@@ -2,6 +2,8 @@
 
 mod aggregate;
 
+use crate::workforce::{validate_staffing_period, StaffingIdentity};
+
 use std::collections::BTreeSet;
 use std::fmt::Write as _;
 use std::fs::{self, OpenOptions};
@@ -9,8 +11,9 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use babylon_persistence::{
-    observer_reader::CampaignSummaryV1, CampaignId, ObserverEconomyReaderV1,
-    ObserverEconomySnapshotV1, ObserverVisibilityV1, ProductionStaffingAccountV1,
+    identity::CampaignId, observer_reader::CampaignSummary, observer_reader::ObserverEconomyReader,
+    observer_reader::ObserverEconomySnapshot, observer_reader::ObserverVisibility,
+    production_observation::ProductionStaffingAccount,
 };
 use bevy::ecs::{query::QueryData, system::SystemParam};
 use bevy::input_focus::tab_navigation::TabGroup;
@@ -47,11 +50,8 @@ struct BrowserScope {
     target: Option<CampaignId>,
 }
 
-type CatalogTask = (BrowserScope, Task<Result<Vec<CampaignSummaryV1>, String>>);
-type ComparisonTask = (
-    BrowserScope,
-    Task<Result<ObserverEconomySnapshotV1, String>>,
-);
+type CatalogTask = (BrowserScope, Task<Result<Vec<CampaignSummary>, String>>);
+type ComparisonTask = (BrowserScope, Task<Result<ObserverEconomySnapshot, String>>);
 
 #[derive(Resource, Default)]
 struct CampaignBrowserState {
@@ -59,9 +59,9 @@ struct CampaignBrowserState {
     generation: u64,
     catalog_task: Option<CatalogTask>,
     comparison_task: Option<ComparisonTask>,
-    catalog: Vec<CampaignSummaryV1>,
+    catalog: Vec<CampaignSummary>,
     selected: usize,
-    comparison: Option<ObserverEconomySnapshotV1>,
+    comparison: Option<ObserverEconomySnapshot>,
     comparison_target: Option<CampaignId>,
     menu_was_open: bool,
     status: String,
@@ -363,10 +363,10 @@ fn sync_focus_targets(
     }
 }
 
-fn reader(perspective: Perspective) -> Result<ObserverEconomyReaderV1, String> {
+fn reader(perspective: Perspective) -> Result<ObserverEconomyReader, String> {
     match perspective {
-        Perspective::FullObserver => ObserverEconomyReaderV1::from_observer_env(),
-        Perspective::PlayerKnowledge => ObserverEconomyReaderV1::from_known_env(),
+        Perspective::FullObserver => ObserverEconomyReader::from_observer_env(),
+        Perspective::PlayerKnowledge => ObserverEconomyReader::from_known_env(),
     }
     .map_err(|error| error.to_string())
 }
@@ -507,9 +507,11 @@ fn open_selected_campaign(
             return;
         }
     };
-    match session.queue_campaign(babylon_persistence::RuntimeSessionTargetV3::Open {
-        campaign_id: campaign.as_uuid().to_string(),
-    }) {
+    match session.queue_campaign(
+        babylon_persistence::runtime_session::RuntimeSessionTarget::Open {
+            campaign_id: campaign.as_uuid().to_string(),
+        },
+    ) {
         Ok(()) => browser.status = "Opening the selected campaign...".into(),
         Err(error) => browser.status = error,
     }
@@ -583,10 +585,10 @@ fn collect(session: Res<ObserverSession>, mut browser: ResMut<CampaignBrowserSta
     }
 }
 
-fn matches_comparison(snapshot: &ObserverEconomySnapshotV1, scope: &BrowserScope) -> bool {
+fn matches_comparison(snapshot: &ObserverEconomySnapshot, scope: &BrowserScope) -> bool {
     let visibility = match scope.active.perspective {
-        Perspective::FullObserver => ObserverVisibilityV1::FullObserver,
-        Perspective::PlayerKnowledge => ObserverVisibilityV1::KnownPreview,
+        Perspective::FullObserver => ObserverVisibility::FullObserver,
+        Perspective::PlayerKnowledge => ObserverVisibility::KnownPreview,
     };
     scope
         .target
@@ -597,45 +599,15 @@ fn matches_comparison(snapshot: &ObserverEconomySnapshotV1, scope: &BrowserScope
         && (snapshot.resolve_tick == 0 || snapshot.tick_content_hash.is_some())
 }
 
-fn receipt_text(site: &babylon_persistence::ProductionProcessV2, tick: u64) -> String {
+fn receipt_text(
+    site: &babylon_persistence::production_observation::ProductionProcess,
+    tick: u64,
+) -> String {
     match (site.produced_batches, site.planned_batches) {
         (Some(produced), Some(planned)) => format!("{produced}/{planned} batches produced/planned"),
         (None, None) if tick == 0 => "no production receipt at foundation".into(),
         (None, None) => "no production receipt this period".into(),
         _ => "production receipt unavailable".into(),
-    }
-}
-
-/// Canonical identities from the authenticated DTO, never display labels.
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-struct StaffingIdentity<'a> {
-    pool: &'a str,
-    site: &'a str,
-    unit: &'a str,
-}
-
-impl<'a> From<&'a ProductionStaffingAccountV1> for StaffingIdentity<'a> {
-    fn from(account: &'a ProductionStaffingAccountV1) -> Self {
-        Self {
-            pool: &account.pool_id,
-            site: &account.site_id,
-            unit: &account.unit_id,
-        }
-    }
-}
-
-fn staffing_scope_error(account: &ProductionStaffingAccountV1, tick: u64) -> Option<&'static str> {
-    if tick.checked_add(1) != Some(account.next_opening_period) {
-        return Some("workforce account does not match the selected period");
-    }
-    match (&account.completed, tick) {
-        (None, 0) => None,
-        (Some(_), 0) => Some("foundation unexpectedly has a completed staffing receipt"),
-        (None, _) => Some("no completed staffing receipt for the selected period"),
-        (Some(receipt), _) if receipt.period != tick => {
-            Some("staffing receipt does not match the selected period")
-        }
-        (Some(_), _) => None,
     }
 }
 
@@ -652,8 +624,8 @@ fn compare_staffing(
     output: &mut String,
     site_id: &str,
     tick: u64,
-    current: &[ProductionStaffingAccountV1],
-    compared: &[ProductionStaffingAccountV1],
+    current: &[ProductionStaffingAccount],
+    compared: &[ProductionStaffingAccount],
 ) {
     let identities: BTreeSet<_> = current
         .iter()
@@ -686,12 +658,12 @@ fn compare_staffing(
         }
         writeln!(output, "Modeled workforce: {}", current.subject.local_name)
             .expect("writing to a String cannot fail");
-        if let Some(error) = staffing_scope_error(current, tick) {
+        if let Err(error) = validate_staffing_period(current, tick) {
             writeln!(output, "CURRENT workforce unavailable: {error}.")
                 .expect("writing to a String cannot fail");
             continue;
         }
-        if let Some(error) = staffing_scope_error(compared, tick) {
+        if let Err(error) = validate_staffing_period(compared, tick) {
             writeln!(output, "COMPARED workforce unavailable: {error}.")
                 .expect("writing to a String cannot fail");
             continue;
@@ -718,7 +690,7 @@ fn compare_staffing(
 }
 
 fn comparison_cohort_ids<'a>(
-    current: &'a babylon_persistence::ProductionSnapshotV2,
+    current: &'a babylon_persistence::production_observation::ProductionSnapshot,
     selected_site: Option<&str>,
 ) -> BTreeSet<&'a str> {
     let mut cohort_ids = BTreeSet::new();
@@ -747,8 +719,8 @@ fn comparison_cohort_ids<'a>(
 }
 
 fn comparison_text(
-    active: &ObserverEconomySnapshotV1,
-    other: &ObserverEconomySnapshotV1,
+    active: &ObserverEconomySnapshot,
+    other: &ObserverEconomySnapshot,
     selected_site: Option<&str>,
     lens: &crate::map_economy_lens::MapLens,
 ) -> String {
@@ -756,14 +728,14 @@ fn comparison_text(
         "Period {} | {}\nCurrent {}\nCompared {}\n\n",
         active.resolve_tick,
         match active.visibility {
-            ObserverVisibilityV1::FullObserver => "full observer",
-            ObserverVisibilityV1::KnownPreview => "player knowledge",
+            ObserverVisibility::FullObserver => "full observer",
+            ObserverVisibility::KnownPreview => "player knowledge",
         },
         active.campaign_id,
         other.campaign_id
     );
-    if active.visibility != ObserverVisibilityV1::FullObserver
-        || other.visibility != ObserverVisibilityV1::FullObserver
+    if active.visibility != ObserverVisibility::FullObserver
+        || other.visibility != ObserverVisibility::FullObserver
         || active.resolve_tick != other.resolve_tick
     {
         output.push_str(
@@ -1097,7 +1069,7 @@ impl Plugin for CampaignBrowserPlugin {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use babylon_persistence::ProductionSiteV2;
+    use babylon_persistence::production_observation::ProductionSite;
 
     fn staffing_snapshot(
         campaign: CampaignId,
@@ -1105,23 +1077,25 @@ mod tests {
         employed: u64,
         hires: u64,
         separations: u64,
-    ) -> ObserverEconomySnapshotV1 {
+    ) -> ObserverEconomySnapshot {
         use babylon_persistence::{
-            CompletedProductionStaffingV1, ProductionSnapshotV2, ProductionStaffingSubjectV1,
+            production_observation::CompletedProductionStaffing,
+            production_observation::ProductionSnapshot,
+            production_observation::ProductionStaffingSubject,
         };
 
         let site_id = "1".repeat(64);
         let opening_employed = employed + separations - hires;
-        ObserverEconomySnapshotV1 {
+        ObserverEconomySnapshot {
             campaign_id: campaign.as_uuid().to_string(),
             resolve_tick: tick,
             foundation_digest: "a".repeat(64),
             nominal_world_hash: Some("b".repeat(64)),
             tick_content_hash: (tick > 0).then(|| "c".repeat(64)),
             envelope_digest: (tick > 0).then(|| "d".repeat(64)),
-            visibility: ObserverVisibilityV1::FullObserver,
+            visibility: ObserverVisibility::FullObserver,
             counties: Vec::new(),
-            production: Some(ProductionSnapshotV2 {
+            production: Some(ProductionSnapshot {
                 content_authority_sha256: "a".repeat(64),
                 road_source: None,
                 physical_edges: Vec::new(),
@@ -1130,35 +1104,38 @@ mod tests {
                 freight_capacity_accounts: Vec::new(),
                 scenario_label: "Staffing comparison fixture".into(),
                 horizon_period: 520,
-                sites: vec![ProductionSiteV2 {
+                sites: vec![ProductionSite {
                     id: site_id.clone(),
                     county_geoid: "26163".into(),
                     name: "Wayne manufacturing cohort".into(),
                     industry_code: "331".into(),
                     observed_employment: Some(20),
                     inventory: Vec::new(),
-                    role: babylon_persistence::ProductionSiteRoleV2::Production,
+                    role:
+                        babylon_persistence::production_observation::ProductionSiteRole::Production,
                     sector_code: "31-33".into(),
-                    processes: vec![babylon_persistence::ProductionProcessV2 {
-                        id: "fixture-process".into(),
-                        name: "Fixture process".into(),
-                        output_good_id: "4".repeat(64),
-                        output_unit_id: "5".repeat(64),
-                        output_good: "steel".into(),
-                        output_unit: "kg".into(),
-                        output_per_batch: 10,
-                        available_batches: 8,
-                        planned_batches: (tick > 0).then_some(8),
-                        produced_batches: (tick > 0).then_some(7),
-                        inputs: Vec::new(),
-                        labor: Vec::new(),
-                    }],
+                    processes: vec![
+                        babylon_persistence::production_observation::ProductionProcess {
+                            id: "fixture-process".into(),
+                            name: "Fixture process".into(),
+                            output_good_id: "4".repeat(64),
+                            output_unit_id: "5".repeat(64),
+                            output_good: "steel".into(),
+                            output_unit: "kg".into(),
+                            output_per_batch: 10,
+                            available_batches: 8,
+                            planned_batches: (tick > 0).then_some(8),
+                            produced_batches: (tick > 0).then_some(7),
+                            inputs: Vec::new(),
+                            labor: Vec::new(),
+                        },
+                    ],
                 }],
-                staffing_accounts: vec![ProductionStaffingAccountV1 {
+                staffing_accounts: vec![ProductionStaffingAccount {
                     pool_id: "2".repeat(64),
                     site_id,
                     unit_id: "3".repeat(64),
-                    subject: ProductionStaffingSubjectV1 {
+                    subject: ProductionStaffingSubject {
                         scenario: "fixture".into(),
                         local_name: "Cohort workforce".into(),
                     },
@@ -1169,7 +1146,7 @@ mod tests {
                     previous_unretained_hours: 0,
                     next_opening_period: tick + 1,
                     next_opening_hours: employed * 40,
-                    completed: (tick > 0).then_some(CompletedProductionStaffingV1 {
+                    completed: (tick > 0).then_some(CompletedProductionStaffing {
                         period: tick,
                         opening_employed,
                         opening_reserve: 10 - opening_employed,
@@ -1228,7 +1205,7 @@ mod tests {
 
     fn edit_comparison_production(
         app: &mut App,
-        mut edit: impl FnMut(&mut babylon_persistence::ProductionSnapshotV2),
+        mut edit: impl FnMut(&mut babylon_persistence::production_observation::ProductionSnapshot),
     ) {
         edit(
             app.world_mut()
@@ -1254,14 +1231,16 @@ mod tests {
 
     fn retail_comparison_app(tick: u64) -> (App, Entity) {
         use babylon_persistence::{
-            CompletedProductionFinalDemandV2, ProductionFinalDemandAccountV2,
-            ProductionFinalDemandOrderV2, ProductionSiteRoleV2, ProductionStockV1,
+            production_observation::CompletedProductionFinalDemand,
+            production_observation::ProductionFinalDemandAccount,
+            production_observation::ProductionFinalDemandOrder,
+            production_observation::ProductionSiteRole, production_observation::ProductionStock,
         };
         let (mut app, text) = staffing_comparison_app(tick);
         edit_comparison_production(&mut app, |snapshot| {
             let mut retailer = snapshot.sites[0].clone();
             retailer.id = "retailer".into();
-            retailer.role = ProductionSiteRoleV2::Retail;
+            retailer.role = ProductionSiteRole::Retail;
             retailer.processes.clear();
             let mut workforce = snapshot.staffing_accounts[0].clone();
             workforce.pool_id = "retail-workforce".into();
@@ -1269,7 +1248,7 @@ mod tests {
             snapshot.staffing_accounts.push(workforce);
             for (unit_id, unit, stock, fulfilled) in [("5", "kg", 10, 3), ("6", "tonne", 900, 11)] {
                 let fulfilled = if tick == 0 { 0 } else { fulfilled };
-                retailer.inventory.push(ProductionStockV1 {
+                retailer.inventory.push(ProductionStock {
                     good_id: "4".repeat(64),
                     unit_id: unit_id.repeat(64),
                     good: "Steel".into(),
@@ -1278,7 +1257,7 @@ mod tests {
                 });
                 snapshot
                     .final_demand_accounts
-                    .push(ProductionFinalDemandAccountV2 {
+                    .push(ProductionFinalDemandAccount {
                         demand_principal_id: format!("demand-{unit}"),
                         county_geoid: "26163".into(),
                         good_id: "4".repeat(64),
@@ -1290,14 +1269,14 @@ mod tests {
                         outstanding: 20 - fulfilled,
                         retail_stock_on_hand: stock,
                         retailer_site_ids: vec![retailer.id.clone()],
-                        orders: vec![ProductionFinalDemandOrderV2 {
+                        orders: vec![ProductionFinalDemandOrder {
                             order_id: format!("retail-order-{unit}"),
                             retailer_site_id: retailer.id.clone(),
                             ordered: 20,
                             fulfilled,
                             outstanding: 20 - fulfilled,
                         }],
-                        completed: (tick > 0).then_some(CompletedProductionFinalDemandV2 {
+                        completed: (tick > 0).then_some(CompletedProductionFinalDemand {
                             period: tick,
                             opening_fulfilled: 0,
                             newly_fulfilled: fulfilled,
@@ -1790,7 +1769,7 @@ mod tests {
                             compared.campaign_id = uuid::Uuid::from_u128(1).to_string();
                         }
                         "period" => compared.resolve_tick = 1,
-                        "perspective" => compared.visibility = ObserverVisibilityV1::KnownPreview,
+                        "perspective" => compared.visibility = ObserverVisibility::KnownPreview,
                         _ => unreachable!(),
                     }
                 }
@@ -1856,7 +1835,7 @@ mod tests {
         let mut app = App::new();
         app.insert_resource(session)
             .insert_resource(CampaignBrowserState {
-                catalog: vec![CampaignSummaryV1 {
+                catalog: vec![CampaignSummary {
                     id: selected.as_uuid().to_string(),
                     preset: "standard".into(),
                     label: "Saved campaign".into(),
@@ -1928,8 +1907,8 @@ mod tests {
             .pending_switch_request()
             .unwrap();
         assert!(
-            matches!(request, babylon_persistence::RuntimeSessionRequestV3::Switch {
-            target: babylon_persistence::RuntimeSessionTargetV3::Open { campaign_id }, ..
+            matches!(request, babylon_persistence::runtime_session::RuntimeSessionRequest::Switch {
+            target: babylon_persistence::runtime_session::RuntimeSessionTarget::Open { campaign_id }, ..
         } if campaign_id == selected.as_uuid().to_string())
         );
         assert!(
@@ -1987,7 +1966,7 @@ mod tests {
         assert_eq!(
             state.error.as_deref(),
             Some(
-                babylon_persistence::RuntimeSessionErrorCodeV3::StorageRefused
+                babylon_persistence::runtime_session::RuntimeSessionErrorCode::StorageRefused
                     .to_string()
                     .as_str()
             )
@@ -2090,8 +2069,8 @@ mod tests {
                 .pending_switch_request()
                 .unwrap();
             assert!(
-                matches!(request, babylon_persistence::RuntimeSessionRequestV3::Switch {
-                target: babylon_persistence::RuntimeSessionTargetV3::Open { campaign_id }, ..
+                matches!(request, babylon_persistence::runtime_session::RuntimeSessionRequest::Switch {
+                target: babylon_persistence::runtime_session::RuntimeSessionTarget::Open { campaign_id }, ..
             } if campaign_id == selected.as_uuid().to_string())
             );
             assert_eq!(
@@ -2214,7 +2193,7 @@ mod tests {
         let browser = CampaignBrowserState {
             // Invalid fixture identities make a regression incapable of writing user preferences.
             catalog: ["unavailable-a", "unavailable-b"]
-                .map(|id| CampaignSummaryV1 {
+                .map(|id| CampaignSummary {
                     id: id.into(),
                     preset: "standard".into(),
                     label: id.into(),

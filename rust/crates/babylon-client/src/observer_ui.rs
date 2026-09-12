@@ -2,7 +2,7 @@
 
 use std::fmt::Write as _;
 
-use babylon_persistence::ObserverEconomySnapshotV1;
+use babylon_persistence::observer_reader::ObserverEconomySnapshot;
 use bevy::ecs::system::SystemParam;
 use bevy::input_focus::tab_navigation::TabGroup;
 use bevy::prelude::*;
@@ -27,13 +27,13 @@ use crate::ui::dossier_card::{ActiveCountyDossier, DossierFetchState, DossierRef
 pub(crate) const OBSERVER_PANEL_BOTTOM: f32 = 56.0;
 
 #[derive(Resource, Default)]
-pub struct ObserverFrame(pub Option<ObserverEconomySnapshotV1>);
+pub struct ObserverFrame(pub Option<ObserverEconomySnapshot>);
 
 impl ObserverFrame {
     /// Returns only the exact installed period and capability for this session.
     /// Async generation is checked before installation by the IO task.
     #[must_use]
-    pub fn for_session(&self, session: &ObserverSession) -> Option<&ObserverEconomySnapshotV1> {
+    pub fn for_session(&self, session: &ObserverSession) -> Option<&ObserverEconomySnapshot> {
         self.0.as_ref().filter(|frame| {
             frame.campaign_id == session.campaign.as_uuid().to_string()
                 && frame.resolve_tick == session.viewed_tick
@@ -41,10 +41,10 @@ impl ObserverFrame {
                     (session.perspective, frame.visibility),
                     (
                         crate::observer::Perspective::FullObserver,
-                        babylon_persistence::ObserverVisibilityV1::FullObserver
+                        babylon_persistence::observer_reader::ObserverVisibility::FullObserver
                     ) | (
                         crate::observer::Perspective::PlayerKnowledge,
-                        babylon_persistence::ObserverVisibilityV1::KnownPreview
+                        babylon_persistence::observer_reader::ObserverVisibility::KnownPreview
                     )
                 )
                 && session
@@ -1575,7 +1575,7 @@ pub fn format_lens_reading(reading: CountyLensReading, unit: &str) -> String {
 }
 
 fn county_circuit_intro(
-    snapshot: &babylon_persistence::ProductionSnapshotV2,
+    snapshot: &babylon_persistence::production_observation::ProductionSnapshot,
     county: Option<&str>,
 ) -> String {
     let Some(county) = county else {
@@ -1591,7 +1591,7 @@ fn county_circuit_intro(
     "Choose a cohort to follow its commodities, freight and workers in Circuit.".into()
 }
 
-fn county_developments(snapshot: Option<&ObserverEconomySnapshotV1>, county: &str) -> String {
+fn county_developments(snapshot: Option<&ObserverEconomySnapshot>, county: &str) -> String {
     let Some(snapshot) = snapshot else {
         return "Awaiting this period's observation.".into();
     };
@@ -1657,18 +1657,18 @@ impl ShellState<'_> {
 }
 
 fn archive_page_status(
-    read: Option<&babylon_persistence::archive_revision::ArchiveDossierReadV2>,
+    read: Option<&babylon_persistence::archive_revision::ArchiveDossierRead>,
     selected: bool,
     read_failed: bool,
 ) -> String {
-    use babylon_persistence::archive_revision::ArchiveDossierStateV2;
+    use babylon_persistence::archive_revision::ArchiveDossierState;
     match read.map(|read| &read.state) {
-        Some(ArchiveDossierStateV2::Ready {
+        Some(ArchiveDossierState::Ready {
             verified_through_tick,
             ..
         }) => format!("Archive verified for period {verified_through_tick}"),
-        Some(ArchiveDossierStateV2::Pending { .. }) => "Archive pending".into(),
-        Some(ArchiveDossierStateV2::Unavailable(_)) => "Archive unavailable".into(),
+        Some(ArchiveDossierState::Pending { .. }) => "Archive pending".into(),
+        Some(ArchiveDossierState::Unavailable(_)) => "Archive unavailable".into(),
         None if read_failed => "Archive read failed".into(),
         None if selected => "Archive awaiting page".into(),
         None => "Archive: select a county".into(),
@@ -1837,7 +1837,7 @@ fn reconcile_lens(
     mut ui: ResMut<ObserverUiState>,
     mut previous_scope: Local<
         Option<(
-            babylon_persistence::CampaignId,
+            babylon_persistence::identity::CampaignId,
             crate::observer::Perspective,
         )>,
     >,
@@ -1867,7 +1867,7 @@ impl Plugin for ObserverShellPlugin {
             .init_resource::<ObserverFeedback>()
             .init_resource::<ObserverKeyboardClaim>()
             .add_message::<ObserverCommand>()
-            .add_systems(Startup, spawn_shell.after(crate::map::spawn_map_surface))
+            .add_systems(Startup, spawn_shell.after(crate::map::load_county_atlas))
             .add_systems(PostUpdate, apply_fonts.before(bevy::ui::UiSystems::Content))
             .add_systems(
                 Update,
@@ -2005,7 +2005,7 @@ mod tests {
 
     #[test]
     fn selected_context_controls_yield_to_history_archive_and_warning() {
-        let session = ObserverSession::new(babylon_persistence::CampaignId::from_uuid(
+        let session = ObserverSession::new(babylon_persistence::identity::CampaignId::from_uuid(
             uuid::Uuid::from_u128(1),
         ));
         for hidden in 0..3 {
@@ -2044,23 +2044,20 @@ mod tests {
     #[test]
     fn archive_hud_certifies_only_the_scoped_ready_page() {
         use babylon_persistence::archive_revision::{
-            ArchiveChangePageV2, ArchiveDossierPageV2, ArchiveDossierPendingV2,
-            ArchiveDossierReadV2, ArchiveDossierStateV2, ArchiveDossierUnavailableV2,
-            ArchivePublicationOriginV2, ArchiveReadScopeV2,
+            ArchiveChangePage, ArchiveDossierPage, ArchiveDossierPending, ArchiveDossierRead,
+            ArchiveDossierState, ArchiveDossierUnavailable, ArchiveReadScope,
         };
-        use babylon_persistence::{ArchivePageRefV1, ArchiveSubjectKindV1, CampaignId};
+        use babylon_persistence::{identity::CampaignId, ArchivePageRef, ArchiveSubjectKind};
         let campaign = CampaignId::from_uuid(uuid::Uuid::from_u128(1));
-        let scope = ArchiveReadScopeV2::committed(campaign, 3, [3; 32]).unwrap();
-        let mut read = ArchiveDossierReadV2 {
+        let scope = ArchiveReadScope::committed(campaign, 3, [3; 32]).unwrap();
+        let mut read = ArchiveDossierRead {
             scope,
-            subject: ArchivePageRefV1::try_new(ArchiveSubjectKindV1::County, "26163".into())
-                .unwrap(),
+            subject: ArchivePageRef::try_new(ArchiveSubjectKind::County, "26163".into()).unwrap(),
             durable_tick: 16,
             processed_tick: 16,
-            history_floor_tick: 0,
-            state: ArchiveDossierStateV2::Pending {
+            state: ArchiveDossierState::Pending {
                 page: None,
-                reason: ArchiveDossierPendingV2::CutoverValidation,
+                reason: ArchiveDossierPending::ReceiptProcessing,
             },
         };
         assert_eq!(
@@ -2068,18 +2065,17 @@ mod tests {
             "Archive pending"
         );
         read.state =
-            ArchiveDossierStateV2::Unavailable(ArchiveDossierUnavailableV2::HistoryNotRetained);
+            ArchiveDossierState::Unavailable(ArchiveDossierUnavailable::PageNotMaterialized);
         assert_eq!(
             archive_page_status(Some(&read), true, false),
             "Archive unavailable"
         );
-        read.state = ArchiveDossierStateV2::Ready {
+        read.state = ArchiveDossierState::Ready {
             verified_through_tick: 3,
-            page: ArchiveDossierPageV2 {
+            page: ArchiveDossierPage {
                 revision_id: [1; 32],
                 effective_tick: 1,
-                origin: ArchivePublicationOriginV2::Materialized,
-                content_source: ArchiveReadScopeV2::committed(campaign, 1, [1; 32]).unwrap(),
+                content_source: ArchiveReadScope::committed(campaign, 1, [1; 32]).unwrap(),
                 title: "Wayne County".into(),
                 question: "What changed?".into(),
                 signals: Vec::new(),
@@ -2088,7 +2084,7 @@ mod tests {
                 citations: Vec::new(),
                 atoms: Vec::new(),
                 links: Vec::new(),
-                changes: ArchiveChangePageV2 {
+                changes: ArchiveChangePage {
                     coverage_from_tick: 0,
                     changes: Vec::new(),
                     next_cursor: None,
@@ -2108,9 +2104,9 @@ mod tests {
 
     fn focused_shell(menu_open: bool, command: ObserverCommand) -> (App, Entity, Entity) {
         use crate::observer_io::ObserverSet;
-        let mut session = ObserverSession::new(babylon_persistence::CampaignId::from_uuid(
-            uuid::Uuid::from_u128(1),
-        ));
+        let mut session = ObserverSession::new(
+            babylon_persistence::identity::CampaignId::from_uuid(uuid::Uuid::from_u128(1)),
+        );
         session.phase = crate::observer::SessionPhase::Ready;
         let mut app = App::new();
         app.add_plugins((
@@ -2350,7 +2346,7 @@ mod tests {
         let mut app = App::new();
         app.add_plugins((MinimalPlugins, bevy::asset::AssetPlugin::default()))
             .insert_resource(ObserverSession::new(
-                babylon_persistence::CampaignId::from_uuid(uuid::Uuid::nil()),
+                babylon_persistence::identity::CampaignId::from_uuid(uuid::Uuid::nil()),
             ))
             .add_plugins((crate::map::MapPlugin, ObserverShellPlugin));
         app.finish();
@@ -2378,7 +2374,7 @@ mod tests {
                 ..default()
             })
             .insert_resource(ObserverSession::new(
-                babylon_persistence::CampaignId::from_uuid(uuid::Uuid::from_u128(1)),
+                babylon_persistence::identity::CampaignId::from_uuid(uuid::Uuid::from_u128(1)),
             ))
             .insert_resource(crate::production::PrimaryView::Map)
             .init_resource::<ObserverFeedback>()
@@ -2465,7 +2461,7 @@ mod tests {
         let mut app = App::new();
         app.add_plugins(MinimalPlugins)
             .insert_resource(ObserverSession::new(
-                babylon_persistence::CampaignId::from_uuid(uuid::Uuid::nil()),
+                babylon_persistence::identity::CampaignId::from_uuid(uuid::Uuid::nil()),
             ))
             .init_resource::<crate::production::PrimaryView>()
             .insert_resource(ObserverUiState {
@@ -2528,7 +2524,7 @@ mod tests {
             })
             .insert_resource(crate::production::PrimaryView::Map)
             .insert_resource(ObserverSession::new(
-                babylon_persistence::CampaignId::from_uuid(uuid::Uuid::from_u128(1)),
+                babylon_persistence::identity::CampaignId::from_uuid(uuid::Uuid::from_u128(1)),
             ))
             .add_systems(Startup, |mut commands: Commands| {
                 spawn_drawers(&mut commands);

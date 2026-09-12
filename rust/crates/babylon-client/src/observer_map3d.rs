@@ -14,7 +14,7 @@ use bevy::window::PrimaryWindow;
 
 use crate::atlas::CountyAtlas;
 use crate::decision_surface::{DeclaredSurface, SurfaceId};
-use crate::map::{HoveredCounty, MapBounds, SelectedCounty};
+use crate::map::{HoveredCounty, SelectedCounty};
 use crate::map_economy_lens::{project_map_lens, MapLens};
 use crate::observer::ObserverSession;
 use crate::observer_focus::ObserverKeyboardClaim;
@@ -219,16 +219,6 @@ fn setup_map(
         .expect("Michigan has geography");
     let origin = (min + max) * 0.5;
     let extent = (max - min) * METRES_TO_SCENE;
-    let mut diagonals: Vec<_> = counties
-        .iter()
-        .filter_map(|index| atlas.county(*index))
-        .map(|county| (county.bbox.max - county.bbox.min).length())
-        .collect();
-    diagonals.sort_by(f32::total_cmp);
-    commands.insert_resource(MapBounds {
-        world_bounds: Rect { min, max },
-        median_county_diagonal: diagonals[diagonals.len() / 2],
-    });
     let triangles = crate::tessellate::tessellate(&atlas);
     commands.insert_resource(relationships::CountyAnchors::from_atlas(
         &atlas, &counties, origin,
@@ -711,7 +701,7 @@ impl Plugin for ObserverMap3dPlugin {
             app.add_plugins(MeshPickingPlugin);
         }
         app.init_asset::<StandardMaterial>()
-            .add_systems(Startup, setup_map.after(crate::map::spawn_map_surface))
+            .add_systems(Startup, setup_map.after(crate::map::load_county_atlas))
             .add_systems(Update, navigate.in_set(ObserverSet::Input))
             .add_systems(Update, update_observation.in_set(ObserverSet::Paint))
             .add_systems(
@@ -727,7 +717,9 @@ mod tests {
     use super::*;
     use crate::observer::Perspective;
     use crate::observer_focus::{ObserverFocusPlugin, ObserverFocusTarget, ObserverFocusWorld};
-    use babylon_persistence::{ObserverEconomySnapshotV1, ObserverVisibilityV1};
+    use babylon_persistence::{
+        observer_reader::ObserverEconomySnapshot, observer_reader::ObserverVisibility,
+    };
     use bevy::ecs::system::RunSystemOnce;
     use bevy::input::keyboard::{Key, KeyboardInput, NativeKey};
     use bevy::input::{ButtonState, InputPlugin};
@@ -1004,17 +996,17 @@ mod tests {
 
     #[test]
     fn stale_campaign_tick_and_visibility_never_feed_geographic_heights() {
-        let campaign = babylon_persistence::CampaignId::from_uuid(uuid::Uuid::nil());
+        let campaign = babylon_persistence::identity::CampaignId::from_uuid(uuid::Uuid::nil());
         let mut session = ObserverSession::new(campaign);
         session.ready(4, Some("a".repeat(64)));
-        let mut snapshot = ObserverEconomySnapshotV1 {
+        let mut snapshot = ObserverEconomySnapshot {
             campaign_id: campaign.as_uuid().to_string(),
             resolve_tick: 4,
             foundation_digest: "f".repeat(64),
             tick_content_hash: Some("a".repeat(64)),
             nominal_world_hash: None,
             envelope_digest: None,
-            visibility: ObserverVisibilityV1::FullObserver,
+            visibility: ObserverVisibility::FullObserver,
             counties: Vec::new(),
             production: None,
         };
@@ -1026,7 +1018,7 @@ mod tests {
             .for_session(&session)
             .is_none());
         snapshot.resolve_tick = 4;
-        snapshot.visibility = ObserverVisibilityV1::KnownPreview;
+        snapshot.visibility = ObserverVisibility::KnownPreview;
         assert!(ObserverFrame(Some(snapshot.clone()))
             .for_session(&session)
             .is_none());
@@ -1185,21 +1177,19 @@ mod tests {
     }
 
     #[test]
-    fn observer_map_loads_the_atlas_without_spawning_the_conformance_2d_surface() {
+    fn map_bootstrap_loads_the_atlas_without_creating_a_render_scene() {
         let mut app = App::new();
         app.add_plugins((MinimalPlugins, bevy::asset::AssetPlugin::default()));
         app.insert_resource(ObserverSession::new(
-            babylon_persistence::CampaignId::from_uuid(uuid::Uuid::nil()),
+            babylon_persistence::identity::CampaignId::from_uuid(uuid::Uuid::nil()),
         ));
         app.add_plugins(crate::map::MapPlugin);
         app.update();
         assert!(app.world().contains_resource::<CountyAtlas>());
-        assert!(app.world().contains_resource::<crate::map::CountyIndex>());
-        assert!(!app.world().contains_resource::<crate::map::MapSurface>());
         let world = app.world_mut();
         assert_eq!(
             world
-                .query_filtered::<Entity, With<crate::map::MapCamera>>()
+                .query_filtered::<Entity, With<Camera2d>>()
                 .iter(world)
                 .count(),
             0

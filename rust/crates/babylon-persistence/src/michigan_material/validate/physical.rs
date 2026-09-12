@@ -1,14 +1,14 @@
 //! Captured selected-path continuity and mass-membership checks, not a router.
 use super::{county, digest};
 use crate::michigan_material::{
-    MichiganCountyTerminalV2, MichiganMaterialErrorV1, MichiganMaterialPathV2,
-    MichiganNormalizedContentV2, MichiganPhysicalEdgeV2, MichiganPhysicalNetworkV2,
+    MichiganCountyTerminal, MichiganMaterialError, MichiganMaterialPath, MichiganNormalizedContent,
+    MichiganPhysicalEdge, MichiganPhysicalNetwork,
 };
 use std::collections::{BTreeMap, BTreeSet};
-pub(super) fn validate(c: &MichiganNormalizedContentV2) -> Result<(), MichiganMaterialErrorV1> {
-    use MichiganMaterialErrorV1::PhysicalPath;
+pub(super) fn validate(c: &MichiganNormalizedContent) -> Result<(), MichiganMaterialError> {
+    use MichiganMaterialError::PhysicalPath;
     let Some(network) = &c.physical_network else {
-        if c.routes.iter().any(|r| matches!(&r.path, MichiganMaterialPathV2::Routed {physical_edge_keys,distance_mm,..} if !physical_edge_keys.is_empty() || distance_mm.is_some())) { return Err(PhysicalPath); }
+        if c.routes.iter().any(|r| matches!(&r.path, MichiganMaterialPath::Routed {physical_edge_keys,distance_mm,..} if !physical_edge_keys.is_empty() || distance_mm.is_some())) { return Err(PhysicalPath); }
         return Ok(());
     };
     network_authority(network)?;
@@ -26,8 +26,8 @@ pub(super) fn validate(c: &MichiganNormalizedContentV2) -> Result<(), MichiganMa
     Ok(())
 }
 
-fn network_authority(network: &MichiganPhysicalNetworkV2) -> Result<(), MichiganMaterialErrorV1> {
-    use MichiganMaterialErrorV1::PhysicalPath;
+fn network_authority(network: &MichiganPhysicalNetwork) -> Result<(), MichiganMaterialError> {
+    use MichiganMaterialError::PhysicalPath;
     if !digest(&network.source.pbf_sha256)
         || !digest(&network.source.footprint_sha256)
         || !digest(&network.source.graph_sha256)
@@ -72,11 +72,11 @@ fn network_authority(network: &MichiganPhysicalNetworkV2) -> Result<(), Michigan
 }
 
 fn selected_geometry(
-    c: &MichiganNormalizedContentV2,
-    network: &MichiganPhysicalNetworkV2,
-    edges: &BTreeMap<&str, &MichiganPhysicalEdgeV2>,
-) -> Result<(), MichiganMaterialErrorV1> {
-    use MichiganMaterialErrorV1::PhysicalPath;
+    c: &MichiganNormalizedContent,
+    network: &MichiganPhysicalNetwork,
+    edges: &BTreeMap<&str, &MichiganPhysicalEdge>,
+) -> Result<(), MichiganMaterialError> {
+    use MichiganMaterialError::PhysicalPath;
     for t in &network.terminals {
         if !county(&t.county_geoid)
             || t.evidence_class != "Designed"
@@ -122,12 +122,12 @@ fn selected_geometry(
 }
 
 fn directed_paths(
-    c: &MichiganNormalizedContentV2,
-    network: &MichiganPhysicalNetworkV2,
-    edges: &BTreeMap<&str, &MichiganPhysicalEdgeV2>,
-    terminals: &BTreeMap<&str, &MichiganCountyTerminalV2>,
-) -> Result<(), MichiganMaterialErrorV1> {
-    use MichiganMaterialErrorV1::PhysicalPath;
+    c: &MichiganNormalizedContent,
+    network: &MichiganPhysicalNetwork,
+    edges: &BTreeMap<&str, &MichiganPhysicalEdge>,
+    terminals: &BTreeMap<&str, &MichiganCountyTerminal>,
+) -> Result<(), MichiganMaterialError> {
+    use MichiganMaterialError::PhysicalPath;
     let mut used = BTreeSet::new();
     let mut memberships: BTreeMap<&str, BTreeSet<&str>> = BTreeMap::new();
     for group in &network.capacity_groups {
@@ -136,7 +136,7 @@ fn directed_paths(
         }
     }
     for route in &c.routes {
-        let MichiganMaterialPathV2::Routed {
+        let MichiganMaterialPath::Routed {
             physical_edge_keys,
             distance_mm,
             capacity_keys,

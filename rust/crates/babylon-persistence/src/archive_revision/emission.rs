@@ -6,8 +6,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::archive::{decode_subject_kind, validate_text, MAX_LINKS, MAX_PAGE_BYTES, MAX_SIGNALS};
 use crate::{
-    ArchiveCitationV1, ArchiveLinkV1, ArchivePageInputV1, ArchivePageRefV1, ArchiveSignalV1,
-    ArchiveSubjectV1, SemanticArchiveErrorV1,
+    ArchiveCitation, ArchiveLink, ArchivePageInput, ArchivePageRef, ArchiveSignal, ArchiveSubject,
+    SemanticArchiveError,
 };
 
 // JSON escapes can expand otherwise lawful control characters up to sixfold.
@@ -16,16 +16,16 @@ const MAX_EMISSION_BYTES: usize = MAX_PAGE_BYTES * 8;
 
 /// The original unknown label is deliberately absent from this type.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) struct ArchiveEmissionLinkV2 {
-    target: ArchivePageRefV1,
+pub(crate) struct ArchiveEmissionLink {
+    target: ArchivePageRef,
     known_label: Option<String>,
 }
 
-impl ArchiveEmissionLinkV2 {
+impl ArchiveEmissionLink {
     pub(crate) fn try_new(
-        target: ArchivePageRefV1,
+        target: ArchivePageRef,
         known_label: Option<String>,
-    ) -> Result<Self, SemanticArchiveErrorV1> {
+    ) -> Result<Self, SemanticArchiveError> {
         if let Some(label) = &known_label {
             validate_text(label)?;
         }
@@ -35,7 +35,7 @@ impl ArchiveEmissionLinkV2 {
         })
     }
 
-    pub(crate) fn target(&self) -> &ArchivePageRefV1 {
+    pub(crate) fn target(&self) -> &ArchivePageRef {
         &self.target
     }
 
@@ -46,38 +46,38 @@ impl ArchiveEmissionLinkV2 {
 
 /// Every field affecting emitted prose, search, citations, or ordered navigation.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) struct ArchiveEmissionManifestV2 {
-    subject_citation: ArchiveCitationV1,
+pub(crate) struct ArchiveEmissionManifest {
+    subject_citation: ArchiveCitation,
     question: String,
-    signals: Vec<ArchiveSignalV1>,
-    links: Vec<ArchiveEmissionLinkV2>,
+    signals: Vec<ArchiveSignal>,
+    links: Vec<ArchiveEmissionLink>,
 }
 
-impl ArchiveEmissionManifestV2 {
+impl ArchiveEmissionManifest {
     pub(crate) fn try_new(
-        subject_citation: ArchiveCitationV1,
+        subject_citation: ArchiveCitation,
         question: String,
-        signals: Vec<ArchiveSignalV1>,
-        links: Vec<ArchiveEmissionLinkV2>,
-    ) -> Result<Self, SemanticArchiveErrorV1> {
+        signals: Vec<ArchiveSignal>,
+        links: Vec<ArchiveEmissionLink>,
+    ) -> Result<Self, SemanticArchiveError> {
         validate_text(&question)?;
         if signals.len() > MAX_SIGNALS || links.len() > MAX_LINKS {
-            return Err(SemanticArchiveErrorV1::CollectionBound);
+            return Err(SemanticArchiveError::CollectionBound);
         }
         if signals
             .iter()
-            .map(ArchiveSignalV1::grant_key)
+            .map(ArchiveSignal::grant_key)
             .collect::<BTreeSet<_>>()
             .len()
             != signals.len()
             || links
                 .iter()
-                .map(ArchiveEmissionLinkV2::target)
+                .map(ArchiveEmissionLink::target)
                 .collect::<BTreeSet<_>>()
                 .len()
                 != links.len()
         {
-            return Err(SemanticArchiveErrorV1::DuplicateKey);
+            return Err(SemanticArchiveError::DuplicateKey);
         }
         Ok(Self {
             subject_citation,
@@ -87,7 +87,7 @@ impl ArchiveEmissionManifestV2 {
         })
     }
 
-    pub(crate) fn subject_citation(&self) -> &ArchiveCitationV1 {
+    pub(crate) fn subject_citation(&self) -> &ArchiveCitation {
         &self.subject_citation
     }
 
@@ -95,15 +95,15 @@ impl ArchiveEmissionManifestV2 {
         &self.question
     }
 
-    pub(crate) fn signals(&self) -> &[ArchiveSignalV1] {
+    pub(crate) fn signals(&self) -> &[ArchiveSignal] {
         &self.signals
     }
 
-    pub(crate) fn links(&self) -> &[ArchiveEmissionLinkV2] {
+    pub(crate) fn links(&self) -> &[ArchiveEmissionLink] {
         &self.links
     }
 
-    pub(crate) fn search_text(&self, subject: &ArchiveSubjectV1) -> String {
+    pub(crate) fn search_text(&self, subject: &ArchiveSubject) -> String {
         let mut parts = vec![
             subject.page_ref().page_key(),
             subject.title().to_owned(),
@@ -122,7 +122,7 @@ impl ArchiveEmissionManifestV2 {
         parts.join(" ")
     }
 
-    pub(crate) fn citations(&self) -> Vec<ArchiveCitationV1> {
+    pub(crate) fn citations(&self) -> Vec<ArchiveCitation> {
         let mut citations = vec![self.subject_citation.clone()];
         for signal in &self.signals {
             if !citations.contains(signal.citation()) {
@@ -136,20 +136,20 @@ impl ArchiveEmissionManifestV2 {
     /// disclosed links. Rendering consumes the full typed manifest separately.
     pub(super) fn atom_input(
         &self,
-        subject: ArchiveSubjectV1,
+        subject: ArchiveSubject,
         source_tick: u64,
         source_hash: [u8; 32],
-    ) -> Result<ArchivePageInputV1, SemanticArchiveErrorV1> {
+    ) -> Result<ArchivePageInput, SemanticArchiveError> {
         let links = self
             .links
             .iter()
             .filter_map(|link| {
                 link.known_label
                     .as_ref()
-                    .map(|label| ArchiveLinkV1::try_new(link.target.clone(), label.clone()))
+                    .map(|label| ArchiveLink::try_new(link.target.clone(), label.clone()))
             })
             .collect::<Result<Vec<_>, _>>()?;
-        ArchivePageInputV1::try_new(
+        ArchivePageInput::try_new(
             subject,
             source_tick,
             source_hash,
@@ -159,24 +159,24 @@ impl ArchiveEmissionManifestV2 {
         )
     }
 
-    pub(super) fn encode(&self) -> Result<String, SemanticArchiveErrorV1> {
+    pub(super) fn encode(&self) -> Result<String, SemanticArchiveError> {
         let encoded = serde_json::to_string(&ManifestWire::from(self))
-            .map_err(|_| SemanticArchiveErrorV1::StoredPageMismatch)?;
+            .map_err(|_| SemanticArchiveError::StoredPageMismatch)?;
         if encoded.len() > MAX_EMISSION_BYTES {
-            return Err(SemanticArchiveErrorV1::CollectionBound);
+            return Err(SemanticArchiveError::CollectionBound);
         }
         Ok(encoded)
     }
 
-    pub(super) fn decode(encoded: &str) -> Result<Self, SemanticArchiveErrorV1> {
+    pub(super) fn decode(encoded: &str) -> Result<Self, SemanticArchiveError> {
         if encoded.len() > MAX_EMISSION_BYTES || encoded.as_bytes().contains(&0) {
-            return Err(SemanticArchiveErrorV1::CollectionBound);
+            return Err(SemanticArchiveError::CollectionBound);
         }
-        let wire: ManifestWire = serde_json::from_str(encoded)
-            .map_err(|_| SemanticArchiveErrorV1::StoredPageMismatch)?;
+        let wire: ManifestWire =
+            serde_json::from_str(encoded).map_err(|_| SemanticArchiveError::StoredPageMismatch)?;
         let manifest = wire.checked()?;
         if manifest.encode()? != encoded {
-            return Err(SemanticArchiveErrorV1::StoredPageMismatch);
+            return Err(SemanticArchiveError::StoredPageMismatch);
         }
         Ok(manifest)
     }
@@ -184,10 +184,10 @@ impl ArchiveEmissionManifestV2 {
     pub(super) fn verify(
         &self,
         record: &super::record::RevisionRecord,
-    ) -> Result<(), SemanticArchiveErrorV1> {
-        use crate::{ArchiveKnowledgeGrantV1, ArchiveKnowledgeV1, FogSafeArchiveRendererV1};
+    ) -> Result<(), SemanticArchiveError> {
+        use crate::{ArchiveKnowledge, ArchiveKnowledgeGrant, FogSafeArchiveRenderer};
 
-        let subject = ArchiveSubjectV1::try_new(
+        let subject = ArchiveSubject::try_new(
             record.subject.kind(),
             record.subject.id().to_owned(),
             record.title.clone(),
@@ -195,25 +195,25 @@ impl ArchiveEmissionManifestV2 {
         let source_hash = record
             .source
             .tick_content_hash()
-            .ok_or(SemanticArchiveErrorV1::InvalidVerifiedTick)?;
-        let renderer = FogSafeArchiveRendererV1::new()?;
+            .ok_or(SemanticArchiveError::InvalidVerifiedTick)?;
+        let renderer = FogSafeArchiveRenderer::new()?;
         let page = renderer.render_emission(&subject, record.source.tick(), &source_hash, self)?;
         let expected_provenance = serde_json::to_string(page.citations())
-            .map_err(|_| SemanticArchiveErrorV1::StoredPageMismatch)?;
+            .map_err(|_| SemanticArchiveError::StoredPageMismatch)?;
         if record.template_sha256 != renderer.template_sha256()
             || record.markdown != page.markdown()
             || record.search_text != page.search_text()
             || record.provenance_json != expected_provenance
             || record.content_sha256 != page.sha256()
         {
-            return Err(SemanticArchiveErrorV1::StoredPageMismatch);
+            return Err(SemanticArchiveError::StoredPageMismatch);
         }
-        let knowledge = ArchiveKnowledgeV1::try_new(
+        let knowledge = ArchiveKnowledge::try_new(
             record
                 .grants
                 .iter()
                 .map(|grant| {
-                    ArchiveKnowledgeGrantV1::try_new(
+                    ArchiveKnowledgeGrant::try_new(
                         grant.subject.clone(),
                         grant.key.clone(),
                         grant.granted_tick,
@@ -222,9 +222,8 @@ impl ArchiveEmissionManifestV2 {
                 })
                 .collect::<Result<Vec<_>, _>>()?,
         )?;
-        if record.atoms.first().map(crate::ArchiveAtomV1::citation) != Some(self.subject_citation())
-        {
-            return Err(SemanticArchiveErrorV1::StoredPageMismatch);
+        if record.atoms.first().map(crate::ArchiveAtom::citation) != Some(self.subject_citation()) {
+            return Err(SemanticArchiveError::StoredPageMismatch);
         }
         let input = self.atom_input(subject, record.source.tick(), source_hash)?;
         let expected_count = self
@@ -232,7 +231,7 @@ impl ArchiveEmissionManifestV2 {
             .len()
             .checked_add(input.links().len())
             .and_then(|count| count.checked_add(1))
-            .ok_or(SemanticArchiveErrorV1::CollectionBound)?;
+            .ok_or(SemanticArchiveError::CollectionBound)?;
         let atoms = crate::archive::mint_page_atoms(
             record.source.campaign_id(),
             record.source.tick(),
@@ -240,7 +239,7 @@ impl ArchiveEmissionManifestV2 {
             &knowledge,
         )?;
         if atoms.len() != expected_count || atoms != record.atoms {
-            return Err(SemanticArchiveErrorV1::StoredPageMismatch);
+            return Err(SemanticArchiveError::StoredPageMismatch);
         }
         Ok(())
     }
@@ -250,14 +249,14 @@ impl ArchiveEmissionManifestV2 {
 #[serde(deny_unknown_fields)]
 struct ManifestWire {
     layout_version: u8,
-    subject_citation: ArchiveCitationV1,
+    subject_citation: ArchiveCitation,
     question: String,
     signals: Vec<SignalWire>,
     links: Vec<LinkWire>,
 }
 
-impl From<&ArchiveEmissionManifestV2> for ManifestWire {
-    fn from(manifest: &ArchiveEmissionManifestV2) -> Self {
+impl From<&ArchiveEmissionManifest> for ManifestWire {
+    fn from(manifest: &ArchiveEmissionManifest) -> Self {
         Self {
             layout_version: 2,
             subject_citation: manifest.subject_citation.clone(),
@@ -286,18 +285,18 @@ impl From<&ArchiveEmissionManifestV2> for ManifestWire {
 }
 
 impl ManifestWire {
-    fn checked(self) -> Result<ArchiveEmissionManifestV2, SemanticArchiveErrorV1> {
+    fn checked(self) -> Result<ArchiveEmissionManifest, SemanticArchiveError> {
         if self.layout_version != 2
             || self.signals.len() > MAX_SIGNALS
             || self.links.len() > MAX_LINKS
         {
-            return Err(SemanticArchiveErrorV1::StoredPageMismatch);
+            return Err(SemanticArchiveError::StoredPageMismatch);
         }
         let signals = self
             .signals
             .into_iter()
             .map(|signal| {
-                ArchiveSignalV1::try_new(
+                ArchiveSignal::try_new(
                     signal.grant_key,
                     signal.label,
                     signal.value,
@@ -309,8 +308,8 @@ impl ManifestWire {
             .links
             .into_iter()
             .map(|link| {
-                ArchiveEmissionLinkV2::try_new(
-                    ArchivePageRefV1::try_new(
+                ArchiveEmissionLink::try_new(
+                    ArchivePageRef::try_new(
                         decode_subject_kind(&link.target_kind)?,
                         link.target_id,
                     )?,
@@ -318,7 +317,7 @@ impl ManifestWire {
                 )
             })
             .collect::<Result<Vec<_>, _>>()?;
-        ArchiveEmissionManifestV2::try_new(self.subject_citation, self.question, signals, links)
+        ArchiveEmissionManifest::try_new(self.subject_citation, self.question, signals, links)
     }
 }
 
@@ -328,7 +327,7 @@ struct SignalWire {
     grant_key: String,
     label: String,
     value: String,
-    citation: ArchiveCitationV1,
+    citation: ArchiveCitation,
 }
 
 #[derive(Serialize, Deserialize)]

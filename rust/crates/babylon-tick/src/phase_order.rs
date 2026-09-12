@@ -19,7 +19,7 @@
 use babylon_bsl::mod_anchors::{check_anchor, AnchorDecl, AnchorError, AnchorPosition};
 use babylon_bsl::reader::SExpr;
 use babylon_bsl::same_tick_order::RankedRule;
-use babylon_kernel::sha256_of;
+use babylon_kernel::content_digest::sha256_of;
 use std::collections::TryReserveError;
 use std::collections::{BTreeMap, HashSet};
 
@@ -262,12 +262,12 @@ pub(crate) struct RuleOrderPlan {
 
 /// Exact canonical identity of the governed causal schedule.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct PhaseScheduleV1 {
+pub(crate) struct PhaseSchedule {
     canonical_bytes: Vec<u8>,
     digest: [u8; 32],
 }
 
-impl PhaseScheduleV1 {
+impl PhaseSchedule {
     pub(crate) const fn layout_version() -> u32 {
         SCHEDULE_DIGEST_LAYOUT_VERSION
     }
@@ -356,11 +356,11 @@ pub(crate) fn registered_systems() -> HashSet<String> {
 
 /// SHA-256 of the versioned, canonical 34-slot scheduling law.
 pub(crate) fn schedule_digest() -> Result<[u8; 32], ScheduleError> {
-    Ok(phase_schedule_v1()?.digest())
+    Ok(phase_schedule()?.digest())
 }
 
 /// Exact versioned bytes of the governed 34-slot scheduling law.
-pub(crate) fn phase_schedule_v1() -> Result<PhaseScheduleV1, ScheduleError> {
+pub(crate) fn phase_schedule() -> Result<PhaseSchedule, ScheduleError> {
     validate_registry()?;
     let capacity = phase_schedule_capacity()?;
     let mut bytes = Vec::new();
@@ -398,7 +398,7 @@ pub(crate) fn phase_schedule_v1() -> Result<PhaseScheduleV1, ScheduleError> {
     }
     debug_assert_eq!(bytes.len(), capacity);
     let digest = sha256_of(&bytes);
-    Ok(PhaseScheduleV1 {
+    Ok(PhaseSchedule {
         canonical_bytes: bytes,
         digest,
     })
@@ -808,8 +808,8 @@ mod tests {
 
     #[test]
     fn schedule_law_digest_pins_slots_partitions_ranks_and_sorted_name_mappings() {
-        let schedule = phase_schedule_v1().expect("the governed schedule encodes");
-        assert_eq!(PhaseScheduleV1::layout_version(), 1);
+        let schedule = phase_schedule().expect("the governed schedule encodes");
+        assert_eq!(PhaseSchedule::layout_version(), 1);
         assert!(schedule
             .canonical_bytes()
             .starts_with(b"babylon.phase-schedule\0"));

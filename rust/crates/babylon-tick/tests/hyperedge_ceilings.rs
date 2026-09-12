@@ -18,7 +18,7 @@
 
 use babylon_bsl::structural_verbs::CollectingSink;
 use babylon_graph::hypergraph_store::HypergraphStore;
-use babylon_tick::{diagnose_content_set, run_once_into};
+use babylon_tick::{diagnose_content_set_sources, run_once_into, ContentRuleSource};
 
 /// Two COMMUNITY hyperedges over three classes — the minimal world whose
 /// census should feed the ceiling maps (Task 1's own population maps,
@@ -71,7 +71,14 @@ const RULE_MEMBERS_OF_FOLD: &str = r#"
 /// default); that lane is this train's own next task.
 #[test]
 fn the_hyperedges_folding_rule_now_loads_through_the_driver() {
-    let errors = diagnose_content_set(SCENARIO, None, &[RULE_HYPEREDGES_FOLD]);
+    let errors = diagnose_content_set_sources(
+        SCENARIO,
+        None,
+        &[ContentRuleSource {
+            source_id: "rules/hyperedges-fold.bsl",
+            source: RULE_HYPEREDGES_FOLD,
+        }],
+    );
     assert!(
         errors.is_empty(),
         "the type-wide fold loads once the census feeds the ceiling map: {errors:?}"
@@ -80,7 +87,14 @@ fn the_hyperedges_folding_rule_now_loads_through_the_driver() {
 
 #[test]
 fn the_members_of_folding_rule_now_loads_through_the_driver() {
-    let errors = diagnose_content_set(SCENARIO, None, &[RULE_MEMBERS_OF_FOLD]);
+    let errors = diagnose_content_set_sources(
+        SCENARIO,
+        None,
+        &[ContentRuleSource {
+            source_id: "rules/members-of-fold.bsl",
+            source: RULE_MEMBERS_OF_FOLD,
+        }],
+    );
     assert!(
         errors.is_empty(),
         "the members-of fold loads once :max-members is census-fed: {errors:?}"

@@ -2,18 +2,19 @@
 //! Real road and intervention qualification remain separate acceptance evidence.
 
 use super::{
-    advance_material_period, identity_hex, install_observer_economy_schema_v1,
-    install_reader_role_v1, CampaignId, DisposableTarget, DurableMaterialRuntimeV3,
-    MichiganContentPresetV1, MichiganDeliveryPresetV1, ObserverEconomyReaderV1,
-    ObserverVisibilityV1, Uuid,
+    advance_material_period, identity_hex, install_reader_role, provision_observer_role,
+    CampaignId, DisposableTarget, DurableMaterialRuntime, MichiganContentPreset,
+    MichiganDeliveryPreset, ObserverEconomyReader, ObserverVisibility, Uuid,
 };
-use babylon_persistence::{ObserverEconomySnapshotV1, ProductionSnapshotV2};
+use babylon_persistence::{
+    observer_reader::ObserverEconomySnapshot, production_observation::ProductionSnapshot,
+};
 use std::{collections::BTreeSet, time::Instant};
 
 #[path = "../fixtures/statewide_synthetic.rs"]
 mod synthetic;
 
-fn assert_projection(snapshot: &ObserverEconomySnapshotV1, runtime: &DurableMaterialRuntimeV3) {
+fn assert_projection(snapshot: &ObserverEconomySnapshot, runtime: &DurableMaterialRuntime) {
     assert_eq!(snapshot.resolve_tick, runtime.session().completed_tick());
     assert!(snapshot.production_evidence_digest().unwrap().is_some());
     let rows = snapshot.production.as_ref().unwrap();
@@ -65,7 +66,7 @@ fn assert_projection(snapshot: &ObserverEconomySnapshotV1, runtime: &DurableMate
     }
 }
 
-fn assert_final_orders(rows: &ProductionSnapshotV2, runtime: &DurableMaterialRuntimeV3) {
+fn assert_final_orders(rows: &ProductionSnapshot, runtime: &DurableMaterialRuntime) {
     let mut orders = BTreeSet::new();
     let state = runtime.session().material().state();
     for account in &rows.final_demand_accounts {
@@ -92,7 +93,7 @@ fn assert_final_orders(rows: &ProductionSnapshotV2, runtime: &DurableMaterialRun
     assert_eq!(orders.len(), 233);
 }
 
-fn assert_stock_accounts(rows: &ProductionSnapshotV2, period: u64) {
+fn assert_stock_accounts(rows: &ProductionSnapshot, period: u64) {
     let balance = rows.material_balance.as_ref().unwrap();
     assert_eq!(balance.period, period);
     let mut principals = BTreeSet::new();
@@ -123,7 +124,7 @@ fn assert_stock_accounts(rows: &ProductionSnapshotV2, period: u64) {
     }
 }
 
-fn assert_same_world(left: &DurableMaterialRuntimeV3, right: &DurableMaterialRuntimeV3) {
+fn assert_same_world(left: &DurableMaterialRuntime, right: &DurableMaterialRuntime) {
     assert_eq!(left.tail(), right.tail());
     assert_eq!(
         left.session().material().canonical_bytes(),
@@ -141,32 +142,29 @@ fn statewide_synthetic_circulation_survives_sixteen_persisted_periods_and_held_h
     let mut target = DisposableTarget::create();
     let start = Instant::now();
     let sources = synthetic::SyntheticSources::create();
-    let catalog =
-        babylon_persistence::michigan_material::MichiganMaterialCatalogV1::load_for_preset(
-            &sources.path("defines.toml"),
-            MichiganDeliveryPresetV1::StatewideBaseline,
-        )
+    let catalog = babylon_persistence::michigan_material::MichiganMaterialCatalog::load_for_preset(
+        &sources.path("defines.toml"),
+        MichiganDeliveryPreset::StatewideBaseline,
+    )
+    .unwrap();
+    let foundation = MichiganContentPreset::new_campaign(MichiganDeliveryPreset::StatewideBaseline)
+        .create_foundation(&catalog)
         .unwrap();
-    let foundation =
-        MichiganContentPresetV1::new_campaign(MichiganDeliveryPresetV1::StatewideBaseline)
-            .create_foundation(&catalog)
-            .unwrap();
     let foundation_digest = foundation.digest();
     let campaign = CampaignId::from_uuid(Uuid::from_u128(29_701));
-    let mut runtime =
-        DurableMaterialRuntimeV3::create(&target.writer, campaign, foundation).unwrap();
+    let mut runtime = DurableMaterialRuntime::create(&target.writer, campaign, foundation).unwrap();
     let reference_foundation =
-        MichiganContentPresetV1::new_campaign(MichiganDeliveryPresetV1::StatewideBaseline)
+        MichiganContentPreset::new_campaign(MichiganDeliveryPreset::StatewideBaseline)
             .create_foundation(&synthetic::catalog())
             .unwrap();
     let mut reference = reference_foundation.into_session().unwrap();
     // Saved PostgreSQL authority must outlive every current input file.
     drop(sources);
-    install_reader_role_v1(&target.writer).unwrap();
-    install_observer_economy_schema_v1(&target.writer).unwrap();
+    install_reader_role(&target.writer).unwrap();
+    provision_observer_role(&target.writer).unwrap();
     let config = target.login("babylon_observer", "statewidescale");
     let observer =
-        ObserverEconomyReaderV1::connect(&config, ObserverVisibilityV1::FullObserver).unwrap();
+        ObserverEconomyReader::connect(&config, ObserverVisibility::FullObserver).unwrap();
     let creation = start.elapsed();
     let mut held = Vec::new();
     let mut advance_time = std::time::Duration::ZERO;
@@ -199,8 +197,7 @@ fn statewide_synthetic_circulation_survives_sixteen_persisted_periods_and_held_h
         if [1, 2, 16].contains(&period) {
             let began = Instant::now();
             let reopened =
-                DurableMaterialRuntimeV3::open(&target.writer, campaign, foundation_digest)
-                    .unwrap();
+                DurableMaterialRuntime::open(&target.writer, campaign, foundation_digest).unwrap();
             resume_time += began.elapsed();
             assert_same_world(&runtime, &reopened);
             runtime = reopened;
@@ -224,8 +221,7 @@ fn statewide_synthetic_circulation_survives_sixteen_persisted_periods_and_held_h
     assert_eq!(observer.campaigns().unwrap()[0].durable_tick, 16);
     let preview_config = target.login("babylon_reader", "statewidepreview");
     let preview =
-        ObserverEconomyReaderV1::connect(&preview_config, ObserverVisibilityV1::KnownPreview)
-            .unwrap();
+        ObserverEconomyReader::connect(&preview_config, ObserverVisibility::KnownPreview).unwrap();
     let restricted = preview.snapshot(campaign, 16).unwrap();
     assert!(restricted.production.is_none());
     assert!(restricted.production_evidence_digest().unwrap().is_none());
@@ -233,14 +229,14 @@ fn statewide_synthetic_circulation_survives_sixteen_persisted_periods_and_held_h
 }
 
 fn advance_reference(
-    reference: &mut babylon_tick::material_replay::MaterialReplaySessionV3<
+    reference: &mut babylon_tick::material_replay::MaterialReplaySession<
         babylon_graph::hypergraph_store::HypergraphStore,
     >,
 ) {
     use babylon_bsl::structural_verbs::CollectingSink;
-    use babylon_practice_contract::ordered_action_v1::OrderedPracticeActionBatchV1;
-    use babylon_tick::replay_session::ReplayCommitDispositionV1;
-    let actions = OrderedPracticeActionBatchV1::empty(
+    use babylon_practice_contract::OrderedPracticeActionBatch;
+    use babylon_tick::replay_session::ReplayCommitDisposition;
+    let actions = OrderedPracticeActionBatch::empty(
         reference.graph_session().session_identity().clone(),
         reference.completed_tick() + 1,
     )
@@ -248,7 +244,7 @@ fn advance_reference(
     let prepared = reference.prepare_advance(&actions).unwrap();
     reference
         .commit_prepared_and_publish(&mut CollectingSink::default(), prepared, |_| {
-            Ok::<_, ()>(ReplayCommitDispositionV1::Committed)
+            Ok::<_, ()>(ReplayCommitDisposition::Committed)
         })
         .unwrap();
 }

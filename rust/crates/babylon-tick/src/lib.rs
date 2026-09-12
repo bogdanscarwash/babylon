@@ -20,13 +20,14 @@
 // branch that is rarely taken.
 #![allow(clippy::result_large_err)]
 
+use babylon_bsl::bindings::BindingVocabulary;
 use babylon_bsl::causal_contract::{reduce_audit_receipts, AuditReceipt};
 use babylon_bsl::declarations::{parse_intrinsic_decls, DeclError, FieldRegistry};
 use babylon_bsl::error_identity::ErrorIdentity;
 use babylon_bsl::evaluator::Value;
 use babylon_bsl::fuel::{CardinalityCeilings, IntrinsicCosts};
 use babylon_bsl::intrinsic_host::KernelIntrinsicHost;
-use babylon_bsl::probability::{KernelInstanceIdentityV1, ProbabilityError};
+use babylon_bsl::probability::{KernelInstanceIdentity, ProbabilityError};
 use babylon_bsl::reader::{FormPath, SExpr};
 use babylon_bsl::rule_pipeline::{
     check_unique_rule_ids, load_rule_form, split_content, LoadContext, LoadError, LoadedRule,
@@ -40,19 +41,18 @@ use babylon_bsl::tick::run_tick_observed;
 use babylon_bsl::typecheck::TypeEnv;
 use babylon_bsl::types::{EnumRegistry, FieldDecl};
 use babylon_bsl::write_log::CollectingWriteLog;
-use babylon_bsl::BindingVocabulary;
 use babylon_graph::allocator_state::AllocatorState;
 use babylon_graph::hypergraph_store::HypergraphStore;
-use babylon_graph::stable_element::{StableElementKeyV1, StableElementResolverV1};
+use babylon_graph::stable_element::{StableElementKey, StableElementResolver};
 use babylon_graph::state_hash::CanonicalState;
 use babylon_graph::substrate::{GraphError, GraphSubstrate, HyperedgeId, NodeId};
 use babylon_graph::working_copy::DetachedCopy;
-use babylon_kernel::replay::{ReplaySeed, ReplaySessionIdV1, RngSeedContext};
-use babylon_kernel::SessionId;
+use babylon_kernel::replay::{ReplaySeed, ReplaySessionId, RngSeedContext};
 use std::collections::{HashMap, HashSet};
 
 pub mod choice_receipt;
 pub mod committed_event;
+pub mod diagnostic;
 pub mod h3_runtime;
 pub mod kernel_slot;
 pub mod material_replay;
@@ -62,11 +62,9 @@ pub mod material_world;
 mod phase_order;
 pub mod replay_identity;
 pub mod replay_session;
-pub mod session;
 mod world_hash;
-pub use session::TickSession;
 
-use replay_session::{IdentifiedTickReportV2, ReplayTickError};
+use replay_session::{IdentifiedTickReport, ReplayTickError};
 
 /// The result of running one or more rules over one scenario for one tick:
 /// graph and nominal-world hashes around the commit, plus guard and firing counts.
@@ -105,10 +103,10 @@ pub struct TickReport {
     pub audit_receipts: Vec<AuditReceipt>,
     /// Exact finite-choice evidence in tick-wide encounter order. A branch
     /// that makes no material change still contributes one receipt.
-    pub choice_receipts: Vec<choice_receipt::ChoiceReceiptV1>,
+    pub choice_receipts: Vec<choice_receipt::ChoiceReceipt>,
     /// Successful event observations with engine-owned emitting-rule and
     /// optional adjacent finite-projection provenance.
-    pub committed_events: Vec<committed_event::CommittedEventV2>,
+    pub committed_events: Vec<committed_event::CommittedEvent>,
 }
 
 pub(crate) type EventRecord = (String, Vec<(String, Value)>);
@@ -222,11 +220,11 @@ pub fn run_once_with_prelude(
 /// intrinsic declarations, load the scenario into `graph`, and load every
 /// `(rule …)` form `split_content` returns against the vocabulary/types/
 /// ceilings that scenario declared — compiled into the governed phase order
-/// before this returns, so every later stage (`TickSession::advance`,
+/// before this returns, so every later stage (`RuleDiagnosticSession::advance`,
 /// `run_once_into`) just iterates the already-correct order. D16's ascending
 /// rule-ID byte order breaks ties at one resolved position. Shared by
-/// `run_once_into` (which still runs exactly tick 1) and, from `session.rs`
-/// on, `TickSession::new` (Program 28 B2,
+/// `run_once_into` (which still runs exactly tick 1) and, from `diagnostic.rs`
+/// on, `RuleDiagnosticSession::new` (Program 28 B2,
 /// `docs/superpowers/plans/2026-08-11-b2-tick-loop-plan.md` Phase A Task 4).
 ///
 /// `Debug` (T2, issue #559): needed so `Result<PreparedRules, PrepareError>`
@@ -248,31 +246,11 @@ pub(crate) struct PreparedRules {
     /// read path (`bind_subject` rendering a stored ordinal back to its
     /// member) both resolve against this.
     pub enums: EnumRegistry,
-    /// **Content-stable node identity (plan §3.4, Task 3).** `LoadedScenario
-    /// ::node_content_ids`, threaded through unchanged — `TickSession` holds
-    /// it for the tick's lifetime by holding this whole struct. **First
-    /// production consumer landed (Task 4, #576 intrinsic-host train):**
-    /// `run_prepared_tick` passes `&prepared.node_content_ids` into
-    /// `run_tick`, which builds one [`babylon_bsl::intrinsic_host::
-    /// DrawContext`] per subject from it (plan §3.3's `subject` key
-    /// component) — the same `require_graph` precedent's lifecycle
-    /// (`babylon-bsl/src/evaluator.rs`) this field's Task-3 doc named:
-    /// dropped its `#[allow(dead_code)]` the moment a real caller landed.
-    /// Still reaches no `babylon-graph` write path and carries no
-    /// canonical-state weight — `state_hash` is computed over the substrate
-    /// alone.
+    /// Authored node identities used to seal the replay resolver.
     pub node_content_ids: HashMap<NodeId, String>,
     /// Validated scenario qname retained for stable replay identity.
-    #[allow(
-        dead_code,
-        reason = "PER-60 Task 7 retains this for Task 9's prepared-environment composer"
-    )]
     pub scenario_scope: String,
-    /// Authored hyperedge identities retained from scenario hydration.
-    #[allow(
-        dead_code,
-        reason = "PER-60 Task 7 retains this for Task 10's sealed stable resolver"
-    )]
+    /// Authored hyperedge identities used to seal the replay resolver.
     pub hyperedge_content_ids: HashMap<HyperedgeId, String>,
     /// The scenario's closed vocabulary, when it declared one —
     /// `run_tick`'s D29 owner-kind filter (`subject_type_of`, Community
@@ -283,7 +261,7 @@ pub(crate) struct PreparedRules {
     pub vocabulary: Option<babylon_bsl::vocabulary::ClosedVocabulary>,
 }
 
-/// Why `prepare_rules` (or [`diagnose_content_set`]) refused a content set —
+/// Why `prepare_rules` (or [`diagnose_content_set_sources`]) refused a content set —
 /// the structured seam #652 Task 3 gives the load path, so a caller (a test,
 /// or wave 2's `bsl-ls`) can read WHAT stage failed and WHAT code it carries
 /// without scanning a formatted string (§2.3, issue #652's `ErrorIdentity`
@@ -325,7 +303,7 @@ pub enum PrepareError {
     },
     /// A scheduled finite kernel did not exactly match the permanent
     /// append-only sample/slot ledger.
-    KernelSlot(kernel_slot::KernelSlotLedgerErrorV1),
+    KernelSlot(kernel_slot::KernelSlotLedgerError),
     /// A composition-level refusal raised by `prepare_rules` itself — no
     /// earlier crate's error type to wrap. `code`/`identity` are `Option`
     /// because some composition rules are genuinely uncoded (the
@@ -399,7 +377,7 @@ impl std::error::Error for PrepareError {}
 
 /// The rule-pack namespaces this driver registers before loading any rule
 /// (`LoadContext::systems`) — extracted (Task 3, #652) so `prepare_rules`
-/// and [`diagnose_content_set`] build the IDENTICAL set from one place
+/// and [`diagnose_content_set_sources`] build the IDENTICAL set from one place
 /// rather than two copies drifting apart. PER-17 replaces the former partial
 /// inline set with the canonical 34-slot registry and its accepted names.
 fn registered_systems() -> HashSet<String> {
@@ -452,7 +430,7 @@ fn enforce_ranked_composition(
     }
     // Keep diagnostics, probability loading and execution on the same
     // schedule admission, including the native composition's identity.
-    plan.native_material_composition_index(material_staffing::STAFFING_COMPOSITION_ID_V1)
+    plan.native_material_composition_index(material_staffing::STAFFING_COMPOSITION_ID)
         .map_err(prepare_error_from_schedule)
 }
 
@@ -549,7 +527,7 @@ fn seed_implicit_edge_strength_fields(
 
 /// Everything a rule form's own [`LoadContext`] needs, built from a
 /// successfully-hydrated scenario — shared by `prepare_rules` (which owns
-/// the values into [`PreparedRules`]) and [`diagnose_content_set`] (which
+/// the values into [`PreparedRules`]) and [`diagnose_content_set_sources`] (which
 /// needs the SAME values just to build a throwaway `LoadContext` for one
 /// diagnostic pass). A named struct rather than a tuple so a caller
 /// destructures by field name, not by position.
@@ -566,7 +544,7 @@ struct SharedLoadInputs {
 
 /// Build [`SharedLoadInputs`] from a hydrated scenario — the SAME
 /// construction `prepare_rules` ran inline before Task 3 (#652), relocated
-/// so [`diagnose_content_set`] does not duplicate ~80 lines of the
+/// so [`diagnose_content_set_sources`] does not duplicate ~80 lines of the
 /// `registered_systems`/ceilings/vocabulary literals verbatim.
 ///
 /// # Errors
@@ -678,14 +656,58 @@ fn probability_prepare_error(rules: &[LoadedRule], error: ProbabilityError) -> P
     PrepareError::Probability { rule_id, error }
 }
 
-/// Load `scenario_src` (optionally through `prelude_src`) and every rule
-/// source in `rule_srcs` through the SAME staged sequence `prepare_rules`
+/// One diagnostic refusal plus the exact rule source that owns it, when the
+/// production loader can determine an owner.
+///
+/// Scenario, declaration-set, duplicate-identity, and genuinely aggregate
+/// composition failures remain ownerless. A rule-load, scheduled-rule, or
+/// finite-kernel refusal is attributed to the manifest-relative source that
+/// supplied that rule. Authoring clients must not infer a sibling source from
+/// a coincidentally valid [`babylon_bsl::reader::FormPath`].
+#[derive(Debug, Clone, PartialEq)]
+pub struct SourcedPrepareError {
+    /// Manifest-relative rule source identity, or `None` for a content-set
+    /// wide refusal.
+    pub source_id: Option<String>,
+    /// The production preparation refusal.
+    pub error: PrepareError,
+}
+
+fn prepare_error_source_id(
+    error: &PrepareError,
+    rule_sources: &HashMap<String, String>,
+) -> Option<String> {
+    let rule_id = match error {
+        PrepareError::Rule {
+            rule_id: Some(rule_id),
+            ..
+        }
+        | PrepareError::Probability {
+            rule_id: Some(rule_id),
+            ..
+        } => Some(rule_id),
+        PrepareError::Composition {
+            identity: Some(ErrorIdentity::RuleId(rule_id)),
+            ..
+        } => Some(rule_id),
+        PrepareError::Scenario(_)
+        | PrepareError::Rule { rule_id: None, .. }
+        | PrepareError::Intrinsic(_)
+        | PrepareError::Probability { rule_id: None, .. }
+        | PrepareError::KernelSlot(_)
+        | PrepareError::Composition { .. } => None,
+    };
+    rule_id.and_then(|rule_id| rule_sources.get(rule_id).cloned())
+}
+
+/// Load `scenario_src` (optionally through `prelude_src`) and every named
+/// rule source in `rule_sources` through the SAME staged sequence `prepare_rules`
 /// runs, but COLLECTING every independent failure instead of stopping at
 /// the first — the `bsl-ls` diagnostics seam (#652, Task 3) needs a full
 /// report of a content set's problems, not just its first one.
 ///
 /// Continuation discipline, staged:
-/// - each element of `rule_srcs` is [`split_content`] independently — one
+/// - each element of `rule_sources` is [`split_content`] independently — one
 ///   malformed source cannot hide the forms a SIBLING source parses
 ///   cleanly, so a failure here is recorded and the NEXT source still gets
 ///   its own chance;
@@ -721,84 +743,15 @@ fn probability_prepare_error(rules: &[LoadedRule], error: ProbabilityError) -> P
 ///
 /// An empty return means the content set loads clean end to end — the SAME
 /// success condition `prepare_rules` reports as `Ok`.
-#[must_use]
-pub fn diagnose_content_set(
-    scenario_src: &str,
-    prelude_src: Option<&str>,
-    rule_srcs: &[&str],
-) -> Vec<PrepareError> {
-    let rule_sources = rule_srcs
-        .iter()
-        .map(|source| ContentRuleSourceV1 {
-            // Preserve the historical loader identity used by this unnamed
-            // compatibility surface. Callers that need exact source
-            // ownership use `diagnose_content_set_sources` below.
-            source_id: "rule",
-            source,
-        })
-        .collect::<Vec<_>>();
-    diagnose_content_set_sources(scenario_src, prelude_src, &rule_sources)
-        .into_iter()
-        .map(|sourced| sourced.error)
-        .collect()
-}
-
-/// One diagnostic refusal plus the exact rule source that owns it, when the
-/// production loader can determine an owner.
 ///
-/// Scenario, declaration-set, duplicate-identity, and genuinely aggregate
-/// composition failures remain ownerless. A rule-load, scheduled-rule, or
-/// finite-kernel refusal is attributed to the manifest-relative source that
-/// supplied that rule. Authoring clients must not infer a sibling source from
-/// a coincidentally valid [`babylon_bsl::FormPath`].
-#[derive(Debug, Clone, PartialEq)]
-pub struct SourcedPrepareErrorV1 {
-    /// Manifest-relative rule source identity, or `None` for a content-set
-    /// wide refusal.
-    pub source_id: Option<String>,
-    /// The production preparation refusal.
-    pub error: PrepareError,
-}
-
-fn prepare_error_source_id(
-    error: &PrepareError,
-    rule_sources: &HashMap<String, String>,
-) -> Option<String> {
-    let rule_id = match error {
-        PrepareError::Rule {
-            rule_id: Some(rule_id),
-            ..
-        }
-        | PrepareError::Probability {
-            rule_id: Some(rule_id),
-            ..
-        } => Some(rule_id),
-        PrepareError::Composition {
-            identity: Some(ErrorIdentity::RuleId(rule_id)),
-            ..
-        } => Some(rule_id),
-        PrepareError::Scenario(_)
-        | PrepareError::Rule { rule_id: None, .. }
-        | PrepareError::Intrinsic(_)
-        | PrepareError::Probability { rule_id: None, .. }
-        | PrepareError::KernelSlot(_)
-        | PrepareError::Composition { .. } => None,
-    };
-    rule_id.and_then(|rule_id| rule_sources.get(rule_id).cloned())
-}
-
-/// Diagnose a named multi-source content set through the same loader,
-/// governed phase schedule, and finite-kernel analysis as executable
-/// preparation while retaining exact source ownership.
-///
-/// Ordering and continuation match [`diagnose_content_set`]. The additional
-/// source identity is authoring metadata only and cannot affect mechanics.
+/// Diagnostics retain exact rule source ownership. Source identity is
+/// authoring metadata only and cannot affect mechanics.
 #[must_use]
 pub fn diagnose_content_set_sources(
     scenario_src: &str,
     prelude_src: Option<&str>,
-    rule_sources: &[ContentRuleSourceV1<'_>],
-) -> Vec<SourcedPrepareErrorV1> {
+    rule_sources: &[ContentRuleSource<'_>],
+) -> Vec<SourcedPrepareError> {
     let mut errors = Vec::new();
     let mut intrinsic_forms: Vec<SExpr> = Vec::new();
     let mut sourced_rule_forms: Vec<(String, SExpr, FormPath, String)> = Vec::new();
@@ -815,7 +768,7 @@ pub fn diagnose_content_set_sources(
                     )
                 }));
             }
-            Err(error) => errors.push(SourcedPrepareErrorV1 {
+            Err(error) => errors.push(SourcedPrepareError {
                 source_id: Some(rule_source.source_id.to_owned()),
                 error: PrepareError::Rule {
                     rule_id: None,
@@ -835,7 +788,7 @@ pub fn diagnose_content_set_sources(
     let unique_rule_ids = match check_unique_rule_ids(&rule_forms) {
         Ok(()) => true,
         Err(error) => {
-            errors.push(SourcedPrepareErrorV1 {
+            errors.push(SourcedPrepareError {
                 source_id: None,
                 error: PrepareError::Rule {
                     rule_id: None,
@@ -849,7 +802,7 @@ pub fn diagnose_content_set_sources(
     let declared = match parse_intrinsic_decls(&intrinsic_forms) {
         Ok(declared) => declared,
         Err(e) => {
-            errors.push(SourcedPrepareErrorV1 {
+            errors.push(SourcedPrepareError {
                 source_id: None,
                 error: PrepareError::Intrinsic(e),
             });
@@ -867,7 +820,7 @@ pub fn diagnose_content_set_sources(
     let scenario = match hydrate_scenario(scenario_src, prelude_src, &mut graph) {
         Ok(scenario) => scenario,
         Err(e) => {
-            errors.push(SourcedPrepareErrorV1 {
+            errors.push(SourcedPrepareError {
                 source_id: None,
                 error: e,
             });
@@ -878,7 +831,7 @@ pub fn diagnose_content_set_sources(
     let inputs = match build_shared_load_inputs(&scenario) {
         Ok(inputs) => inputs,
         Err(e) => {
-            errors.push(SourcedPrepareErrorV1 {
+            errors.push(SourcedPrepareError {
                 source_id: None,
                 error: e,
             });
@@ -905,7 +858,7 @@ pub fn diagnose_content_set_sources(
                 admitted_rule_forms.push((id.clone(), form.clone()));
                 admitted_rules.push((id.clone(), loaded));
             }
-            Err(error) => errors.push(SourcedPrepareErrorV1 {
+            Err(error) => errors.push(SourcedPrepareError {
                 source_id: Some(source_id.clone()),
                 error: PrepareError::Rule {
                     rule_id: Some(id.clone()),
@@ -919,7 +872,7 @@ pub fn diagnose_content_set_sources(
         match phase_order::compile(&admitted_rule_forms) {
             Ok(plan) => {
                 if let Err(error) = enforce_ranked_composition(&plan, &admitted_rule_forms) {
-                    errors.push(SourcedPrepareErrorV1 {
+                    errors.push(SourcedPrepareError {
                         source_id: prepare_error_source_id(&error, &rule_source_by_id),
                         error,
                     });
@@ -934,7 +887,7 @@ pub fn diagnose_content_set_sources(
                                 babylon_bsl::probability::analyze_content_set(&loaded)
                             {
                                 let error = probability_prepare_error(&loaded, error);
-                                errors.push(SourcedPrepareErrorV1 {
+                                errors.push(SourcedPrepareError {
                                     source_id: prepare_error_source_id(&error, &rule_source_by_id),
                                     error,
                                 });
@@ -942,7 +895,7 @@ pub fn diagnose_content_set_sources(
                         }
                         Err(error) => {
                             let error = prepare_error_from_schedule(error);
-                            errors.push(SourcedPrepareErrorV1 {
+                            errors.push(SourcedPrepareError {
                                 source_id: prepare_error_source_id(&error, &rule_source_by_id),
                                 error,
                             });
@@ -952,7 +905,7 @@ pub fn diagnose_content_set_sources(
             }
             Err(error) => {
                 let error = prepare_error_from_schedule(error);
-                errors.push(SourcedPrepareErrorV1 {
+                errors.push(SourcedPrepareError {
                     source_id: prepare_error_source_id(&error, &rule_source_by_id),
                     error,
                 });
@@ -970,7 +923,7 @@ pub fn diagnose_content_set_sources(
 /// File names do not change mechanics. They only map typed `FormPath`s back
 /// to diagnostics and authoring facts in the correct source buffer.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct ContentRuleSourceV1<'a> {
+pub struct ContentRuleSource<'a> {
     /// Manifest-relative source identity.
     pub source_id: &'a str,
     /// Exact current source bytes decoded as UTF-8.
@@ -986,21 +939,21 @@ pub struct ContentRuleSourceV1<'a> {
 /// permanent ledger check refused the content set; it is never an executable
 /// admission.
 #[derive(Debug)]
-pub struct ContentSetSourceAnalysisErrorV1 {
+pub struct ContentSetSourceAnalysisError {
     /// The governed preparation refusal.
     pub error: PrepareError,
     /// Typed, non-executable facts available for locating a kernel-slot
     /// refusal. `None` for every earlier preparation failure.
-    pub partial_analysis: Option<babylon_bsl::probability::ContentSetAnalysisV1>,
+    pub partial_analysis: Option<babylon_bsl::probability::ContentSetAnalysis>,
 }
 
-impl std::fmt::Display for ContentSetSourceAnalysisErrorV1 {
+impl std::fmt::Display for ContentSetSourceAnalysisError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.error)
     }
 }
 
-impl std::error::Error for ContentSetSourceAnalysisErrorV1 {}
+impl std::error::Error for ContentSetSourceAnalysisError {}
 
 /// Load and analyze a named multi-source content set through the production
 /// rule loader and governed phase schedule, without running a tick or mutating
@@ -1016,15 +969,15 @@ impl std::error::Error for ContentSetSourceAnalysisErrorV1 {}
 /// Returns the same first-failing scenario, intrinsic, rule, phase, or finite
 /// probability refusal as executable preparation.
 pub fn analyze_content_set_sources(
-    scenario_source: ContentRuleSourceV1<'_>,
-    prelude_sources: &[ContentRuleSourceV1<'_>],
-    rule_sources: &[ContentRuleSourceV1<'_>],
-) -> Result<babylon_bsl::probability::ContentSetAnalysisV1, PrepareError> {
+    scenario_source: ContentRuleSource<'_>,
+    prelude_sources: &[ContentRuleSource<'_>],
+    rule_sources: &[ContentRuleSource<'_>],
+) -> Result<babylon_bsl::probability::ContentSetAnalysis, PrepareError> {
     analyze_content_set_sources_with_kernel_slots(
         scenario_source,
         prelude_sources,
         rule_sources,
-        kernel_slot::BUNDLED_KERNEL_SLOT_RESERVATIONS_V1,
+        kernel_slot::BUNDLED_KERNEL_SLOT_RESERVATIONS,
     )
     .map_err(|error| error.error)
 }
@@ -1034,7 +987,7 @@ pub fn analyze_content_set_sources(
 ///
 /// This is the tooling counterpart to executable preparation's caller-owned
 /// ledger seam. A final slot refusal retains typed source paths in
-/// [`ContentSetSourceAnalysisErrorV1::partial_analysis`] solely so an editor
+/// [`ContentSetSourceAnalysisError::partial_analysis`] solely so an editor
 /// can underline the exact sample or slot; callers must still treat the
 /// result as refused.
 ///
@@ -1043,17 +996,17 @@ pub fn analyze_content_set_sources(
 /// Returns the same loader, schedule, probability, and permanent slot
 /// refusals as executable preparation.
 pub fn analyze_content_set_sources_with_kernel_slots(
-    scenario_source: ContentRuleSourceV1<'_>,
-    prelude_sources: &[ContentRuleSourceV1<'_>],
-    rule_sources: &[ContentRuleSourceV1<'_>],
-    kernel_slots: &[kernel_slot::KernelSlotReservationV1<'_>],
-) -> Result<babylon_bsl::probability::ContentSetAnalysisV1, ContentSetSourceAnalysisErrorV1> {
+    scenario_source: ContentRuleSource<'_>,
+    prelude_sources: &[ContentRuleSource<'_>],
+    rule_sources: &[ContentRuleSource<'_>],
+    kernel_slots: &[kernel_slot::KernelSlotReservationRef<'_>],
+) -> Result<babylon_bsl::probability::ContentSetAnalysis, ContentSetSourceAnalysisError> {
     let analysis = analyze_content_set_sources_before_kernel_slots(
         scenario_source,
         prelude_sources,
         rule_sources,
     )
-    .map_err(|error| ContentSetSourceAnalysisErrorV1 {
+    .map_err(|error| ContentSetSourceAnalysisError {
         error,
         partial_analysis: None,
     })?;
@@ -1066,8 +1019,8 @@ pub fn analyze_content_set_sources_with_kernel_slots(
                 .map(|kernel| (rule.rule_id.as_str(), kernel))
         })
         .collect::<Vec<_>>();
-    if let Err(error) = kernel_slot::validate_live_kernel_slots_v1(kernel_slots, &live_kernels) {
-        return Err(ContentSetSourceAnalysisErrorV1 {
+    if let Err(error) = kernel_slot::validate_live_kernel_slots(kernel_slots, &live_kernels) {
+        return Err(ContentSetSourceAnalysisError {
             error: PrepareError::KernelSlot(error),
             partial_analysis: Some(analysis),
         });
@@ -1076,10 +1029,10 @@ pub fn analyze_content_set_sources_with_kernel_slots(
 }
 
 fn analyze_content_set_sources_before_kernel_slots(
-    scenario_source: ContentRuleSourceV1<'_>,
-    prelude_sources: &[ContentRuleSourceV1<'_>],
-    rule_sources: &[ContentRuleSourceV1<'_>],
-) -> Result<babylon_bsl::probability::ContentSetAnalysisV1, PrepareError> {
+    scenario_source: ContentRuleSource<'_>,
+    prelude_sources: &[ContentRuleSource<'_>],
+    rule_sources: &[ContentRuleSource<'_>],
+) -> Result<babylon_bsl::probability::ContentSetAnalysis, PrepareError> {
     let mut intrinsic_forms = Vec::new();
     let mut sourced_rule_forms = Vec::new();
     for rule_source in rule_sources {
@@ -1116,13 +1069,13 @@ fn analyze_content_set_sources_before_kernel_slots(
 
     let named_preludes = prelude_sources
         .iter()
-        .map(|source| babylon_bsl::NamedDeclarationPreludeV1 {
+        .map(|source| babylon_bsl::scenario::NamedDeclarationPrelude {
             source_id: source.source_id,
             source: source.source,
         })
         .collect::<Vec<_>>();
     let mut graph = HypergraphStore::new();
-    let scenario = babylon_bsl::load_scenario_with_named_preludes(
+    let scenario = babylon_bsl::scenario::load_scenario_with_named_preludes(
         scenario_source.source_id,
         scenario_source.source,
         &named_preludes,
@@ -1169,7 +1122,7 @@ fn analyze_content_set_sources_before_kernel_slots(
 /// Why a requested event likelihood is outside the exact finite projection
 /// boundary or why its real loader/executor refused it.
 #[derive(Debug)]
-pub enum ForecastErrorV1 {
+pub enum ForecastError {
     /// The content set did not load through the executable preparation path.
     Preparation(PrepareError),
     /// The request asks for something V1 deliberately cannot enumerate.
@@ -1181,7 +1134,7 @@ pub enum ForecastErrorV1 {
     Execution(babylon_bsl::tick::TickError),
 }
 
-impl std::fmt::Display for ForecastErrorV1 {
+impl std::fmt::Display for ForecastError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Preparation(error) => write!(f, "{error}"),
@@ -1193,7 +1146,7 @@ impl std::fmt::Display for ForecastErrorV1 {
     }
 }
 
-impl std::error::Error for ForecastErrorV1 {}
+impl std::error::Error for ForecastError {}
 
 /// Forecast the exact event likelihoods for one stable subject and one
 /// adjacent finite kernel/projection pair in a paired scenario.
@@ -1215,16 +1168,16 @@ impl std::error::Error for ForecastErrorV1 {}
 pub fn forecast_event_likelihoods(
     scenario_src: &str,
     prelude_src: Option<&str>,
-    rule_sources: &[ContentRuleSourceV1<'_>],
+    rule_sources: &[ContentRuleSource<'_>],
     sample: &str,
-    subject: &StableElementKeyV1,
+    subject: &StableElementKey,
     tick: i64,
-) -> Result<Vec<babylon_bsl::probability::EventLikelihoodV1>, ForecastErrorV1> {
+) -> Result<Vec<babylon_bsl::probability::EventLikelihood>, ForecastError> {
     forecast_event_likelihoods_with_kernel_slots(
         scenario_src,
         prelude_src,
         rule_sources,
-        kernel_slot::BUNDLED_KERNEL_SLOT_RESERVATIONS_V1,
+        kernel_slot::BUNDLED_KERNEL_SLOT_RESERVATIONS,
         sample,
         subject,
         tick,
@@ -1243,14 +1196,14 @@ pub fn forecast_event_likelihoods(
 pub fn forecast_event_likelihoods_with_kernel_slots(
     scenario_src: &str,
     prelude_src: Option<&str>,
-    rule_sources: &[ContentRuleSourceV1<'_>],
-    kernel_slots: &[kernel_slot::KernelSlotReservationV1<'_>],
+    rule_sources: &[ContentRuleSource<'_>],
+    kernel_slots: &[kernel_slot::KernelSlotReservationRef<'_>],
     sample: &str,
-    subject: &StableElementKeyV1,
+    subject: &StableElementKey,
     tick: i64,
-) -> Result<Vec<babylon_bsl::probability::EventLikelihoodV1>, ForecastErrorV1> {
+) -> Result<Vec<babylon_bsl::probability::EventLikelihood>, ForecastError> {
     if tick <= 0 {
-        return Err(ForecastErrorV1::NotExactlyEnumerable {
+        return Err(ForecastError::NotExactlyEnumerable {
             reason: format!("forecast tick must be positive, got {tick}"),
         });
     }
@@ -1269,18 +1222,18 @@ pub fn forecast_event_likelihoods_with_kernel_slots(
         &mut graph,
         kernel_slots,
     )
-    .map_err(ForecastErrorV1::Preparation)?;
-    let StableElementKeyV1::Node {
+    .map_err(ForecastError::Preparation)?;
+    let StableElementKey::Node {
         scenario,
         local_name,
     } = subject
     else {
-        return Err(ForecastErrorV1::NotExactlyEnumerable {
+        return Err(ForecastError::NotExactlyEnumerable {
             reason: "V1 finite projections are subject-local node recognizers".to_owned(),
         });
     };
     if scenario != &prepared.scenario_scope {
-        return Err(ForecastErrorV1::NotExactlyEnumerable {
+        return Err(ForecastError::NotExactlyEnumerable {
             reason: format!(
                 "stable subject belongs to scenario `{scenario}`, not `{}`",
                 prepared.scenario_scope
@@ -1291,7 +1244,7 @@ pub fn forecast_event_likelihoods_with_kernel_slots(
         .node_content_ids
         .iter()
         .find_map(|(node, name)| (name == local_name).then_some(*node))
-        .ok_or_else(|| ForecastErrorV1::NotExactlyEnumerable {
+        .ok_or_else(|| ForecastError::NotExactlyEnumerable {
             reason: format!("scenario has no stable node `{local_name}`"),
         })?;
     let rules = prepared
@@ -1306,7 +1259,7 @@ pub fn forecast_event_likelihoods_with_kernel_slots(
                 .as_ref()
                 .is_some_and(|kernel| kernel.sample == sample)
         })
-        .ok_or_else(|| ForecastErrorV1::NotExactlyEnumerable {
+        .ok_or_else(|| ForecastError::NotExactlyEnumerable {
             reason: format!("content set has no finite kernel `{sample}`"),
         })?;
     let projection_is_adjacent = rules
@@ -1314,7 +1267,7 @@ pub fn forecast_event_likelihoods_with_kernel_slots(
         .and_then(|rule| rule.projection.as_ref())
         .is_some_and(|projection| projection.sample == sample);
     if !projection_is_adjacent {
-        return Err(ForecastErrorV1::NotExactlyEnumerable {
+        return Err(ForecastError::NotExactlyEnumerable {
             reason: format!(
                 "finite kernel `{sample}` has no immediately adjacent deterministic projection"
             ),
@@ -1322,41 +1275,42 @@ pub fn forecast_event_likelihoods_with_kernel_slots(
     }
     let mechanic_subject_type =
         babylon_bsl::tick::subject_type_of_rule(&rules[kernel_index], prepared.vocabulary.as_ref())
-            .map_err(ForecastErrorV1::Execution)?;
-    let actual_subject_type = graph.node_type_of(subject_node).map_err(|error| {
-        ForecastErrorV1::NotExactlyEnumerable {
-            reason: format!(
-                "stable subject `{local_name}` has no resolvable node type: {}",
-                error.message
-            ),
-        }
-    })?;
+            .map_err(ForecastError::Execution)?;
+    let actual_subject_type =
+        graph
+            .node_type_of(subject_node)
+            .map_err(|error| ForecastError::NotExactlyEnumerable {
+                reason: format!(
+                    "stable subject `{local_name}` has no resolvable node type: {}",
+                    error.message
+                ),
+            })?;
     if actual_subject_type != mechanic_subject_type {
-        return Err(ForecastErrorV1::NotExactlyEnumerable {
+        return Err(ForecastError::NotExactlyEnumerable {
             reason: format!(
                 "stable subject `{local_name}` has node type `{actual_subject_type}`, but finite kernel `{sample}` mechanic runs over `{mechanic_subject_type}`"
             ),
         });
     }
-    let resolver = StableElementResolverV1::seal(
+    let resolver = StableElementResolver::seal(
         &graph,
         &prepared.scenario_scope,
         &prepared.node_content_ids,
         &prepared.hyperedge_content_ids,
     )
-    .map_err(|error| ForecastErrorV1::NotExactlyEnumerable {
+    .map_err(|error| ForecastError::NotExactlyEnumerable {
         reason: format!("forecast scenario has no sealed stable carrier map: {error:?}"),
     })?;
     let analysis_session =
-        ReplaySessionIdV1::try_from("analysis/finite-projection-v1").map_err(|error| {
-            ForecastErrorV1::NotExactlyEnumerable {
+        ReplaySessionId::try_from("analysis/finite-projection-v1").map_err(|error| {
+            ForecastError::NotExactlyEnumerable {
                 reason: format!("forecast replay identity refused: {error:?}"),
             }
         })?;
     let analysis_seed = ReplaySeed::new(0);
     for prior in rules.iter().take(kernel_index) {
         if let Some(kernel) = &prior.kernel {
-            return Err(ForecastErrorV1::NotExactlyEnumerable {
+            return Err(ForecastError::NotExactlyEnumerable {
                 reason: format!(
                     "resolved pre-choice state depends on earlier finite kernel `{}`; V1 does not enumerate cross-sample paths",
                     kernel.sample
@@ -1375,31 +1329,29 @@ pub fn forecast_event_likelihoods_with_kernel_slots(
             &prepared.intrinsics,
             &prepared.consts,
             tick,
-            Some(&prepared.node_content_ids),
-            RngSeedContext::V2 {
+            RngSeedContext {
                 session: &analysis_session,
                 seed: analysis_seed,
             },
-            Some(&resolver),
+            &resolver,
             prepared.vocabulary.as_ref(),
             &mut ignored_writes,
         )
-        .map_err(ForecastErrorV1::Execution)?;
+        .map_err(ForecastError::Execution)?;
         if !outcome.kernel_realizations.is_empty() {
-            return Err(ForecastErrorV1::NotExactlyEnumerable {
+            return Err(ForecastError::NotExactlyEnumerable {
                 reason: "deterministic forecast prefix produced an unexpected finite realization"
                     .to_owned(),
             });
         }
     }
-    let context = babylon_bsl::tick::ForecastContextV1 {
+    let context = babylon_bsl::tick::ForecastContext {
         types: &prepared.types,
         enums: &prepared.enums,
         host: &KernelIntrinsicHost,
         costs: &prepared.intrinsics,
         defines: &prepared.consts,
         tick,
-        vocabulary: prepared.vocabulary.as_ref(),
     };
     babylon_bsl::tick::forecast_event_likelihoods(
         &rules,
@@ -1408,7 +1360,7 @@ pub fn forecast_event_likelihoods_with_kernel_slots(
         subject_node,
         &context,
     )
-    .map_err(ForecastErrorV1::Execution)
+    .map_err(ForecastError::Execution)
 }
 
 /// Forecast without guessing a carrier or calendar position when the paired
@@ -1422,19 +1374,19 @@ pub fn forecast_event_likelihoods_with_kernel_slots(
 ///
 /// # Errors
 ///
-/// Returns [`ForecastErrorV1`] for loader/executor failures or when the paired
+/// Returns [`ForecastError`] for loader/executor failures or when the paired
 /// scenario does not uniquely determine an exact finite instance.
 pub fn forecast_scenario_determined_event_likelihoods(
     scenario_src: &str,
     prelude_src: Option<&str>,
-    rule_sources: &[ContentRuleSourceV1<'_>],
+    rule_sources: &[ContentRuleSource<'_>],
     sample: &str,
-) -> Result<Vec<babylon_bsl::probability::EventLikelihoodV1>, ForecastErrorV1> {
+) -> Result<Vec<babylon_bsl::probability::EventLikelihood>, ForecastError> {
     forecast_scenario_determined_event_likelihoods_with_kernel_slots(
         scenario_src,
         prelude_src,
         rule_sources,
-        kernel_slot::BUNDLED_KERNEL_SLOT_RESERVATIONS_V1,
+        kernel_slot::BUNDLED_KERNEL_SLOT_RESERVATIONS,
         sample,
     )
 }
@@ -1450,10 +1402,10 @@ pub fn forecast_scenario_determined_event_likelihoods(
 pub fn forecast_scenario_determined_event_likelihoods_with_kernel_slots(
     scenario_src: &str,
     prelude_src: Option<&str>,
-    rule_sources: &[ContentRuleSourceV1<'_>],
-    kernel_slots: &[kernel_slot::KernelSlotReservationV1<'_>],
+    rule_sources: &[ContentRuleSource<'_>],
+    kernel_slots: &[kernel_slot::KernelSlotReservationRef<'_>],
     sample: &str,
-) -> Result<Vec<babylon_bsl::probability::EventLikelihoodV1>, ForecastErrorV1> {
+) -> Result<Vec<babylon_bsl::probability::EventLikelihood>, ForecastError> {
     let combined_rules = rule_sources
         .iter()
         .map(|source| source.source)
@@ -1467,7 +1419,7 @@ pub fn forecast_scenario_determined_event_likelihoods_with_kernel_slots(
         &mut graph,
         kernel_slots,
     )
-    .map_err(ForecastErrorV1::Preparation)?;
+    .map_err(ForecastError::Preparation)?;
     let kernel_index = prepared
         .rules
         .iter()
@@ -1476,7 +1428,7 @@ pub fn forecast_scenario_determined_event_likelihoods_with_kernel_slots(
                 .as_ref()
                 .is_some_and(|kernel| kernel.sample == sample)
         })
-        .ok_or_else(|| ForecastErrorV1::NotExactlyEnumerable {
+        .ok_or_else(|| ForecastError::NotExactlyEnumerable {
             reason: format!("content set has no finite kernel `{sample}`"),
         })?;
     let mechanic = &prepared.rules[kernel_index].1;
@@ -1488,7 +1440,7 @@ pub fn forecast_scenario_determined_event_likelihoods_with_kernel_slots(
                 .as_ref()
                 .is_some_and(|projection| projection.sample == sample)
         })
-        .ok_or_else(|| ForecastErrorV1::NotExactlyEnumerable {
+        .ok_or_else(|| ForecastError::NotExactlyEnumerable {
             reason: format!(
                 "finite kernel `{sample}` has no immediately adjacent deterministic projection"
             ),
@@ -1508,17 +1460,17 @@ pub fn forecast_scenario_determined_event_likelihoods_with_kernel_slots(
             )
         });
     if reads_calendar {
-        return Err(ForecastErrorV1::NotExactlyEnumerable {
+        return Err(ForecastError::NotExactlyEnumerable {
             reason: "resolved forecast prefix, kernel, or projection depends on the forecast tick"
                 .to_owned(),
         });
     }
     let subject_type =
         babylon_bsl::tick::subject_type_of_rule(mechanic, prepared.vocabulary.as_ref())
-            .map_err(ForecastErrorV1::Execution)?;
+            .map_err(ForecastError::Execution)?;
     let subjects = graph.nodes(&subject_type);
     let [subject_node] = subjects.as_slice() else {
-        return Err(ForecastErrorV1::NotExactlyEnumerable {
+        return Err(ForecastError::NotExactlyEnumerable {
             reason: format!(
                 "paired scenario determines {} `{subject_type}` carriers, not exactly one",
                 subjects.len()
@@ -1526,11 +1478,11 @@ pub fn forecast_scenario_determined_event_likelihoods_with_kernel_slots(
         });
     };
     let local_name = prepared.node_content_ids.get(subject_node).ok_or_else(|| {
-        ForecastErrorV1::NotExactlyEnumerable {
+        ForecastError::NotExactlyEnumerable {
             reason: "the unique forecast carrier has no authored stable identity".to_owned(),
         }
     })?;
-    let subject = StableElementKeyV1::Node {
+    let subject = StableElementKey::Node {
         scenario: prepared.scenario_scope.clone(),
         local_name: local_name.clone(),
     };
@@ -1561,20 +1513,20 @@ pub(crate) fn prepare_rules<G: GraphSubstrate + CanonicalState>(
         prelude_src,
         rule_src,
         graph,
-        kernel_slot::BUNDLED_KERNEL_SLOT_RESERVATIONS_V1,
+        kernel_slot::BUNDLED_KERNEL_SLOT_RESERVATIONS,
     )
 }
 
 fn prepare_rules_with_kernel_slots<G: GraphSubstrate + CanonicalState>(
     scenario_src: &str,
     // Train B item 4 (#591, D157): `None` for every pre-existing caller
-    // (`run_once_into`, `TickSession::new`) — behavior unchanged, byte for
+    // (`run_once_into`, `RuleDiagnosticSession::new`) — behavior unchanged, byte for
     // byte. `Some(prelude)` routes the scenario load through
     // `load_scenario_with_prelude` instead of `load_scenario`.
     prelude_src: Option<&str>,
     rule_src: &str,
     graph: &mut G,
-    kernel_slots: &[kernel_slot::KernelSlotReservationV1<'_>],
+    kernel_slots: &[kernel_slot::KernelSlotReservationRef<'_>],
 ) -> Result<PreparedRules, PrepareError> {
     // §2.2's `<intrinsic-decl>` top-forms, split from the `(rule …)` forms
     // they may share a source with (`split_content`), then parsed into the
@@ -1609,7 +1561,7 @@ fn prepare_rules_with_kernel_slots<G: GraphSubstrate + CanonicalState>(
     // than from a guess about its stored value. The D32 implicit-
     // `<edge-type>/strength` seeding (and its own duplicate-declaration
     // refusal) is [`seed_implicit_edge_strength_fields`]'s own doc — shared
-    // with [`diagnose_content_set`] via [`build_shared_load_inputs`].
+    // with [`diagnose_content_set_sources`] via [`build_shared_load_inputs`].
     let inputs = build_shared_load_inputs(&validation_scenario)?;
 
     // ONE shared LoadContext for every rule in the content set — the
@@ -1683,7 +1635,7 @@ fn prepare_rules_with_kernel_slots<G: GraphSubstrate + CanonicalState>(
                 .map(|kernel| (rule_id.as_str(), kernel))
         })
         .collect::<Vec<_>>();
-    kernel_slot::validate_live_kernel_slots_v1(kernel_slots, &live_kernels)
+    kernel_slot::validate_live_kernel_slots(kernel_slots, &live_kernels)
         .map_err(PrepareError::KernelSlot)?;
 
     // All non-mutating validation has succeeded. Hydrate the caller graph
@@ -1746,7 +1698,7 @@ pub fn run_once_into<G: GraphSubstrate + CanonicalState + AllocatorState + Detac
 /// needs it directly: once `consciousness-ternary-conformance.bscn` stopped
 /// re-declaring `WorldView` itself (this train), every one of its callers —
 /// not only `tick_goldens.rs`'s golden — needs the prelude, and this
-/// module's other entry points (`run_once`, `TickSession`) are all it has
+/// module's other entry points (`run_once`, `RuleDiagnosticSession`) are all it has
 /// to route through.
 ///
 /// # Errors
@@ -1771,43 +1723,34 @@ pub fn run_once_into_with_prelude<
     Ok(report)
 }
 
-/// Deterministic V1 execution namespace for every one-shot driver in this
-/// module. These drivers are pinned at tick 1 and cannot realize a finite
-/// kernel; governed choice requires [`replay_session::ReplayTickSession`].
-/// The fixed literal remains non-random and never reads a UUID or wall clock.
-fn run_once_session() -> SessionId {
-    SessionId::new("run-once").expect("literal is non-empty")
+/// Explicit deterministic inputs for graph-only command-line diagnostics.
+fn run_once_session() -> ReplaySessionId {
+    ReplaySessionId::try_from("diagnostic/run-once").expect("fixed diagnostic namespace")
 }
 
-/// `run_once_with_prelude` (this train) and `run_once_into` (above) share
-/// this from the point `prepare_rules` has already returned: clone the
-/// committed graph, run every prepared rule to completion against that one
-/// working copy, buffer its events, and publish both only after every rule
-/// and hash succeeds. Extracted so a prelude-bearing caller does not
-/// duplicate this loop — `prepare_rules`'s own `prelude_src` parameter is
-/// the only thing that differs between the two callers, and it is fully
-/// resolved before this function ever runs.
-///
-/// # Errors
-///
-/// An invalid tick number, schedule/world/graph hashing, event reservation,
-/// or the tick itself (named to its own rule id). Every error leaves the
-/// caller's graph and existing events unchanged.
-pub(crate) fn run_prepared_tick<
-    G: GraphSubstrate + CanonicalState + AllocatorState + DetachedCopy,
->(
+fn run_prepared_tick<G: GraphSubstrate + CanonicalState + AllocatorState + DetachedCopy>(
     prepared: &PreparedRules,
     graph: &mut G,
     sink: &mut CollectingSink,
-    session: &SessionId,
+    session: &ReplaySessionId,
     tick: i64,
 ) -> Result<TickReport, String> {
+    let resolver = StableElementResolver::seal(
+        graph,
+        &prepared.scenario_scope,
+        &prepared.node_content_ids,
+        &prepared.hyperedge_content_ids,
+    )
+    .map_err(|error| format!("diagnostic identity refused: {error:?}"))?;
     run_prepared_tick_with(
         prepared,
         graph,
         sink,
-        RngSeedContext::V1 { session },
-        None,
+        RngSeedContext {
+            session,
+            seed: ReplaySeed::new(0),
+        },
+        &resolver,
         tick,
         |_boundary, candidate| candidate.state_hash(),
     )
@@ -1832,9 +1775,9 @@ fn checked_considered_total(per_rule_considered: &[(String, usize)]) -> Result<u
 }
 
 enum ExecutionIdentity<'a, C> {
-    Current {
+    Diagnostic {
         rng_seed: RngSeedContext<'a>,
-        stable_resolver: Option<&'a StableElementResolverV1>,
+        stable_resolver: &'a StableElementResolver,
     },
     Replay(replay_session::ReplayExecutionInputs<'a, C>),
 }
@@ -1842,20 +1785,20 @@ enum ExecutionIdentity<'a, C> {
 impl<C> ExecutionIdentity<'_, C> {
     fn rng_seed(&self) -> RngSeedContext<'_> {
         match self {
-            Self::Current { rng_seed, .. } => *rng_seed,
-            Self::Replay(execution) => RngSeedContext::V2 {
+            Self::Diagnostic { rng_seed, .. } => *rng_seed,
+            Self::Replay(execution) => RngSeedContext {
                 session: execution.session,
                 seed: execution.seed,
             },
         }
     }
 
-    fn stable_resolver(&self) -> Option<&StableElementResolverV1> {
+    fn stable_resolver(&self) -> &StableElementResolver {
         match self {
-            Self::Current {
+            Self::Diagnostic {
                 stable_resolver, ..
-            } => *stable_resolver,
-            Self::Replay(execution) => Some(execution.resolver),
+            } => stable_resolver,
+            Self::Replay(execution) => execution.resolver,
         }
     }
 
@@ -1866,15 +1809,15 @@ impl<C> ExecutionIdentity<'_, C> {
 
 struct TickTransactionResult {
     report: TickReport,
-    replay: Option<replay_session::ReplayIdentityArtifactsV2>,
-    material: Option<material_world::PreparedMaterialWorldV4>,
+    replay: Option<replay_session::ReplayIdentityArtifacts>,
+    material: Option<material_world::PreparedMaterialWorld>,
 }
 
 struct TransactionPrelude {
     schedule_digest: [u8; 32],
     before: [u8; 32],
     world_before: [u8; 32],
-    replay_prior: Option<replay_session::ReplayPriorIdentityV1>,
+    replay_prior: Option<replay_session::ReplayPriorIdentity>,
 }
 
 struct ExecutedRules<G> {
@@ -1885,13 +1828,13 @@ struct ExecutedRules<G> {
     per_rule_considered: Vec<(String, usize)>,
     per_rule_fired: Vec<(String, usize)>,
     audit_receipts: Vec<AuditReceipt>,
-    choice_receipts: Vec<choice_receipt::ChoiceReceiptV1>,
-    committed_events: Vec<committed_event::CommittedEventV2>,
-    material: Option<material_world::PreparedMaterialWorldV4>,
+    choice_receipts: Vec<choice_receipt::ChoiceReceipt>,
+    committed_events: Vec<committed_event::CommittedEvent>,
+    material: Option<material_world::PreparedMaterialWorld>,
 }
 
 enum TickTransactionError {
-    Current(String),
+    Diagnostic(String),
     Replay(ReplayTickError),
 }
 
@@ -1902,7 +1845,7 @@ fn transaction_error<C>(
     if identity.is_replay() {
         TickTransactionError::Replay(ReplayTickError::Execution { message })
     } else {
-        TickTransactionError::Current(message)
+        TickTransactionError::Diagnostic(message)
     }
 }
 
@@ -1911,7 +1854,7 @@ fn run_prepared_tick_with<G, B, H>(
     graph: &mut G,
     sink: &mut B,
     rng_seed: RngSeedContext<'_>,
-    stable_resolver: Option<&StableElementResolverV1>,
+    stable_resolver: &StableElementResolver,
     tick: i64,
     state_hash: H,
 ) -> Result<TickReport, String>
@@ -1921,14 +1864,14 @@ where
     H: FnMut(HashBoundary, &G) -> Result<[u8; 32], GraphError>,
 {
     let identity: ExecutionIdentity<'_, replay_session::ProductionReplayIdentityComposer> =
-        ExecutionIdentity::Current {
+        ExecutionIdentity::Diagnostic {
             rng_seed,
             stable_resolver,
         };
     run_prepared_tick_transaction(prepared, graph, sink, &identity, tick, state_hash, None)
         .map(|result| result.report)
         .map_err(|error| match error {
-            TickTransactionError::Current(message) => message,
+            TickTransactionError::Diagnostic(message) => message,
             TickTransactionError::Replay(replay) => replay.to_string(),
         })
 }
@@ -1942,8 +1885,8 @@ pub(crate) fn run_prepared_replay_tick<G, C>(
     material_base: Option<material_replay::MaterialBaseInputs<'_>>,
 ) -> Result<
     (
-        IdentifiedTickReportV2,
-        Option<material_world::PreparedMaterialWorldV4>,
+        IdentifiedTickReport,
+        Option<material_world::PreparedMaterialWorld>,
     ),
     ReplayTickError,
 >
@@ -1962,7 +1905,7 @@ where
         material_base,
     )
     .map_err(|error| match error {
-        TickTransactionError::Current(message) => ReplayTickError::Execution { message },
+        TickTransactionError::Diagnostic(message) => ReplayTickError::Execution { message },
         TickTransactionError::Replay(replay) => replay,
     })?;
     let artifacts = result.replay.ok_or_else(|| ReplayTickError::Composer {
@@ -2039,7 +1982,7 @@ where
     )
     .map_err(|error| transaction_error(identity, error))?;
     let replay_prior = match identity {
-        ExecutionIdentity::Current { .. } => None,
+        ExecutionIdentity::Diagnostic { .. } => None,
         ExecutionIdentity::Replay(execution) => Some(
             replay_session::compose_replay_prior(graph, execution, completed_before)
                 .map_err(TickTransactionError::Replay)?,
@@ -2075,15 +2018,10 @@ where
     for position in 0..=prepared.rules.len() {
         if position == prepared.material_base_index {
             if let Some(inputs) = material_base.take() {
-                let resolver = identity.stable_resolver().ok_or({
-                    TickTransactionError::Replay(ReplayTickError::MaterialBase(
-                        material_replay::MaterialBaseErrorV1::MissingResolver,
-                    ))
-                })?;
-                let context = material_staffing::StaffingEffectContextV1 {
+                let resolver = identity.stable_resolver();
+                let context = material_staffing::StaffingEffectContext {
                     types: &prepared.types,
                     enums: &prepared.enums,
-                    vocabulary: prepared.vocabulary.as_ref(),
                     resolver,
                 };
                 let (candidate, effects) = inputs
@@ -2096,7 +2034,7 @@ where
                         effects
                             .committed_events()
                             .iter()
-                            .map(committed_event::CommittedEventV2::sink_record),
+                            .map(committed_event::CommittedEvent::sink_record),
                     );
                     audit_receipts.extend_from_slice(effects.audit_receipts());
                     committed_events.extend_from_slice(effects.committed_events());
@@ -2123,7 +2061,6 @@ where
             // read it; `:year`/`:tick-of-year` need an epoch slice 1 does
             // not pin and are refused by name at `run_tick` entry.
             tick,
-            Some(&prepared.node_content_ids),
             identity.rng_seed(),
             identity.stable_resolver(),
             prepared.vocabulary.as_ref(),
@@ -2133,14 +2070,7 @@ where
             transaction_error(identity, format!("tick failed in rule {id}: {error}"))
         })?;
         for realization in outcome.kernel_realizations {
-            let RngSeedContext::V2 { session, seed } = identity.rng_seed() else {
-                return Err(transaction_error(
-                    identity,
-                    format!(
-                        "finite choice in rule {id} reached the transaction without a sealed V2 replay identity"
-                    ),
-                ));
-            };
+            let RngSeedContext { session, seed } = identity.rng_seed();
             let encounter_ordinal = u32::try_from(choice_receipts.len()).map_err(|_| {
                 transaction_error(
                     identity,
@@ -2148,7 +2078,7 @@ where
                         .to_owned(),
                 )
             })?;
-            let instance = KernelInstanceIdentityV1 {
+            let instance = KernelInstanceIdentity {
                 replay_session: session.as_bytes().to_vec(),
                 replay_seed: seed.to_be_bytes(),
                 tick,
@@ -2157,13 +2087,13 @@ where
                 active_elements: realization.active_elements.clone(),
             };
             let receipt =
-                choice_receipt::ChoiceReceiptV1::try_new(encounter_ordinal, &instance, realization)
+                choice_receipt::ChoiceReceipt::try_new(encounter_ordinal, &instance, realization)
                     .map_err(|error| {
-                        transaction_error(
-                            identity,
-                            format!("choice receipt refused in rule {id}: {error}"),
-                        )
-                    })?;
+                    transaction_error(
+                        identity,
+                        format!("choice receipt refused in rule {id}: {error}"),
+                    )
+                })?;
             let lookup = (
                 receipt.sample().to_owned(),
                 receipt.stable_carrier().clone(),
@@ -2183,9 +2113,7 @@ where
         }
         let new_events = &working_sink.events[event_start..];
         let event_subjects = outcome.event_provenance;
-        if matches!(identity.rng_seed(), RngSeedContext::V2 { .. })
-            && event_subjects.len() != new_events.len()
-        {
+        if event_subjects.len() != new_events.len() {
             return Err(transaction_error(
                 identity,
                 format!(
@@ -2221,7 +2149,7 @@ where
             } else {
                 None
             };
-            committed_events.push(committed_event::CommittedEventV2::new(
+            committed_events.push(committed_event::CommittedEvent::new(
                 id.clone(),
                 choice_receipt,
                 event_type.clone(),
@@ -2306,7 +2234,7 @@ where
         committed_events: executed.committed_events,
     };
     let replay = match (identity, prelude.replay_prior) {
-        (ExecutionIdentity::Current { .. }, None) => None,
+        (ExecutionIdentity::Diagnostic { .. }, None) => None,
         (ExecutionIdentity::Replay(execution), Some(prior)) => Some(
             execution
                 .composer
@@ -2384,7 +2312,7 @@ impl std::fmt::Display for FuelBoundRow {
 
 /// Load one content set (scenario, optional declaration prelude, rule
 /// source) through the REAL production pipeline (`prepare_rules` — the same
-/// function `run_once`/`TickSession::new` use) and report its fuel bounds,
+/// function `run_once`/`RuleDiagnosticSession::new` use) and report its fuel bounds,
 /// one row per rule, in the SAME governed phase order `prepare_rules`
 /// compiles. D16's ascending rule-ID byte order breaks same-position ties.
 ///
@@ -2506,8 +2434,8 @@ mod tests {
         assert_eq!(graph.encode_state().unwrap().as_bytes(), before);
 
         let retained = [
-            super::kernel_slot::BUNDLED_KERNEL_SLOT_RESERVATIONS_V1[0],
-            super::kernel_slot::KernelSlotReservationV1 {
+            super::kernel_slot::BUNDLED_KERNEL_SLOT_RESERVATIONS[0],
+            super::kernel_slot::KernelSlotReservationRef {
                 ordinal: 1,
                 rule: "history/retired-mechanic",
                 sample: "history/retired-sample",
@@ -2593,7 +2521,7 @@ mod tests {
     where
         G: GraphSubstrate + CanonicalState + AllocatorState + DetachedCopy + Default,
     {
-        let mut graph = prepopulated_graph::<G>();
+        let mut graph = G::default();
         let before = graph.encode_state().unwrap().as_bytes().to_vec();
         let cursors = graph.allocator_cursors();
         let mut sink = CollectingSink {
@@ -2625,11 +2553,11 @@ mod tests {
         assert_eq!(sink.events, events);
     }
 
-    fn assert_one_shot_success_preserves_relative_allocation<G>(with_prelude: bool)
+    fn assert_one_shot_success_publishes_named_allocations<G>(with_prelude: bool)
     where
         G: GraphSubstrate + CanonicalState + AllocatorState + DetachedCopy + Default,
     {
-        let mut graph = prepopulated_graph::<G>();
+        let mut graph = G::default();
         let mut sink = CollectingSink::default();
         let report = if with_prelude {
             run_once_into_with_prelude(
@@ -2649,10 +2577,10 @@ mod tests {
         }
         .expect("the staged one-shot tick commits");
 
-        assert_eq!(graph.nodes("SOCIAL_CLASS"), vec![NodeId(1)]);
+        assert_eq!(graph.nodes("SOCIAL_CLASS"), vec![NodeId(0)]);
         assert_eq!(
             graph
-                .node_attribute(NodeId(1), "social-class/count")
+                .node_attribute(NodeId(0), "social-class/count")
                 .unwrap()
                 .to_bits(),
             2.0f64.to_bits()
@@ -2660,8 +2588,8 @@ mod tests {
         assert_eq!(
             graph.allocator_cursors(),
             AllocatorCursors {
-                next_node: 2,
-                next_hyperedge: 1,
+                next_node: 1,
+                next_hyperedge: 0,
             }
         );
         assert_eq!(report.fired, 1);
@@ -2689,6 +2617,23 @@ mod tests {
     }
 
     #[test]
+    fn one_shot_refuses_unnamed_preexisting_graph_without_publication() {
+        let mut graph = prepopulated_graph::<HypergraphStore>();
+        let before = graph.encode_state().unwrap().as_bytes().to_vec();
+        let mut sink = CollectingSink::default();
+        let error = run_once_into(
+            ONE_SHOT_SUCCESS_SCENARIO,
+            ONE_SHOT_SUCCESS_RULE,
+            &mut graph,
+            &mut sink,
+        )
+        .unwrap_err();
+        assert!(error.contains("identity refused"), "{error}");
+        assert_eq!(graph.encode_state().unwrap().as_bytes(), before);
+        assert!(sink.events.is_empty());
+    }
+
+    #[test]
     fn both_one_shot_variants_roll_back_hydration_on_both_backends() {
         assert_one_shot_failure_is_atomic::<MemoryGraph>(false);
         assert_one_shot_failure_is_atomic::<MemoryGraph>(true);
@@ -2697,11 +2642,11 @@ mod tests {
     }
 
     #[test]
-    fn both_one_shot_variants_keep_preexisting_allocation_on_success() {
-        assert_one_shot_success_preserves_relative_allocation::<MemoryGraph>(false);
-        assert_one_shot_success_preserves_relative_allocation::<MemoryGraph>(true);
-        assert_one_shot_success_preserves_relative_allocation::<HypergraphStore>(false);
-        assert_one_shot_success_preserves_relative_allocation::<HypergraphStore>(true);
+    fn both_one_shot_variants_publish_named_allocations_on_success() {
+        assert_one_shot_success_publishes_named_allocations::<MemoryGraph>(false);
+        assert_one_shot_success_publishes_named_allocations::<MemoryGraph>(true);
+        assert_one_shot_success_publishes_named_allocations::<HypergraphStore>(false);
+        assert_one_shot_success_publishes_named_allocations::<HypergraphStore>(true);
     }
 
     // Task W3 (BSL Hygiene Knock-out): the fuel-bound report's smallest

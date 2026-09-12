@@ -10,14 +10,14 @@ mod michigan;
 mod staffing;
 mod validate;
 
-use babylon_graph::stable_element::StableElementKeyV1;
-use babylon_kernel::sha256_of;
+use babylon_graph::stable_element::StableElementKey;
+use babylon_kernel::content_digest::sha256_of;
 use babylon_material_circuit::{
-    decode_material_circuit_state_v3, encode_material_circuit_state_v3, MaterialCircuitErrorV3,
-    MaterialCircuitStateV3, ProcessIdV1, UnitIdV1,
+    decode_material_circuit_state, encode_material_circuit_state, MaterialCircuitError,
+    MaterialCircuitState, ProcessId, UnitId,
 };
 
-pub use michigan::{compile_sector_bundles_v2, michigan_sector_bundles_v2};
+pub use michigan::{compile_sector_bundles, michigan_sector_bundles};
 
 const BUNDLE_DOMAIN: &[u8] = b"babylon.sector-bundle.v2\0";
 const BUNDLE_VERSION: u16 = 2;
@@ -25,11 +25,11 @@ const MAX_BUNDLE_BYTES: usize = 1_048_576;
 const MAX_BUNDLE_TEXT_BYTES: usize = 4_096;
 const MAX_BUNDLE_GOODS: usize = 64;
 const MAX_BUNDLE_PROCESSES: usize = 64;
-use crate::michigan_material::MICHIGAN_MAX_HORIZON_PERIODS_V1;
+use crate::michigan_material::MICHIGAN_MAX_HORIZON_PERIODS;
 
 /// Closed content refusals; an absent productive bundle never means zero output.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum SectorBundleErrorV2 {
+pub enum SectorBundleError {
     Bound,
     Source,
     Owner,
@@ -46,30 +46,30 @@ pub enum SectorBundleErrorV2 {
     WireTruncated,
     WireTrailing,
     WireNoncanonical,
-    Circuit(MaterialCircuitErrorV3),
+    Circuit(MaterialCircuitError),
 }
-impl std::fmt::Display for SectorBundleErrorV2 {
+impl std::fmt::Display for SectorBundleError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "sector bundle refused: {self:?}")
     }
 }
-impl std::error::Error for SectorBundleErrorV2 {}
-impl From<MaterialCircuitErrorV3> for SectorBundleErrorV2 {
-    fn from(error: MaterialCircuitErrorV3) -> Self {
+impl std::error::Error for SectorBundleError {}
+impl From<MaterialCircuitError> for SectorBundleError {
+    fn from(error: MaterialCircuitError) -> Self {
         Self::Circuit(error)
     }
 }
 
 /// Observed ownership context. No employee or financial measure is allocated.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct SectorBundleOwnerV2 {
-    subject: StableElementKeyV1,
+pub struct SectorBundleOwner {
+    subject: StableElementKey,
     county_geoid: String,
     sector_code: String,
 }
-impl SectorBundleOwnerV2 {
+impl SectorBundleOwner {
     #[must_use]
-    pub const fn subject(&self) -> &StableElementKeyV1 {
+    pub const fn subject(&self) -> &StableElementKey {
         &self.subject
     }
     #[must_use]
@@ -84,7 +84,7 @@ impl SectorBundleOwnerV2 {
 
 /// Exact sources of the observed binding and the separately Designed coefficients.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct SectorBundleSourcesV2 {
+pub struct SectorBundleSources {
     county_source_file: String,
     county_source_sha256: [u8; 32],
     sector_artifact_sha256: [u8; 32],
@@ -92,7 +92,7 @@ pub struct SectorBundleSourcesV2 {
     industry_artifact_sha256: [u8; 32],
     designed_scenario_sha256: [u8; 32],
 }
-impl SectorBundleSourcesV2 {
+impl SectorBundleSources {
     #[must_use]
     pub fn county_source_file(&self) -> &str {
         &self.county_source_file
@@ -109,30 +109,30 @@ impl SectorBundleSourcesV2 {
 
 /// A physical good has one exact unit inside and across the compiled bundles.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub struct SectorBundleGoodV2 {
-    good_id: babylon_material_circuit::GoodIdV1,
-    unit_id: UnitIdV1,
+pub struct SectorBundleGood {
+    good_id: babylon_material_circuit::GoodId,
+    unit_id: UnitId,
 }
-impl SectorBundleGoodV2 {
+impl SectorBundleGood {
     #[must_use]
-    pub const fn good_id(self) -> babylon_material_circuit::GoodIdV1 {
+    pub const fn good_id(self) -> babylon_material_circuit::GoodId {
         self.good_id
     }
     #[must_use]
-    pub const fn unit_id(self) -> UnitIdV1 {
+    pub const fn unit_id(self) -> UnitId {
         self.unit_id
     }
 }
 
 /// A process belongs to one bundle; its site remains a separate resource account.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub struct SectorBundleProcessV2 {
-    process_id: ProcessIdV1,
+pub struct SectorBundleProcess {
+    process_id: ProcessId,
     industry_code: String,
 }
-impl SectorBundleProcessV2 {
+impl SectorBundleProcess {
     #[must_use]
-    pub const fn process_id(&self) -> ProcessIdV1 {
+    pub const fn process_id(&self) -> ProcessId {
         self.process_id
     }
     #[must_use]
@@ -147,28 +147,28 @@ impl SectorBundleProcessV2 {
 /// Cross-bundle routes and orders belong to the circuit composition. Keeping the
 /// V3 row codec avoids a second interpretation of recipe coefficients.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct SectorBundleV2 {
-    owner: SectorBundleOwnerV2,
-    sources: SectorBundleSourcesV2,
-    goods: Vec<SectorBundleGoodV2>,
-    processes: Vec<SectorBundleProcessV2>,
-    labor_unit: UnitIdV1,
-    rows: MaterialCircuitStateV3,
+pub struct SectorBundle {
+    owner: SectorBundleOwner,
+    sources: SectorBundleSources,
+    goods: Vec<SectorBundleGood>,
+    processes: Vec<SectorBundleProcess>,
+    labor_unit: UnitId,
+    rows: MaterialCircuitState,
     bytes: Vec<u8>,
     digest: [u8; 32],
 }
-impl SectorBundleV2 {
+impl SectorBundle {
     fn from_parts(
-        owner: SectorBundleOwnerV2,
-        sources: SectorBundleSourcesV2,
-        mut goods: Vec<SectorBundleGoodV2>,
-        mut processes: Vec<SectorBundleProcessV2>,
-        labor_unit: UnitIdV1,
-        rows: &MaterialCircuitStateV3,
-    ) -> Result<Self, SectorBundleErrorV2> {
+        owner: SectorBundleOwner,
+        sources: SectorBundleSources,
+        mut goods: Vec<SectorBundleGood>,
+        mut processes: Vec<SectorBundleProcess>,
+        labor_unit: UnitId,
+        rows: &MaterialCircuitState,
+    ) -> Result<Self, SectorBundleError> {
         goods.sort_unstable();
         processes.sort_unstable();
-        let rows = decode_material_circuit_state_v3(&encode_material_circuit_state_v3(rows)?)?;
+        let rows = decode_material_circuit_state(&encode_material_circuit_state(rows)?)?;
         let mut bundle = Self {
             owner,
             sources,
@@ -188,12 +188,12 @@ impl SectorBundleV2 {
     /// Decode canonical bytes against a caller's independently admitted digest.
     /// # Errors
     /// Refuses changed identity, malformed content and noncanonical encodings.
-    pub fn decode(bytes: &[u8], expected: [u8; 32]) -> Result<Self, SectorBundleErrorV2> {
+    pub fn decode(bytes: &[u8], expected: [u8; 32]) -> Result<Self, SectorBundleError> {
         if bytes.len() > MAX_BUNDLE_BYTES {
-            return Err(SectorBundleErrorV2::Bound);
+            return Err(SectorBundleError::Bound);
         }
         if sha256_of(bytes) != expected {
-            return Err(SectorBundleErrorV2::Digest);
+            return Err(SectorBundleError::Digest);
         }
         codec::decode(bytes)
     }
@@ -206,32 +206,32 @@ impl SectorBundleV2 {
         self.digest
     }
     #[must_use]
-    pub const fn owner(&self) -> &SectorBundleOwnerV2 {
+    pub const fn owner(&self) -> &SectorBundleOwner {
         &self.owner
     }
     #[must_use]
-    pub const fn sources(&self) -> &SectorBundleSourcesV2 {
+    pub const fn sources(&self) -> &SectorBundleSources {
         &self.sources
     }
     #[must_use]
     pub const fn horizon_ticks(&self) -> u64 {
-        MICHIGAN_MAX_HORIZON_PERIODS_V1
+        MICHIGAN_MAX_HORIZON_PERIODS
     }
     #[must_use]
-    pub fn goods(&self) -> &[SectorBundleGoodV2] {
+    pub fn goods(&self) -> &[SectorBundleGood] {
         &self.goods
     }
     #[must_use]
-    pub fn processes(&self) -> &[SectorBundleProcessV2] {
+    pub fn processes(&self) -> &[SectorBundleProcess] {
         &self.processes
     }
     #[must_use]
-    pub const fn material_rows(&self) -> &MaterialCircuitStateV3 {
+    pub const fn material_rows(&self) -> &MaterialCircuitState {
         &self.rows
     }
     #[must_use]
-    pub const fn production_evidence_class(&self) -> crate::ArchiveEvidenceClassV1 {
-        crate::ArchiveEvidenceClassV1::Designed
+    pub const fn production_evidence_class(&self) -> crate::ArchiveEvidenceClass {
+        crate::ArchiveEvidenceClass::Designed
     }
 }
 

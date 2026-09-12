@@ -2,7 +2,6 @@
 //!
 //! These values define the database-free replay boundary. They intentionally
 //! have no conversion to campaign, persistence, or graph identities.
-use crate::clock::SessionId;
 use std::collections::TryReserveError;
 
 const MIN_REPLAY_SESSION_BYTES: usize = 1;
@@ -65,9 +64,9 @@ pub enum ReplayIdentityError {
 /// The authoritative logical replay session namespace, encoded as strict
 /// graphic ASCII and never normalized.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct ReplaySessionIdV1(Vec<u8>);
+pub struct ReplaySessionId(Vec<u8>);
 
-impl ReplaySessionIdV1 {
+impl ReplaySessionId {
     /// The exact session bytes after checked construction.
     #[must_use]
     pub fn as_bytes(&self) -> &[u8] {
@@ -96,7 +95,7 @@ impl ReplaySessionIdV1 {
     }
 }
 
-impl TryFrom<&[u8]> for ReplaySessionIdV1 {
+impl TryFrom<&[u8]> for ReplaySessionId {
     type Error = ReplayIdentityError;
 
     fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
@@ -110,7 +109,7 @@ impl TryFrom<&[u8]> for ReplaySessionIdV1 {
     }
 }
 
-impl TryFrom<&str> for ReplaySessionIdV1 {
+impl TryFrom<&str> for ReplaySessionId {
     type Error = ReplayIdentityError;
 
     fn try_from(value: &str) -> Result<Self, Self::Error> {
@@ -139,10 +138,8 @@ impl ReplaySeed {
 /// The governed RNG layouts parsed once at the replay boundary.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum RngLayoutVersion {
-    /// The frozen current `TickSession` layout.
-    V1,
     /// The seed-aware replay layout.
-    V2,
+    SeededCarrier,
 }
 
 impl TryFrom<u32> for RngLayoutVersion {
@@ -150,8 +147,7 @@ impl TryFrom<u32> for RngLayoutVersion {
 
     fn try_from(value: u32) -> Result<Self, Self::Error> {
         match value {
-            1 => Ok(Self::V1),
-            2 => Ok(Self::V2),
+            2 => Ok(Self::SeededCarrier),
             _ => Err(ReplayIdentityError::UnsupportedRngLayoutVersion { value }),
         }
     }
@@ -159,9 +155,9 @@ impl TryFrom<u32> for RngLayoutVersion {
 
 /// A checked V2 RNG domain: a strict-ASCII firing-rule qname.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct RngDomainV2(String);
+pub struct RngDomain(String);
 
-impl RngDomainV2 {
+impl RngDomain {
     /// Borrow the checked UTF-8 domain text.
     #[must_use]
     pub fn as_str(&self) -> &str {
@@ -175,7 +171,7 @@ impl RngDomainV2 {
     }
 }
 
-impl TryFrom<&str> for RngDomainV2 {
+impl TryFrom<&str> for RngDomain {
     type Error = ReplayIdentityError;
 
     fn try_from(value: &str) -> Result<Self, Self::Error> {
@@ -198,19 +194,11 @@ impl TryFrom<&str> for RngDomainV2 {
 /// The typed context that prevents replay callers from selecting an unparsed
 /// numeric RNG layout.
 #[derive(Debug, Clone, Copy)]
-pub enum RngSeedContext<'a> {
-    /// Frozen V1 derivation using the current `TickSession` identity.
-    V1 {
-        /// The current `TickSession` session identity.
-        session: &'a SessionId,
-    },
-    /// V2 derivation using the replay session and explicit replay seed.
-    V2 {
-        /// The checked replay session identity.
-        session: &'a ReplaySessionIdV1,
-        /// The explicit replay seed.
-        seed: ReplaySeed,
-    },
+pub struct RngSeedContext<'a> {
+    /// The checked replay session identity.
+    pub session: &'a ReplaySessionId,
+    /// The explicit replay seed.
+    pub seed: ReplaySeed,
 }
 
 fn validate_rng_domain_qname(value: &[u8]) -> Result<(), ReplayIdentityError> {

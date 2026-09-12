@@ -22,7 +22,7 @@
 //! literal (minus sign present, any value — including `-0$`) is `E-LEX-022`
 //! because §1.5 names the *literal*, not the value, negative.
 
-use babylon_kernel::Currency;
+use babylon_kernel::currency::Currency;
 
 /// Maximum simultaneously open lists accepted by the reader.
 ///
@@ -125,7 +125,7 @@ pub enum Atom {
 /// The unit-interval scaled-literal kinds (`p` / `i` / `c` suffixes), plus
 /// the `r`-suffixed `Ratio` kind (§1.5 addendum, Director ruling 2026-08-11
 /// #492/ADR194): unlike `p`/`i`/`c`, `Ratio` is NOT unit-interval — its
-/// domain is `(0, ∞)`, the kernel's existing `babylon_kernel::Ratio` sort.
+/// domain is `(0, ∞)`, the kernel's existing `babylon_kernel::scalars::Ratio` sort.
 /// It shares this struct's canonical decimal representation (and therefore
 /// this reader's canonicalization and CAS encoding machinery) rather than
 /// inventing a parallel literal shape, which is the whole point: scalar
@@ -1215,7 +1215,7 @@ mod tests {
         read, read_all, read_all_spanned, Atom, FormPath, LexCode, ReadErrorKind, SExpr,
         ScaledKind, ScaledLit, MAX_READER_NESTING_DEPTH,
     };
-    use babylon_kernel::Currency;
+    use babylon_kernel::currency::Currency;
 
     fn one(source: &str) -> SExpr {
         read(source).expect("should parse").0

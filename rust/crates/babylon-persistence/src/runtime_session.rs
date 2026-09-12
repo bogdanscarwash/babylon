@@ -12,7 +12,7 @@ pub use protocol::*;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum RuntimeSessionErrorCodeV3 {
+pub enum RuntimeSessionErrorCode {
     InvalidRequest,
     UnsupportedVersion,
     SessionMismatch,
@@ -32,66 +32,66 @@ pub enum RuntimeSessionErrorCodeV3 {
     PipeFailure,
     HorizonComplete,
 }
-impl std::fmt::Display for RuntimeSessionErrorCodeV3 {
+impl std::fmt::Display for RuntimeSessionErrorCode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "runtime session refused: {self:?}")
     }
 }
-impl std::error::Error for RuntimeSessionErrorCodeV3 {}
+impl std::error::Error for RuntimeSessionErrorCode {}
 
 trait SessionBackend {
-    fn tail(&self) -> RuntimeSessionTailV3;
+    fn tail(&self) -> RuntimeSessionTail;
     fn advance(
         &mut self,
-        expected: &RuntimeSessionTailV3,
-    ) -> Result<RuntimeSessionTailV3, RuntimeSessionErrorCodeV3>;
+        expected: &RuntimeSessionTail,
+    ) -> Result<RuntimeSessionTail, RuntimeSessionErrorCode>;
 }
 
 fn emit(
     output: &mut impl Write,
-    response: &RuntimeSessionResponseV3,
-) -> Result<(), RuntimeSessionErrorCodeV3> {
+    response: &RuntimeSessionResponse,
+) -> Result<(), RuntimeSessionErrorCode> {
     let mut bytes =
-        serde_json::to_vec(response).map_err(|_| RuntimeSessionErrorCodeV3::PipeFailure)?;
-    if bytes.len() >= RUNTIME_SESSION_MAX_LINE_BYTES_V3 {
-        return Err(RuntimeSessionErrorCodeV3::PipeFailure);
+        serde_json::to_vec(response).map_err(|_| RuntimeSessionErrorCode::PipeFailure)?;
+    if bytes.len() >= RUNTIME_SESSION_MAX_LINE_BYTES {
+        return Err(RuntimeSessionErrorCode::PipeFailure);
     }
     bytes.push(b'\n');
     output
         .write_all(&bytes)
         .and_then(|()| output.flush())
-        .map_err(|_| RuntimeSessionErrorCodeV3::PipeFailure)
+        .map_err(|_| RuntimeSessionErrorCode::PipeFailure)
 }
 
 /// Run one lifecycle service; no campaign is admitted before the first Switch.
 /// # Errors
 /// Refuses broken framing/pipes and fatal worker teardown. Target admission
 /// failures are scoped protocol responses and permit another explicit Switch.
-pub fn run_runtime_session_v3(
+pub fn run_runtime_session(
     config: &Config,
     defines_path: &std::path::Path,
     input: impl BufRead + Send + 'static,
     output: &mut impl Write,
-) -> Result<(), RuntimeSessionErrorCodeV3> {
+) -> Result<(), RuntimeSessionErrorCode> {
     coordinator::serve(
         input,
         output,
         |target| backend::open(config, target, defines_path),
         |campaign, events| {
-            crate::archive_driver::ArchiveDriverV1::start(config, campaign, events)
-                .map_err(|_| RuntimeSessionErrorCodeV3::ArchiveRefused)
+            crate::archive_driver::ArchiveDriver::start(config, campaign, events)
+                .map_err(|_| RuntimeSessionErrorCode::ArchiveRefused)
         },
     )
 }
 
 /// Bind the lifecycle service to the inherited standard streams.
 /// # Errors
-/// See [`run_runtime_session_v3`].
-pub fn run_runtime_session_stdio_v3(
+/// See [`run_runtime_session`].
+pub fn run_runtime_session_stdio(
     config: &Config,
     defines_path: &std::path::Path,
-) -> Result<(), RuntimeSessionErrorCodeV3> {
-    run_runtime_session_v3(
+) -> Result<(), RuntimeSessionErrorCode> {
+    run_runtime_session(
         config,
         defines_path,
         std::io::BufReader::new(std::io::stdin()),

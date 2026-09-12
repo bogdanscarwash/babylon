@@ -2,21 +2,21 @@
 
 use std::collections::BTreeSet;
 
-use crate::{LaborCapacityRowV1, ProcessIdV1, SiteIdV1, UnitIdV1, MAX_MATERIAL_CIRCUIT_ROWS_V1};
+use crate::{LaborCapacityRow, ProcessId, SiteId, UnitId, MAX_MATERIAL_CIRCUIT_ROWS};
 
-crate::model::identity_type!(StaffingPoolIdV1);
+crate::model::identity_type!(StaffingPoolId);
 
 /// The material activity served by a staffing pool.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub enum StaffingWorkSourceV2 {
-    Production(ProcessIdV1),
-    MerchantHandling(SiteIdV1),
+pub enum StaffingWorkSource {
+    Production(ProcessId),
+    MerchantHandling(SiteId),
 }
 
 /// Closed refusals; no partial staffing transition is returned.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u16)]
-pub enum StaffingErrorV2 {
+pub enum StaffingError {
     RowLimit = 1,
     EmptyWorkSources = 2,
     ZeroSchedule = 3,
@@ -33,25 +33,25 @@ pub enum StaffingErrorV2 {
     Allocation = 14,
 }
 
-impl std::fmt::Display for StaffingErrorV2 {
+impl std::fmt::Display for StaffingError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "staffing refused: {self:?}")
     }
 }
-impl std::error::Error for StaffingErrorV2 {}
+impl std::error::Error for StaffingError {}
 
 /// An explicit schedule under V1's one-period retention rule.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct StaffingPolicyV1 {
+pub struct StaffingPolicy {
     hours_per_person: u64,
 }
-impl StaffingPolicyV1 {
+impl StaffingPolicy {
     /// Retain the larger of current and preceding unretained work requests.
     /// # Errors
     /// Refuses a zero work schedule; no default schedule is inferred.
-    pub const fn one_period(hours_per_person: u64) -> Result<Self, StaffingErrorV2> {
+    pub const fn one_period(hours_per_person: u64) -> Result<Self, StaffingError> {
         if hours_per_person == 0 {
-            return Err(StaffingErrorV2::ZeroSchedule);
+            return Err(StaffingError::ZeroSchedule);
         }
         Ok(Self { hours_per_person })
     }
@@ -63,35 +63,35 @@ impl StaffingPolicyV1 {
 
 /// One nonduplicated person principal serving a single site and labor unit.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct StaffingPoolBindingV2 {
-    pool_id: StaffingPoolIdV1,
-    site_id: SiteIdV1,
-    unit_id: UnitIdV1,
+pub struct StaffingPoolBinding {
+    pool_id: StaffingPoolId,
+    site_id: SiteId,
+    unit_id: UnitId,
     labor_force: u64,
-    policy: StaffingPolicyV1,
-    work_sources: Vec<StaffingWorkSourceV2>,
+    policy: StaffingPolicy,
+    work_sources: Vec<StaffingWorkSource>,
 }
-impl StaffingPoolBindingV2 {
+impl StaffingPoolBinding {
     /// Declare the complete work-source membership and labor force explicitly.
     /// # Errors
     /// Refuses empty, duplicate or over-bound work-source membership.
     pub fn try_new(
-        pool_id: StaffingPoolIdV1,
-        site_id: SiteIdV1,
-        unit_id: UnitIdV1,
+        pool_id: StaffingPoolId,
+        site_id: SiteId,
+        unit_id: UnitId,
         labor_force: u64,
-        policy: StaffingPolicyV1,
-        mut work_sources: Vec<StaffingWorkSourceV2>,
-    ) -> Result<Self, StaffingErrorV2> {
+        policy: StaffingPolicy,
+        mut work_sources: Vec<StaffingWorkSource>,
+    ) -> Result<Self, StaffingError> {
         if work_sources.is_empty() {
-            return Err(StaffingErrorV2::EmptyWorkSources);
+            return Err(StaffingError::EmptyWorkSources);
         }
-        if work_sources.len() > MAX_MATERIAL_CIRCUIT_ROWS_V1 {
-            return Err(StaffingErrorV2::RowLimit);
+        if work_sources.len() > MAX_MATERIAL_CIRCUIT_ROWS {
+            return Err(StaffingError::RowLimit);
         }
         work_sources.sort_unstable();
         if work_sources.windows(2).any(|pair| pair[0] == pair[1]) {
-            return Err(StaffingErrorV2::DuplicateWorkSource);
+            return Err(StaffingError::DuplicateWorkSource);
         }
         Ok(Self {
             pool_id,
@@ -103,15 +103,15 @@ impl StaffingPoolBindingV2 {
         })
     }
     #[must_use]
-    pub const fn pool_id(&self) -> StaffingPoolIdV1 {
+    pub const fn pool_id(&self) -> StaffingPoolId {
         self.pool_id
     }
     #[must_use]
-    pub const fn site_id(&self) -> SiteIdV1 {
+    pub const fn site_id(&self) -> SiteId {
         self.site_id
     }
     #[must_use]
-    pub const fn unit_id(&self) -> UnitIdV1 {
+    pub const fn unit_id(&self) -> UnitId {
         self.unit_id
     }
     #[must_use]
@@ -119,43 +119,43 @@ impl StaffingPoolBindingV2 {
         self.labor_force
     }
     #[must_use]
-    pub const fn policy(&self) -> StaffingPolicyV1 {
+    pub const fn policy(&self) -> StaffingPolicy {
         self.policy
     }
     #[must_use]
-    pub fn work_sources(&self) -> &[StaffingWorkSourceV2] {
+    pub fn work_sources(&self) -> &[StaffingWorkSource] {
         &self.work_sources
     }
 }
 
 /// Opening person stocks and the previous unretained labor-time request.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct StaffingPoolStateV2 {
-    binding: StaffingPoolBindingV2,
+pub struct StaffingPoolState {
+    binding: StaffingPoolBinding,
     employed: u64,
     reserve: u64,
     previous_unretained_hours: u64,
 }
-impl StaffingPoolStateV2 {
+impl StaffingPoolState {
     /// Capture exact stocks; retention memory is an explicit caller input.
     /// # Errors
     /// Refuses a nonconserved population or an unrepresentable opening schedule.
     pub fn try_new(
-        binding: StaffingPoolBindingV2,
+        binding: StaffingPoolBinding,
         employed: u64,
         reserve: u64,
         previous_unretained_hours: u64,
-    ) -> Result<Self, StaffingErrorV2> {
+    ) -> Result<Self, StaffingError> {
         if employed
             .checked_add(reserve)
-            .ok_or(StaffingErrorV2::Arithmetic)?
+            .ok_or(StaffingError::Arithmetic)?
             != binding.labor_force
         {
-            return Err(StaffingErrorV2::PopulationInvariant);
+            return Err(StaffingError::PopulationInvariant);
         }
         employed
             .checked_mul(binding.policy.hours_per_person)
-            .ok_or(StaffingErrorV2::Arithmetic)?;
+            .ok_or(StaffingError::Arithmetic)?;
         Ok(Self {
             binding,
             employed,
@@ -164,7 +164,7 @@ impl StaffingPoolStateV2 {
         })
     }
     #[must_use]
-    pub const fn binding(&self) -> &StaffingPoolBindingV2 {
+    pub const fn binding(&self) -> &StaffingPoolBinding {
         &self.binding
     }
     #[must_use]
@@ -183,23 +183,20 @@ impl StaffingPoolStateV2 {
 
 /// Complete immutable opening staffing state, ordered by pool identity.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct StaffingStateV2 {
+pub struct StaffingState {
     period: u64,
-    pools: Vec<StaffingPoolStateV2>,
+    pools: Vec<StaffingPoolState>,
 }
-impl StaffingStateV2 {
+impl StaffingState {
     /// Validate one owner per pool, site/unit and work source across the state.
     /// # Errors
     /// Refuses period zero, row bounds or overlapping ownership.
-    pub fn try_new(
-        period: u64,
-        mut pools: Vec<StaffingPoolStateV2>,
-    ) -> Result<Self, StaffingErrorV2> {
+    pub fn try_new(period: u64, mut pools: Vec<StaffingPoolState>) -> Result<Self, StaffingError> {
         if period == 0 {
-            return Err(StaffingErrorV2::PeriodInvariant);
+            return Err(StaffingError::PeriodInvariant);
         }
-        if pools.len() > MAX_MATERIAL_CIRCUIT_ROWS_V1 {
-            return Err(StaffingErrorV2::RowLimit);
+        if pools.len() > MAX_MATERIAL_CIRCUIT_ROWS {
+            return Err(StaffingError::RowLimit);
         }
         pools.sort_unstable_by_key(|pool| pool.binding.pool_id);
         let mut site_units = BTreeSet::new();
@@ -208,18 +205,18 @@ impl StaffingStateV2 {
         for pool in &pools {
             let binding = &pool.binding;
             if previous_pool == Some(binding.pool_id) {
-                return Err(StaffingErrorV2::DuplicatePool);
+                return Err(StaffingError::DuplicatePool);
             }
             previous_pool = Some(binding.pool_id);
             if !site_units.insert((binding.site_id, binding.unit_id)) {
-                return Err(StaffingErrorV2::DuplicateSiteUnit);
+                return Err(StaffingError::DuplicateSiteUnit);
             }
             for source in &binding.work_sources {
                 if !work_sources.insert(*source) {
-                    return Err(StaffingErrorV2::DuplicateWorkSource);
+                    return Err(StaffingError::DuplicateWorkSource);
                 }
-                if work_sources.len() > MAX_MATERIAL_CIRCUIT_ROWS_V1 {
-                    return Err(StaffingErrorV2::RowLimit);
+                if work_sources.len() > MAX_MATERIAL_CIRCUIT_ROWS {
+                    return Err(StaffingError::RowLimit);
                 }
             }
         }
@@ -230,29 +227,29 @@ impl StaffingStateV2 {
         self.period
     }
     #[must_use]
-    pub fn pools(&self) -> &[StaffingPoolStateV2] {
+    pub fn pools(&self) -> &[StaffingPoolState] {
         &self.pools
     }
 }
 
 /// One explicit material work request, including an explicit zero for no work.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct StaffingWorkRequestV2 {
+pub struct StaffingWorkRequest {
     period: u64,
-    pool_id: StaffingPoolIdV1,
-    work_source: StaffingWorkSourceV2,
-    site_id: SiteIdV1,
-    unit_id: UnitIdV1,
+    pool_id: StaffingPoolId,
+    work_source: StaffingWorkSource,
+    site_id: SiteId,
+    unit_id: UnitId,
     hours: u64,
 }
-impl StaffingWorkRequestV2 {
+impl StaffingWorkRequest {
     #[must_use]
     pub const fn new(
         period: u64,
-        pool_id: StaffingPoolIdV1,
-        work_source: StaffingWorkSourceV2,
-        site_id: SiteIdV1,
-        unit_id: UnitIdV1,
+        pool_id: StaffingPoolId,
+        work_source: StaffingWorkSource,
+        site_id: SiteId,
+        unit_id: UnitId,
         hours: u64,
     ) -> Self {
         Self {
@@ -269,19 +266,19 @@ impl StaffingWorkRequestV2 {
         self.period
     }
     #[must_use]
-    pub const fn pool_id(self) -> StaffingPoolIdV1 {
+    pub const fn pool_id(self) -> StaffingPoolId {
         self.pool_id
     }
     #[must_use]
-    pub const fn work_source(self) -> StaffingWorkSourceV2 {
+    pub const fn work_source(self) -> StaffingWorkSource {
         self.work_source
     }
     #[must_use]
-    pub const fn site_id(self) -> SiteIdV1 {
+    pub const fn site_id(self) -> SiteId {
         self.site_id
     }
     #[must_use]
-    pub const fn unit_id(self) -> UnitIdV1 {
+    pub const fn unit_id(self) -> UnitId {
         self.unit_id
     }
     #[must_use]
@@ -292,9 +289,9 @@ impl StaffingWorkRequestV2 {
 
 /// Exact completed account; V1 has no mortality, migration or inactivity flows.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct StaffingReceiptV2 {
+pub struct StaffingReceipt {
     period: u64,
-    binding: StaffingPoolBindingV2,
+    binding: StaffingPoolBinding,
     opening_employed: u64,
     opening_reserve: u64,
     previous_unretained_hours: u64,
@@ -307,11 +304,11 @@ pub struct StaffingReceiptV2 {
     closing_reserve: u64,
     next_opening_hours: u64,
 }
-impl StaffingReceiptV2 {
+impl StaffingReceipt {
     pub(super) fn from_transition(
         period: u64,
-        opening: &StaffingPoolStateV2,
-        closing: &StaffingPoolStateV2,
+        opening: &StaffingPoolState,
+        closing: &StaffingPoolState,
         current_unretained_hours: u64,
         retained_hours: u64,
         target_employed: u64,
@@ -343,7 +340,7 @@ impl StaffingReceiptV2 {
         self.period
     }
     #[must_use]
-    pub const fn binding(&self) -> &StaffingPoolBindingV2 {
+    pub const fn binding(&self) -> &StaffingPoolBinding {
         &self.binding
     }
     #[must_use]
@@ -394,16 +391,16 @@ impl StaffingReceiptV2 {
 
 /// A complete detached successor; constructing evidence never publishes it.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct StaffingTransitionV2 {
-    state: StaffingStateV2,
-    receipts: Vec<StaffingReceiptV2>,
-    labor: Vec<LaborCapacityRowV1>,
+pub struct StaffingTransition {
+    state: StaffingState,
+    receipts: Vec<StaffingReceipt>,
+    labor: Vec<LaborCapacityRow>,
 }
-impl StaffingTransitionV2 {
+impl StaffingTransition {
     pub(super) fn new(
-        state: StaffingStateV2,
-        receipts: Vec<StaffingReceiptV2>,
-        labor: Vec<LaborCapacityRowV1>,
+        state: StaffingState,
+        receipts: Vec<StaffingReceipt>,
+        labor: Vec<LaborCapacityRow>,
     ) -> Self {
         Self {
             state,
@@ -412,20 +409,20 @@ impl StaffingTransitionV2 {
         }
     }
     #[must_use]
-    pub const fn state(&self) -> &StaffingStateV2 {
+    pub const fn state(&self) -> &StaffingState {
         &self.state
     }
     #[must_use]
-    pub fn receipts(&self) -> &[StaffingReceiptV2] {
+    pub fn receipts(&self) -> &[StaffingReceipt] {
         &self.receipts
     }
     /// Proposed exact budgets, ordered by site/unit, for the following period.
     #[must_use]
-    pub fn next_labor(&self) -> &[LaborCapacityRowV1] {
+    pub fn next_labor(&self) -> &[LaborCapacityRow] {
         &self.labor
     }
     #[must_use]
-    pub fn into_state(self) -> StaffingStateV2 {
+    pub fn into_state(self) -> StaffingState {
         self.state
     }
 }

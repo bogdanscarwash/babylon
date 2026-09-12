@@ -1,59 +1,64 @@
 //! Explicit V3 durable material campaign, marker-last and checkpoint-complete.
 
 mod component_identity;
-pub(crate) use component_identity::MaterialComponentIdentityV1;
+pub(crate) use component_identity::MaterialComponentIdentity;
 
-use crate::stored_tick::{StoredEventV2, StoredTickReadSourceV1, StoredTickRelationV1};
+use crate::stored_tick::{StoredEvent, StoredTickReadSource, StoredTickRelation};
 
+use crate::CommittedTickReceipt;
 use crate::{
-    checkpoint::{CommittedFullCheckpointV1, CommittedResolveTickV1},
-    committed_tick_envelope::CommittedTickRowFamiliesV2,
-    foundation::{CampaignFoundationV1, FoundationContentBundleV2},
+    checkpoint::{CommittedFullCheckpoint, CommittedResolveTick},
+    committed_tick_envelope::CommittedTickRowFamilies,
+    foundation::{CampaignFoundation, FoundationContentBundle},
     identity::CampaignId,
-    material_envelope::CommittedMaterialTickEnvelopeV3,
+    material_envelope::CommittedMaterialTickEnvelope,
     runtime::{
-        insert_campaign_foundation_rows_v1, insert_typed_tick_pre_marker_rows_v2,
-        prepare_committed_tick_v2, reconstruct_graph_foundation_session_v1,
-        require_active_authority_client, RustPersistenceRuntimeErrorV2,
+        insert_campaign_foundation_rows, insert_typed_tick_pre_marker_rows, prepare_committed_tick,
+        reconstruct_graph_foundation_session, verify_runtime_schema_client,
+        RustPersistenceRuntimeError,
     },
     semantic_batches::{
-        compose_graph_rows_with_encoder_v1, compose_material_state_rows_v1, StableGraphRowRefV1,
+        compose_graph_rows_with_encoder, compose_material_state_rows, StableGraphRowRef,
     },
     stored_tick,
 };
 use babylon_bsl::structural_verbs::CollectingSink;
 use babylon_graph::hypergraph_store::HypergraphStore;
-use babylon_kernel::sha256_of;
-use babylon_material_circuit::MaterialCircuitStateV3;
-use babylon_practice_contract::ordered_action_v1::OrderedPracticeActionBatchV1;
+use babylon_graph::stable_state::StableGraphState;
+use babylon_kernel::content_digest::sha256_of;
+use babylon_material_circuit::MaterialCircuitState;
+use babylon_practice_contract::OrderedPracticeActionBatch;
+use babylon_tick::choice_receipt::ChoiceReceipt;
 use babylon_tick::{
     material_replay::{
-        IdentifiedMaterialTickV3, MaterialCommitErrorV3, MaterialReplayErrorV3,
-        MaterialReplaySessionV3,
+        IdentifiedMaterialTick, MaterialCommitError, MaterialReplayError, MaterialReplaySession,
     },
-    material_world::{MaterialWorldErrorV3, MaterialWorldRegisterV3},
-    replay_session::{ReplayCommitDispositionV1, ReplayTickSession},
+    material_world::{MaterialWorldError, MaterialWorldRegister},
+    replay_session::{ReplayCommitDisposition, ReplayTickSession},
 };
 use postgres::{Config, GenericClient, NoTls};
 use std::time::{Duration, Instant};
 
-const SCHEMA: &str = include_str!("../migrations/material_runtime_v3.sql");
 const FOUNDATION_DOMAIN: &[u8] = b"babylon.material-campaign-foundation.v2\0";
 
 const WRITER_CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
 const WRITER_TCP_USER_TIMEOUT: Duration = Duration::from_secs(30);
 // Tick computation is detached before these transactions begin. Individual
 // writer statements get a larger budget than the observer's read queries.
-const WRITER_STARTUP_OPTIONS: &str = "-c statement_timeout=120000ms -c lock_timeout=5000ms \
+const WRITER_STARTUP_OPTIONS: &str = "-c search_path=pg_catalog -c quote_all_identifiers=off \
+    -c statement_timeout=120000ms -c lock_timeout=5000ms \
     -c idle_in_transaction_session_timeout=120000ms";
 
-pub(crate) fn bounded_material_writer_config_v3(
+pub(crate) fn bounded_material_writer_config(
     config: &Config,
-) -> Result<Config, MaterialRuntimeErrorV3> {
+) -> Result<Config, MaterialRuntimeError> {
     // Validate the caller before introducing trusted startup settings. Never
     // accept caller options merely because they resemble our timeout values.
-    crate::validate_connection_target(config)
-        .map_err(|_| RustPersistenceRuntimeErrorV2::ActivationRequired)?;
+    crate::postgres_catalog::validate_connection_target(config).map_err(|error| {
+        RustPersistenceRuntimeError::CurrentSchema(crate::CurrentSchemaError::ConnectionTarget(
+            error,
+        ))
+    })?;
     let mut bounded = config.clone();
     bounded
         .connect_timeout(WRITER_CONNECT_TIMEOUT)
@@ -64,68 +69,70 @@ pub(crate) fn bounded_material_writer_config_v3(
 
 /// Pinned authored identity; quantities remain in the complete material register.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct MaterialFoundationSpecV2 {
+pub struct MaterialFoundationSpec {
     pub preset_id: String,
     pub horizon_ticks: u64,
     pub content_digest: [u8; 32],
 }
 /// Fresh tick-zero owners and their exact combined foundation.
-pub struct MaterialRuntimeFoundationV2 {
+pub struct MaterialRuntimeFoundation {
     graph: ReplayTickSession<HypergraphStore>,
-    graph_foundation: CampaignFoundationV1,
-    register: MaterialWorldRegisterV3,
-    spec: MaterialFoundationSpecV2,
+    graph_foundation: CampaignFoundation,
+    register: MaterialWorldRegister,
+    spec: MaterialFoundationSpec,
     bytes: Vec<u8>,
     digest: [u8; 32],
-    labor: babylon_tick::material_replay::MaterialLaborV1,
+    labor: babylon_tick::material_staffing::StaffingComposition,
 }
 /// Precise successor refusal classes. No fallback to a graph-only campaign.
 #[derive(Debug)]
-pub enum MaterialRuntimeErrorV3 {
-    Graph(RustPersistenceRuntimeErrorV2),
-    Replay(MaterialReplayErrorV3),
-    Register(MaterialWorldErrorV3),
+pub enum MaterialRuntimeError {
+    Graph(RustPersistenceRuntimeError),
+    Replay(MaterialReplayError),
+    Register(MaterialWorldError),
     Database(postgres::Error),
     DatabaseLockRefused(postgres::Error),
     DatabaseStatementCanceled(postgres::Error),
     SchemaDrift,
     FoundationMismatch,
+    #[cfg(test)]
+    InjectedCommitLoss,
     LegacyCampaign,
     MissingCampaign,
     AlreadyExists,
     TailConflict,
     InvalidCheckpoint,
     Bounds,
-    MichiganEconomy(crate::michigan_economy::MichiganEconomyErrorV1),
-    MichiganMaterial(crate::michigan_material::MichiganMaterialErrorV1),
+    MichiganEconomy(crate::michigan_economy::MichiganEconomyError),
+    MichiganMaterial(crate::michigan_material::MichiganMaterialError),
 }
-impl std::fmt::Display for MaterialRuntimeErrorV3 {
+impl std::fmt::Display for MaterialRuntimeError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "material runtime refused: {self:?}")
     }
 }
-impl std::error::Error for MaterialRuntimeErrorV3 {}
-impl From<RustPersistenceRuntimeErrorV2> for MaterialRuntimeErrorV3 {
-    fn from(error: RustPersistenceRuntimeErrorV2) -> Self {
+impl std::error::Error for MaterialRuntimeError {}
+impl From<RustPersistenceRuntimeError> for MaterialRuntimeError {
+    fn from(error: RustPersistenceRuntimeError) -> Self {
         Self::Graph(error)
     }
 }
-impl From<MaterialReplayErrorV3> for MaterialRuntimeErrorV3 {
-    fn from(error: MaterialReplayErrorV3) -> Self {
+impl From<MaterialReplayError> for MaterialRuntimeError {
+    fn from(error: MaterialReplayError) -> Self {
         Self::Replay(error)
     }
 }
-impl From<MaterialWorldErrorV3> for MaterialRuntimeErrorV3 {
-    fn from(error: MaterialWorldErrorV3) -> Self {
+impl From<MaterialWorldError> for MaterialRuntimeError {
+    fn from(error: MaterialWorldError) -> Self {
         Self::Register(error)
     }
 }
-impl From<crate::semantic_batches::SemanticBatchErrorV2> for MaterialRuntimeErrorV3 {
-    fn from(error: crate::semantic_batches::SemanticBatchErrorV2) -> Self {
+impl From<crate::semantic_batches::SemanticBatchError> for MaterialRuntimeError {
+    fn from(error: crate::semantic_batches::SemanticBatchError) -> Self {
         Self::Graph(error.into())
     }
 }
-impl From<postgres::Error> for MaterialRuntimeErrorV3 {
+impl From<postgres::Error> for MaterialRuntimeError {
     fn from(error: postgres::Error) -> Self {
         if error.code() == Some(&postgres::error::SqlState::LOCK_NOT_AVAILABLE) {
             Self::DatabaseLockRefused(error)
@@ -137,7 +144,7 @@ impl From<postgres::Error> for MaterialRuntimeErrorV3 {
     }
 }
 
-fn validate_foundation_spec(spec: &MaterialFoundationSpecV2) -> Result<(), MaterialRuntimeErrorV3> {
+fn validate_foundation_spec(spec: &MaterialFoundationSpec) -> Result<(), MaterialRuntimeError> {
     if spec.preset_id.is_empty()
         || spec.preset_id.len() > 128
         || !spec
@@ -147,24 +154,24 @@ fn validate_foundation_spec(spec: &MaterialFoundationSpecV2) -> Result<(), Mater
         || spec.horizon_ticks == 0
         || spec.horizon_ticks > i64::MAX as u64
     {
-        return Err(MaterialRuntimeErrorV3::Bounds);
+        return Err(MaterialRuntimeError::Bounds);
     }
     Ok(())
 }
 
-impl MaterialRuntimeFoundationV2 {
+impl MaterialRuntimeFoundation {
     /// Capture a foundation whose content explicitly uses the V2 source encoding.
     /// # Errors
     /// Refuses invalid graph, material register, spec or aggregate bounds.
-    pub fn capture_v2(
+    pub fn capture(
         graph: ReplayTickSession<HypergraphStore>,
-        bundle: FoundationContentBundleV2,
-        state: MaterialCircuitStateV3,
-        spec: MaterialFoundationSpecV2,
-    ) -> Result<Self, MaterialRuntimeErrorV3> {
+        bundle: FoundationContentBundle,
+        state: MaterialCircuitState,
+        spec: MaterialFoundationSpec,
+    ) -> Result<Self, MaterialRuntimeError> {
         validate_foundation_spec(&spec)?;
-        let graph_foundation = CampaignFoundationV1::capture_v2(&graph, bundle)?;
-        let register = MaterialWorldRegisterV3::try_new(0, state)?;
+        let graph_foundation = CampaignFoundation::capture(&graph, bundle)?;
+        let register = MaterialWorldRegister::try_new(0, state)?;
         Self::from_parts(graph, graph_foundation, register, spec)
     }
 
@@ -172,34 +179,34 @@ impl MaterialRuntimeFoundationV2 {
     // Callers first prove that graph_foundation describes the prepared graph.
     fn from_parts(
         graph: ReplayTickSession<HypergraphStore>,
-        graph_foundation: CampaignFoundationV1,
-        register: MaterialWorldRegisterV3,
-        spec: MaterialFoundationSpecV2,
-    ) -> Result<Self, MaterialRuntimeErrorV3> {
+        graph_foundation: CampaignFoundation,
+        register: MaterialWorldRegister,
+        spec: MaterialFoundationSpec,
+    ) -> Result<Self, MaterialRuntimeError> {
         validate_foundation_spec(&spec)?;
         if graph.completed_tick() != 0 || register.completed_tick() != 0 {
-            return Err(MaterialRuntimeErrorV3::FoundationMismatch);
+            return Err(MaterialRuntimeError::FoundationMismatch);
         }
         let labor = crate::sector_bundle::foundation::validate_stored_material_authority(
             &graph_foundation,
             &register,
             &spec,
         )
-        .map_err(|_| MaterialRuntimeErrorV3::FoundationMismatch)?;
+        .map_err(|_| MaterialRuntimeError::FoundationMismatch)?;
         let length = FOUNDATION_DOMAIN
             .len()
             .checked_add(4 + 8 + 32 + 3 * 8)
             .and_then(|n| n.checked_add(spec.preset_id.len()))
             .and_then(|n| n.checked_add(graph_foundation.canonical_bytes().len()))
             .and_then(|n| n.checked_add(register.canonical_bytes().len()))
-            .ok_or(MaterialRuntimeErrorV3::Bounds)?;
+            .ok_or(MaterialRuntimeError::Bounds)?;
         if length > 67_108_864 {
-            return Err(MaterialRuntimeErrorV3::Bounds);
+            return Err(MaterialRuntimeError::Bounds);
         }
         let mut bytes = Vec::new();
         bytes
             .try_reserve_exact(length)
-            .map_err(|_| MaterialRuntimeErrorV3::Bounds)?;
+            .map_err(|_| MaterialRuntimeError::Bounds)?;
         bytes.extend_from_slice(FOUNDATION_DOMAIN);
         bytes.extend_from_slice(&2_u32.to_be_bytes());
         bytes.extend_from_slice(&spec.horizon_ticks.to_be_bytes());
@@ -211,13 +218,13 @@ impl MaterialRuntimeFoundationV2 {
         ] {
             bytes.extend_from_slice(
                 &u64::try_from(part.len())
-                    .map_err(|_| MaterialRuntimeErrorV3::Bounds)?
+                    .map_err(|_| MaterialRuntimeError::Bounds)?
                     .to_be_bytes(),
             );
             bytes.extend_from_slice(part);
         }
         if bytes.len() != length {
-            return Err(MaterialRuntimeErrorV3::Bounds);
+            return Err(MaterialRuntimeError::Bounds);
         }
         let digest = sha256_of(&bytes);
         Ok(Self {
@@ -239,20 +246,20 @@ impl MaterialRuntimeFoundationV2 {
         &self.bytes
     }
     #[must_use]
-    pub const fn initial_register(&self) -> &MaterialWorldRegisterV3 {
+    pub const fn initial_register(&self) -> &MaterialWorldRegister {
         &self.register
     }
     #[must_use]
-    pub const fn spec(&self) -> &MaterialFoundationSpecV2 {
+    pub const fn spec(&self) -> &MaterialFoundationSpec {
         &self.spec
     }
     #[must_use]
-    pub const fn graph_foundation(&self) -> &CampaignFoundationV1 {
+    pub const fn graph_foundation(&self) -> &CampaignFoundation {
         &self.graph_foundation
     }
     /// Exact labor authority decoded from the admitted stored definitions.
     #[must_use]
-    pub const fn labor(&self) -> &babylon_tick::material_replay::MaterialLaborV1 {
+    pub const fn labor(&self) -> &babylon_tick::material_staffing::StaffingComposition {
         &self.labor
     }
     /// Consume the exact foundation into its admitted graph and labor authority.
@@ -260,8 +267,8 @@ impl MaterialRuntimeFoundationV2 {
     /// Refuses invalid initial clocks or material replay bounds.
     pub fn into_session(
         self,
-    ) -> Result<MaterialReplaySessionV3<HypergraphStore>, MaterialRuntimeErrorV3> {
-        Ok(MaterialReplaySessionV3::new(
+    ) -> Result<MaterialReplaySession<HypergraphStore>, MaterialRuntimeError> {
+        Ok(MaterialReplaySession::new(
             self.graph,
             self.register,
             self.digest,
@@ -272,46 +279,42 @@ impl MaterialRuntimeFoundationV2 {
 }
 
 /// Canonical writer for explicitly founded circuit campaigns.
-pub struct DurableMaterialRuntimeV3 {
+pub struct DurableMaterialRuntime {
     config: Config,
     campaign: CampaignId,
-    session: MaterialReplaySessionV3<HypergraphStore>,
-    tail: Option<IdentifiedMaterialTickV3>,
-    content_layout: crate::FoundationContentLayout,
+    session: MaterialReplaySession<HypergraphStore>,
+    tail: Option<IdentifiedMaterialTick>,
+    last_receipt: Option<crate::CommittedTickReceipt>,
+    last_choice_receipts: Vec<babylon_tick::choice_receipt::ChoiceReceipt>,
 }
-impl DurableMaterialRuntimeV3 {
+impl DurableMaterialRuntime {
     /// Install both foundation components in one transaction, without an implicit tick.
     /// # Errors
     /// Refuses absent authority, existing graph-only campaigns, mismatched foundation or DB failure.
     pub fn create(
         config: &Config,
         campaign: CampaignId,
-        foundation: MaterialRuntimeFoundationV2,
-    ) -> Result<Self, MaterialRuntimeErrorV3> {
+        foundation: MaterialRuntimeFoundation,
+    ) -> Result<Self, MaterialRuntimeError> {
         Self::create_with_admission(config, campaign, foundation, false)
     }
     /// Lifecycle New requires absence under the same founding lock/transaction.
     pub(crate) fn create_new(
         config: &Config,
         campaign: CampaignId,
-        foundation: MaterialRuntimeFoundationV2,
-    ) -> Result<Self, MaterialRuntimeErrorV3> {
+        foundation: MaterialRuntimeFoundation,
+    ) -> Result<Self, MaterialRuntimeError> {
         Self::create_with_admission(config, campaign, foundation, true)
     }
     fn create_with_admission(
         config: &Config,
         campaign: CampaignId,
-        foundation: MaterialRuntimeFoundationV2,
+        foundation: MaterialRuntimeFoundation,
         require_absent: bool,
-    ) -> Result<Self, MaterialRuntimeErrorV3> {
-        let bounded = bounded_material_writer_config_v3(config)?;
-        install_material_runtime_schema_v3(config)?;
-        crate::install_territory_county_map_schema_v1(config)
-            .map_err(|_| MaterialRuntimeErrorV3::SchemaDrift)?;
-        crate::archive::SemanticArchiveStoreV1::new(config)
-            .install_schema()
-            .map_err(|_| MaterialRuntimeErrorV3::SchemaDrift)?;
+    ) -> Result<Self, MaterialRuntimeError> {
+        let bounded = bounded_material_writer_config(config)?;
         let mut client = bounded.connect(NoTls)?;
+        verify_runtime_schema_client(&mut client)?;
         let mut tx = client.transaction()?;
         tx.batch_execute(
             "SET LOCAL search_path TO pg_catalog; SET LOCAL synchronous_commit TO on",
@@ -322,23 +325,22 @@ impl DurableMaterialRuntimeV3 {
         )?;
         let existed=tx.query_opt("SELECT campaign_id FROM babylon_state.campaign WHERE campaign_id=$1::uuid FOR UPDATE",&[campaign.as_uuid()])?.is_some();
         if existed && require_absent {
-            return Err(MaterialRuntimeErrorV3::AlreadyExists);
+            return Err(MaterialRuntimeError::AlreadyExists);
         }
         if existed {
-            let stored = hydrate_material_foundation_v2(&mut tx, campaign, foundation.digest())?;
+            let stored = hydrate_material_foundation(&mut tx, campaign, foundation.digest())?;
             if stored.canonical_bytes() != foundation.canonical_bytes() {
-                return Err(MaterialRuntimeErrorV3::FoundationMismatch);
+                return Err(MaterialRuntimeError::FoundationMismatch);
             }
             if read_tail_tick(&mut tx, campaign)? != 0 {
-                return Err(MaterialRuntimeErrorV3::TailConflict);
+                return Err(MaterialRuntimeError::TailConflict);
             }
         } else {
-            insert_campaign_foundation_rows_v1(&mut tx, campaign, &foundation.graph_foundation)?;
+            insert_campaign_foundation_rows(&mut tx, campaign, &foundation.graph_foundation)?;
             let horizon = i64::try_from(foundation.spec.horizon_ticks)
-                .map_err(|_| MaterialRuntimeErrorV3::Bounds)?;
+                .map_err(|_| MaterialRuntimeError::Bounds)?;
             tx.execute("INSERT INTO babylon_state.material_campaign_foundation_v2 (campaign_id,preset_id,horizon_ticks,content_sha256,initial_register_bytes,foundation_bytes,foundation_sha256) VALUES ($1::uuid,$2,$3,$4,$5,$6,$7)",&[campaign.as_uuid(),&foundation.spec.preset_id,&horizon,&&foundation.spec.content_digest[..],&foundation.register.canonical_bytes(),&foundation.canonical_bytes(),&&foundation.digest[..]])?;
         }
-        let content_layout = foundation.graph_foundation.content_bundle().layout();
         // Staffed rule ownership is fallible: refuse before any founding rows
         // become durable, so dropping this transaction also removes enrollment.
         let session = foundation.into_session()?;
@@ -348,7 +350,8 @@ impl DurableMaterialRuntimeV3 {
             campaign,
             session,
             tail: None,
-            content_layout,
+            last_receipt: None,
+            last_choice_receipts: Vec::new(),
         })
     }
     /// Reconstruct the stored foundation and hydrate the latest complete V3 checkpoint.
@@ -360,19 +363,18 @@ impl DurableMaterialRuntimeV3 {
         config: &Config,
         campaign: CampaignId,
         expected_foundation_digest: [u8; 32],
-    ) -> Result<Self, MaterialRuntimeErrorV3> {
-        let bounded = bounded_material_writer_config_v3(config)?;
-        install_material_runtime_schema_v3(config)?;
+    ) -> Result<Self, MaterialRuntimeError> {
+        let bounded = bounded_material_writer_config(config)?;
         let mut client = bounded.connect(NoTls)?;
+        verify_runtime_schema_client(&mut client)?;
         let mut tx = client
             .build_transaction()
             .isolation_level(postgres::IsolationLevel::RepeatableRead)
             .read_only(true)
             .start()?;
         let foundation =
-            hydrate_material_foundation_v2(&mut tx, campaign, expected_foundation_digest)?;
+            hydrate_material_foundation(&mut tx, campaign, expected_foundation_digest)?;
         let tick = read_tail_tick(&mut tx, campaign)?;
-        let content_layout = foundation.graph_foundation.content_bundle().layout();
         let mut session = foundation.into_session()?;
         let tail = if tick == 0 {
             None
@@ -385,7 +387,7 @@ impl DurableMaterialRuntimeV3 {
                 stored.register.canonical_bytes(),
             )?;
             if session.current_world_hash()? != stored.identity.result_world_hash() {
-                return Err(MaterialRuntimeErrorV3::InvalidCheckpoint);
+                return Err(MaterialRuntimeError::InvalidCheckpoint);
             }
             Some(stored.identity)
         };
@@ -395,11 +397,12 @@ impl DurableMaterialRuntimeV3 {
             campaign,
             session,
             tail,
-            content_layout,
+            last_receipt: None,
+            last_choice_receipts: Vec::new(),
         })
     }
     #[must_use]
-    pub const fn session(&self) -> &MaterialReplaySessionV3<HypergraphStore> {
+    pub const fn session(&self) -> &MaterialReplaySession<HypergraphStore> {
         &self.session
     }
     #[must_use]
@@ -407,28 +410,115 @@ impl DurableMaterialRuntimeV3 {
         self.campaign
     }
     #[must_use]
-    pub const fn tail(&self) -> Option<&IdentifiedMaterialTickV3> {
+    pub const fn tail(&self) -> Option<&IdentifiedMaterialTick> {
         self.tail.as_ref()
     }
+    /// Process-local diagnostics for the last acknowledged tick.
+    #[must_use]
+    pub const fn diagnostic_receipt(&self) -> Option<&crate::CommittedTickReceipt> {
+        self.last_receipt.as_ref()
+    }
+
+    /// Recompose the exact graph state bound to the current acknowledged receipt.
+    ///
+    /// This observation stays separate from the bounded receipt so persistence
+    /// acknowledgements remain identity- and value-free. The caller must present
+    /// the current runtime tail, and recomposition must reproduce its sealed
+    /// post-tick graph digest before any state is returned.
+    ///
+    /// # Errors
+    /// Refuses a receipt for any other tick, graph-state recomposition failure,
+    /// or a recomposed digest that differs from the acknowledged graph digest.
+    pub fn observe_committed_graph_state(
+        &self,
+        receipt: &CommittedTickReceipt,
+    ) -> Result<StableGraphState, RustPersistenceRuntimeError> {
+        if self.tail.as_ref().map(IdentifiedMaterialTick::resolve_tick)
+            != Some(receipt.resolve_tick().get())
+        {
+            return Err(
+                RustPersistenceRuntimeError::ObservationNotCurrentCommittedTail {
+                    receipt_tick: receipt.resolve_tick().get(),
+                    current_tail: self.tail.as_ref().map(IdentifiedMaterialTick::resolve_tick),
+                },
+            );
+        }
+        let observed = self.observe_current_stable_graph_state()?;
+        if observed.digest().as_bytes() != &receipt.result_stable_graph_digest() {
+            return Err(RustPersistenceRuntimeError::ObservationGraphDigestMismatch);
+        }
+        Ok(observed)
+    }
+
+    /// Borrow detailed choice evidence for the just-acknowledged process-local tick.
+    ///
+    /// This is an optional post-commit operational observation seam. It never
+    /// participates in adjudication, hashing, persistence, retry, or restart.
+    ///
+    /// # Errors
+    /// Refuses a receipt other than the current tail or detail not retained by
+    /// this process (for example immediately after reopening a campaign).
+    pub fn observe_committed_choice_receipts(
+        &self,
+        receipt: &CommittedTickReceipt,
+    ) -> Result<&[ChoiceReceipt], RustPersistenceRuntimeError> {
+        if self.tail.as_ref().map(IdentifiedMaterialTick::resolve_tick)
+            != Some(receipt.resolve_tick().get())
+        {
+            return Err(
+                RustPersistenceRuntimeError::ObservationNotCurrentCommittedTail {
+                    receipt_tick: receipt.resolve_tick().get(),
+                    current_tail: self.tail.as_ref().map(IdentifiedMaterialTick::resolve_tick),
+                },
+            );
+        }
+        if self.last_receipt.as_ref() != Some(receipt)
+            || self.last_choice_receipts.len() != receipt.choice_receipt_count()
+        {
+            return Err(RustPersistenceRuntimeError::ObservationChoiceReceiptUnavailable);
+        }
+        Ok(&self.last_choice_receipts)
+    }
+
+    /// Recompose the runtime's current stable graph without mutating it.
+    ///
+    /// This unbound observation supports capturing a pre-tick state. A caller
+    /// must bind its digest to the next acknowledged receipt before exposing
+    /// any derived values.
+    ///
+    /// # Errors
+    /// Refuses any stable-identity, topology, numeric, bound, or allocation
+    /// failure while recomposing the current graph.
+    pub fn observe_current_stable_graph_state(
+        &self,
+    ) -> Result<StableGraphState, RustPersistenceRuntimeError> {
+        self.session
+            .graph_session()
+            .stable_graph_state()
+            .map_err(|_| RustPersistenceRuntimeError::ReplayTick)
+    }
+
     /// Prepare both owners, durably commit all eight families, then publish both.
     /// # Errors
     /// Refuses stale state, adjudication, row bounds or database failures without live publication.
     pub fn advance_and_commit(
         &mut self,
         sink: &mut CollectingSink,
-        actions: &OrderedPracticeActionBatchV1,
-    ) -> Result<IdentifiedMaterialTickV3, MaterialRuntimeErrorV3> {
+        actions: &OrderedPracticeActionBatch,
+    ) -> Result<IdentifiedMaterialTick, MaterialRuntimeError> {
         let started = Instant::now();
         let candidate = self.session.prepare_advance(actions)?;
         let adjudicated = Instant::now();
         let identity = *candidate.identity();
-        let tick = CommittedResolveTickV1::try_from(identity.resolve_tick())
-            .map_err(|_| MaterialRuntimeErrorV3::Bounds)?;
+        let mut diagnostic = crate::CommittedTickReceipt::from_material_candidate(&candidate)?;
+        let choices = candidate.graph_report().report().choice_receipts.clone();
+        let tick = CommittedResolveTick::try_from(identity.resolve_tick())
+            .map_err(|_| MaterialRuntimeError::Bounds)?;
         let checkpoint =
-            CommittedFullCheckpointV1::capture(self.campaign, tick, candidate.graph_report())?;
-        let families = prepare_committed_tick_v2(candidate.graph_report())?
+            CommittedFullCheckpoint::capture(self.campaign, tick, candidate.graph_report())?;
+        let families = prepare_committed_tick(candidate.graph_report())?
             .into_material_families(identity.tick_content_hash())?;
-        let envelope = CommittedMaterialTickEnvelopeV3::compose(
+        let envelope = CommittedMaterialTickEnvelope::compose(
             self.campaign,
             &identity,
             families,
@@ -444,38 +534,37 @@ impl DurableMaterialRuntimeV3 {
         )?;
         let locked=tx.query_opt("SELECT campaign_id FROM babylon_state.material_campaign_foundation_v2 WHERE campaign_id=$1::uuid FOR UPDATE",&[self.campaign.as_uuid()])?;
         if locked.is_none() {
-            return Err(MaterialRuntimeErrorV3::MissingCampaign);
+            return Err(MaterialRuntimeError::MissingCampaign);
         }
-        crate::foundation_content_schema::lock_foundation_content_layout_v2(
-            &mut tx,
-            self.campaign,
-            self.content_layout,
-        )?;
+        verify_runtime_schema_client(&mut tx)?;
         let durable = read_tail_tick(&mut tx, self.campaign)?;
         if durable == identity.resolve_tick() {
             let stored = read_stored_material_tick(&mut tx, self.campaign, durable, &self.session)?;
             if stored.envelope.canonical_bytes() != envelope.canonical_bytes() {
-                return Err(MaterialRuntimeErrorV3::TailConflict);
+                return Err(MaterialRuntimeError::TailConflict);
             }
             tx.rollback()?;
             let (ack, _) = self
                 .session
                 .commit_prepared_and_publish(sink, candidate, |_| {
-                    Ok::<_, MaterialRuntimeErrorV3>(
-                        ReplayCommitDispositionV1::ReconciledAfterAmbiguousCommit,
+                    Ok::<_, MaterialRuntimeError>(
+                        ReplayCommitDisposition::ReconciledAfterAmbiguousCommit,
                     )
                 })
                 .map_err(commit_error)?;
             self.tail = Some(ack);
+            diagnostic.acknowledge(ReplayCommitDisposition::ReconciledAfterAmbiguousCommit);
+            self.last_receipt = Some(diagnostic);
+            self.last_choice_receipts = choices;
             record_advance_timing(ack.resolve_tick(), timing);
             return Ok(ack);
         }
         if durable != self.session.completed_tick() {
-            return Err(MaterialRuntimeErrorV3::TailConflict);
+            return Err(MaterialRuntimeError::TailConflict);
         }
         let tick_sql =
-            i64::try_from(identity.resolve_tick()).map_err(|_| MaterialRuntimeErrorV3::Bounds)?;
-        insert_typed_tick_pre_marker_rows_v2(
+            i64::try_from(identity.resolve_tick()).map_err(|_| MaterialRuntimeError::Bounds)?;
+        insert_typed_tick_pre_marker_rows(
             &mut tx,
             self.campaign,
             tick_sql,
@@ -484,38 +573,153 @@ impl DurableMaterialRuntimeV3 {
             identity.tick_content_hash(),
         )?;
         tx.execute("INSERT INTO babylon_state.material_tick_v3 (campaign_id,resolve_tick,identity_bytes,register_bytes,receipt_bytes) VALUES ($1::uuid,$2,$3,$4,$5)",&[self.campaign.as_uuid(),&tick_sql,&identity.canonical_bytes(),&candidate.material().register().canonical_bytes(),&candidate.material().receipt_bytes()])?;
-        crate::metadata::advance_campaign_catalog_tick_v1(
+        crate::metadata::advance_campaign_catalog_tick(
             &mut tx,
             self.campaign,
             tick_sql - 1,
             tick_sql,
         )?;
-        let config = &self.config;
-        let campaign = self.campaign;
-        let content_layout = self.content_layout;
         let scope = candidate
             .graph_report()
             .result_stable_graph()
             .scenario_scope()
             .to_owned();
-        let components = MaterialComponentIdentityV1::from_session(self.session.graph_session());
-        let (ack,_)=self.session.commit_prepared_and_publish(sink,candidate,|_|{
-            // The marker is the final durable statement. Publication capacity is already reserved.
-            tx.execute("INSERT INTO babylon_state.tick_commit (campaign_id,resolve_tick,envelope_layout_version,tick_content_hash,envelope_digest) VALUES ($1::uuid,$2,3,$3,$4)",&[campaign.as_uuid(),&tick_sql,&&identity.tick_content_hash().as_bytes()[..],&&envelope.digest()[..]])?;
-            match tx.commit() {Ok(())=>Ok(ReplayCommitDispositionV1::Committed),Err(error)=>{
-                let mut retry_client=config.connect(NoTls)?;
-                let mut retry=retry_client.transaction()?;
-                crate::foundation_content_schema::lock_foundation_content_layout_v2(&mut retry,campaign,content_layout)?;
-                if !marker_matches(&mut retry,StoredTickReadSourceV1::Runtime,campaign,&identity,&envelope)? {return Err(error.into());}
-                let stored=read_authenticated_material_tick_v3(&mut retry,StoredTickReadSourceV1::Runtime,campaign,identity.resolve_tick(),&scope,identity.foundation_digest(),&components)?;
-                if stored.identity!=identity || stored.envelope.canonical_bytes()!=envelope.canonical_bytes(){return Err(MaterialRuntimeErrorV3::TailConflict);}
-                Ok(ReplayCommitDispositionV1::ReconciledAfterAmbiguousCommit)
-            }}
-        }).map_err(commit_error)?;
+        let components = MaterialComponentIdentity::from_session(self.session.graph_session());
+        let (ack, disposition) = self
+            .session
+            .commit_prepared_and_publish(sink, candidate, |_| {
+                commit_material_envelope(
+                    tx,
+                    &self.config,
+                    self.campaign,
+                    &identity,
+                    &envelope,
+                    &scope,
+                    &components,
+                )
+            })
+            .map_err(commit_error)?;
         self.tail = Some(ack);
+        diagnostic.acknowledge(disposition);
+        self.last_receipt = Some(diagnostic);
+        self.last_choice_receipts = choices;
         record_advance_timing(ack.resolve_tick(), timing);
         Ok(ack)
     }
+}
+
+// Commit the marker last, then reconcile an ambiguous acknowledgement against
+// the complete authenticated candidate before permitting live publication.
+fn commit_material_envelope(
+    mut tx: postgres::Transaction<'_>,
+    config: &Config,
+    campaign: CampaignId,
+    identity: &IdentifiedMaterialTick,
+    envelope: &CommittedMaterialTickEnvelope,
+    scope: &str,
+    components: &MaterialComponentIdentity,
+) -> Result<ReplayCommitDisposition, MaterialRuntimeError> {
+    let tick = i64::try_from(identity.resolve_tick()).map_err(|_| MaterialRuntimeError::Bounds)?;
+    #[cfg(test)]
+    inject_marker_trigger_failure(&mut tx)?;
+    tx.execute(
+        "INSERT INTO babylon_state.tick_commit \
+         (campaign_id,resolve_tick,envelope_layout_version,tick_content_hash,envelope_digest) \
+         VALUES ($1::uuid,$2,3,$3,$4)",
+        &[
+            campaign.as_uuid(),
+            &tick,
+            &&identity.tick_content_hash().as_bytes()[..],
+            &&envelope.digest()[..],
+        ],
+    )?;
+    match commit_material_transaction(tx) {
+        Ok(()) => Ok(ReplayCommitDisposition::Committed),
+        Err(error) => {
+            let mut retry_client = config.connect(NoTls)?;
+            let mut retry = retry_client.transaction()?;
+            verify_runtime_schema_client(&mut retry)?;
+            if !marker_matches(
+                &mut retry,
+                StoredTickReadSource::Runtime,
+                campaign,
+                identity,
+                envelope,
+            )? {
+                return Err(error);
+            }
+            let stored = read_authenticated_material_tick(
+                &mut retry,
+                StoredTickReadSource::Runtime,
+                campaign,
+                identity.resolve_tick(),
+                scope,
+                identity.foundation_digest(),
+                components,
+            )?;
+            if stored.identity != *identity
+                || stored.envelope.canonical_bytes() != envelope.canonical_bytes()
+            {
+                return Err(MaterialRuntimeError::TailConflict);
+            }
+            Ok(ReplayCommitDisposition::ReconciledAfterAmbiguousCommit)
+        }
+    }
+}
+
+// Inject only after exact schema admission and all candidate rows are prepared.
+// The replacement and its marker-trigger failure share the candidate transaction,
+// so PostgreSQL rollback restores the original function without external repair.
+#[cfg(test)]
+fn inject_marker_trigger_failure(
+    tx: &mut postgres::Transaction<'_>,
+) -> Result<(), MaterialRuntimeError> {
+    let armed = COMMIT_FAULT.with(|slot| {
+        if slot.get() == Some(CommitFault::MarkerTrigger) {
+            slot.set(None);
+            true
+        } else {
+            false
+        }
+    });
+    if armed {
+        tx.batch_execute(
+            "CREATE OR REPLACE FUNCTION babylon_meta.archive_wakeup_v1() RETURNS trigger \
+             LANGUAGE plpgsql SET search_path = pg_catalog AS $fault$ BEGIN \
+             RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='test-owned Archive wakeup failure'; END $fault$",
+        )?;
+    }
+    Ok(())
+}
+
+// Keep commit acknowledgement loss inside the same reconciliation boundary as
+// transport failure: only the persisted complete candidate can authorize publication.
+fn commit_material_transaction(tx: postgres::Transaction<'_>) -> Result<(), MaterialRuntimeError> {
+    #[cfg(test)]
+    let fault = COMMIT_FAULT.with(|slot| slot.replace(None));
+    #[cfg(test)]
+    if fault == Some(CommitFault::BeforeCommit) {
+        tx.rollback()?;
+        return Err(MaterialRuntimeError::InjectedCommitLoss);
+    }
+    tx.commit()?;
+    #[cfg(test)]
+    if fault == Some(CommitFault::AfterCommit) {
+        return Err(MaterialRuntimeError::InjectedCommitLoss);
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum CommitFault {
+    BeforeCommit,
+    AfterCommit,
+    MarkerTrigger,
+}
+#[cfg(test)]
+thread_local! {
+    pub(crate) static COMMIT_FAULT: std::cell::Cell<Option<CommitFault>> = const { std::cell::Cell::new(None) };
 }
 
 // Operator diagnostics only: clocks never enter state, hashes, receipts or the
@@ -532,75 +736,33 @@ fn record_advance_timing(period: u64, [started, adjudicated, prepared]: [Instant
     }
 }
 
-fn commit_error(error: MaterialCommitErrorV3<MaterialRuntimeErrorV3>) -> MaterialRuntimeErrorV3 {
+fn commit_error(error: MaterialCommitError<MaterialRuntimeError>) -> MaterialRuntimeError {
     match error {
-        MaterialCommitErrorV3::Preflight(error) => error.into(),
-        MaterialCommitErrorV3::Commit(error) => error,
+        MaterialCommitError::Preflight(error) => error.into(),
+        MaterialCommitError::Commit(error) => error,
     }
 }
 
-/// Install an exact successor schema; the old codec cannot mark a material campaign.
-/// # Errors
-/// Refuses absent authority, partial schema or changed installer contract.
-pub fn install_material_runtime_schema_v3(config: &Config) -> Result<(), MaterialRuntimeErrorV3> {
-    let bounded = bounded_material_writer_config_v3(config)?;
-    let mut client = bounded.connect(NoTls)?;
-    // The connection already passed target validation before trusted options
-    // were added. Verify authority on this same bounded socket.
-    require_active_authority_client(&mut client)?;
-    crate::foundation_content_schema::install_foundation_content_schema_v2(&mut client)?;
-    let mut tx = client.transaction()?;
-    tx.query_one(
-        "SELECT pg_catalog.pg_advisory_xact_lock($1)",
-        &[&crate::SCHEMA_ADVISORY_LOCK_KEY],
-    )?;
-    let installed: bool = tx
-        .query_one(
-            "SELECT pg_catalog.to_regclass('babylon_meta.material_runtime_schema_v3') IS NOT NULL",
-            &[],
-        )?
-        .get(0);
-    let digest = sha256_of(SCHEMA.as_bytes());
-    if installed {
-        let stored:Vec<u8>=tx.query_one("SELECT migration_sha256 FROM babylon_meta.material_runtime_schema_v3 WHERE singleton",&[])?.get(0);
-        if stored != digest {
-            return Err(MaterialRuntimeErrorV3::SchemaDrift);
-        }
-    } else {
-        let partial:bool=tx.query_one("SELECT pg_catalog.to_regclass('babylon_state.material_campaign_foundation_v2') IS NOT NULL OR pg_catalog.to_regclass('babylon_state.material_tick_v3') IS NOT NULL",&[])?.get(0);
-        if partial {
-            return Err(MaterialRuntimeErrorV3::SchemaDrift);
-        }
-        tx.batch_execute(SCHEMA)?;
-        tx.batch_execute("CREATE TABLE babylon_meta.material_runtime_schema_v3 (singleton boolean PRIMARY KEY CHECK(singleton),migration_sha256 bytea NOT NULL CHECK(octet_length(migration_sha256)=32)); REVOKE ALL ON babylon_meta.material_runtime_schema_v3 FROM PUBLIC")?;
-        tx.execute(
-            "INSERT INTO babylon_meta.material_runtime_schema_v3 VALUES (true,$1)",
-            &[&&digest[..]],
-        )?;
-    }
-    tx.commit()?;
-    Ok(())
-}
-struct StoredMaterialFoundationV2 {
-    spec: MaterialFoundationSpecV2,
+struct StoredMaterialFoundation {
+    spec: MaterialFoundationSpec,
     initial_register_bytes: Vec<u8>,
     foundation_bytes: Vec<u8>,
     foundation_digest: [u8; 32],
     graph_foundation_digest: [u8; 32],
 }
 
-impl StoredMaterialFoundationV2 {
-    fn from_row(row: &postgres::Row) -> Result<Self, MaterialRuntimeErrorV3> {
-        let digest = |column: usize| -> Result<[u8; 32], MaterialRuntimeErrorV3> {
+impl StoredMaterialFoundation {
+    fn from_row(row: &postgres::Row) -> Result<Self, MaterialRuntimeError> {
+        let digest = |column: usize| -> Result<[u8; 32], MaterialRuntimeError> {
             row.try_get::<_, Vec<u8>>(column)?
                 .try_into()
-                .map_err(|_| MaterialRuntimeErrorV3::FoundationMismatch)
+                .map_err(|_| MaterialRuntimeError::FoundationMismatch)
         };
         Ok(Self {
-            spec: MaterialFoundationSpecV2 {
+            spec: MaterialFoundationSpec {
                 preset_id: row.try_get(0)?,
                 horizon_ticks: u64::try_from(row.try_get::<_, i64>(1)?)
-                    .map_err(|_| MaterialRuntimeErrorV3::FoundationMismatch)?,
+                    .map_err(|_| MaterialRuntimeError::FoundationMismatch)?,
                 content_digest: digest(2)?,
             },
             initial_register_bytes: row.try_get(3)?,
@@ -611,11 +773,11 @@ impl StoredMaterialFoundationV2 {
     }
 }
 
-fn hydrate_material_foundation_v2(
+fn hydrate_material_foundation(
     client: &mut impl GenericClient,
     campaign: CampaignId,
     expected_foundation_digest: [u8; 32],
-) -> Result<MaterialRuntimeFoundationV2, MaterialRuntimeErrorV3> {
+) -> Result<MaterialRuntimeFoundation, MaterialRuntimeError> {
     let row=client.query_opt("SELECT f.preset_id,f.horizon_ticks,f.content_sha256,f.initial_register_bytes,f.foundation_bytes,f.foundation_sha256,g.foundation_sha256 FROM babylon_state.material_campaign_foundation_v2 f JOIN babylon_state.campaign_foundation g USING(campaign_id) WHERE campaign_id=$1::uuid",&[campaign.as_uuid()])?;
     let Some(row) = row else {
         let exists = client
@@ -625,100 +787,99 @@ fn hydrate_material_foundation_v2(
             )?
             .is_some();
         return Err(if exists {
-            MaterialRuntimeErrorV3::LegacyCampaign
+            MaterialRuntimeError::LegacyCampaign
         } else {
-            MaterialRuntimeErrorV3::MissingCampaign
+            MaterialRuntimeError::MissingCampaign
         });
     };
-    let stored = StoredMaterialFoundationV2::from_row(&row)?;
+    let stored = StoredMaterialFoundation::from_row(&row)?;
     if stored.foundation_digest != expected_foundation_digest {
-        return Err(MaterialRuntimeErrorV3::FoundationMismatch);
+        return Err(MaterialRuntimeError::FoundationMismatch);
     }
-    let graph = crate::runtime::hydrate_campaign_foundation_client_v1(client, campaign)?;
-    reconstruct_material_foundation_v2(stored, graph, expected_foundation_digest)
+    let graph = crate::runtime::hydrate_campaign_foundation_client(client, campaign)?;
+    reconstruct_material_foundation(stored, graph, expected_foundation_digest)
 }
 
-fn reconstruct_material_foundation_v2(
-    stored: StoredMaterialFoundationV2,
-    graph_foundation: CampaignFoundationV1,
+fn reconstruct_material_foundation(
+    stored: StoredMaterialFoundation,
+    graph_foundation: CampaignFoundation,
     expected_foundation_digest: [u8; 32],
-) -> Result<MaterialRuntimeFoundationV2, MaterialRuntimeErrorV3> {
+) -> Result<MaterialRuntimeFoundation, MaterialRuntimeError> {
     if stored.foundation_digest != expected_foundation_digest
         || sha256_of(&stored.foundation_bytes) != expected_foundation_digest
         || sha256_of(graph_foundation.canonical_bytes()) != stored.graph_foundation_digest
     {
-        return Err(MaterialRuntimeErrorV3::FoundationMismatch);
+        return Err(MaterialRuntimeError::FoundationMismatch);
     }
-    let register = MaterialWorldRegisterV3::decode(&stored.initial_register_bytes)?;
+    let register = MaterialWorldRegister::decode(&stored.initial_register_bytes)?;
     if register.completed_tick() != 0 {
-        return Err(MaterialRuntimeErrorV3::FoundationMismatch);
+        return Err(MaterialRuntimeError::FoundationMismatch);
     }
-    let graph = reconstruct_graph_foundation_session_v1(&graph_foundation)?;
+    let graph = reconstruct_graph_foundation_session(&graph_foundation)?;
     let reconstructed =
-        MaterialRuntimeFoundationV2::from_parts(graph, graph_foundation, register, stored.spec)?;
+        MaterialRuntimeFoundation::from_parts(graph, graph_foundation, register, stored.spec)?;
     if reconstructed.canonical_bytes() != stored.foundation_bytes
         || reconstructed.digest() != expected_foundation_digest
     {
-        return Err(MaterialRuntimeErrorV3::FoundationMismatch);
+        return Err(MaterialRuntimeError::FoundationMismatch);
     }
     Ok(reconstructed)
 }
 fn read_tail_tick(
     client: &mut impl GenericClient,
     campaign: CampaignId,
-) -> Result<u64, MaterialRuntimeErrorV3> {
+) -> Result<u64, MaterialRuntimeError> {
     let row=client.query_one("SELECT count(*),coalesce(max(resolve_tick),0),coalesce(bool_and(envelope_layout_version=3),true) FROM babylon_state.tick_commit WHERE campaign_id=$1::uuid",&[campaign.as_uuid()])?;
     let count: i64 = row.try_get(0)?;
     let tick: i64 = row.try_get(1)?;
     let version: bool = row.try_get(2)?;
     if count != tick || !version {
-        return Err(MaterialRuntimeErrorV3::TailConflict);
+        return Err(MaterialRuntimeError::TailConflict);
     }
-    u64::try_from(tick).map_err(|_| MaterialRuntimeErrorV3::TailConflict)
+    u64::try_from(tick).map_err(|_| MaterialRuntimeError::TailConflict)
 }
 fn marker_matches(
     client: &mut impl GenericClient,
-    source: StoredTickReadSourceV1,
+    source: StoredTickReadSource,
     campaign: CampaignId,
-    identity: &IdentifiedMaterialTickV3,
-    envelope: &CommittedMaterialTickEnvelopeV3,
-) -> Result<bool, MaterialRuntimeErrorV3> {
-    let tick =
-        i64::try_from(identity.resolve_tick()).map_err(|_| MaterialRuntimeErrorV3::Bounds)?;
-    let Some(row)=client.query_opt(&format!("SELECT envelope_layout_version,tick_content_hash,envelope_digest FROM {} WHERE campaign_id=$1::uuid AND resolve_tick=$2", source.relation(StoredTickRelationV1::TickCommit)),&[campaign.as_uuid(),&tick])? else{return Ok(false);};
+    identity: &IdentifiedMaterialTick,
+    envelope: &CommittedMaterialTickEnvelope,
+) -> Result<bool, MaterialRuntimeError> {
+    let tick = i64::try_from(identity.resolve_tick()).map_err(|_| MaterialRuntimeError::Bounds)?;
+    let Some(row)=client.query_opt(&format!("SELECT envelope_layout_version,tick_content_hash,envelope_digest FROM {} WHERE campaign_id=$1::uuid AND resolve_tick=$2", source.relation(StoredTickRelation::TickCommit)),&[campaign.as_uuid(),&tick])? else{return Ok(false);};
     if row.try_get::<_, i16>(0)? != 3
         || row.try_get::<_, Vec<u8>>(1)? != identity.tick_content_hash().as_bytes()
         || row.try_get::<_, Vec<u8>>(2)? != envelope.digest()
     {
-        return Err(MaterialRuntimeErrorV3::TailConflict);
+        return Err(MaterialRuntimeError::TailConflict);
     }
     Ok(true)
 }
 
 /// A fully authenticated committed material tick, never a partial checkpoint read.
-pub(crate) struct StoredMaterialTickV3 {
-    pub(crate) identity: IdentifiedMaterialTickV3,
-    envelope: CommittedMaterialTickEnvelopeV3,
-    pub(crate) graph: babylon_graph::stable_state::StableGraphStateV1,
-    material: babylon_tick::material_state::MaterialStateRowsV1,
+pub(crate) struct StoredMaterialTick {
+    pub(crate) identity: IdentifiedMaterialTick,
+    envelope: CommittedMaterialTickEnvelope,
+    pub(crate) graph: babylon_graph::stable_state::StableGraphState,
+    material: babylon_tick::material_state::MaterialStateRows,
     sections: Vec<Vec<u8>>,
-    pub(crate) register: MaterialWorldRegisterV3,
-    pub(crate) events: Vec<StoredEventV2>,
+    pub(crate) register: MaterialWorldRegister,
+    pub(crate) events: Vec<StoredEvent>,
 }
 
 /// Uses the same complete decoder and envelope proof as durable reconciliation.
 /// The caller retains its role confinement and repeatable-read transaction.
-pub(crate) fn read_observer_material_tick_v3(
+pub(crate) fn read_observer_material_tick(
     client: &mut impl GenericClient,
     campaign: CampaignId,
     tick: u64,
     scope: &str,
     foundation_digest: [u8; 32],
-    components: &MaterialComponentIdentityV1,
-) -> Result<StoredMaterialTickV3, MaterialRuntimeErrorV3> {
-    read_authenticated_material_tick_v3(
+    components: &MaterialComponentIdentity,
+) -> Result<StoredMaterialTick, MaterialRuntimeError> {
+    read_authenticated_material_tick(
         client,
-        StoredTickReadSourceV1::FullObserver,
+        StoredTickReadSource::FullObserver,
         campaign,
         tick,
         scope,
@@ -731,18 +892,18 @@ fn read_stored_material_tick(
     client: &mut impl GenericClient,
     campaign: CampaignId,
     tick: u64,
-    session: &MaterialReplaySessionV3<HypergraphStore>,
-) -> Result<StoredMaterialTickV3, MaterialRuntimeErrorV3> {
+    session: &MaterialReplaySession<HypergraphStore>,
+) -> Result<StoredMaterialTick, MaterialRuntimeError> {
     let scope = session
         .graph_session()
         .stable_graph_state()
-        .map_err(MaterialReplayErrorV3::Graph)?
+        .map_err(MaterialReplayError::Graph)?
         .scenario_scope()
         .to_owned();
-    let components = MaterialComponentIdentityV1::from_session(session.graph_session());
-    read_authenticated_material_tick_v3(
+    let components = MaterialComponentIdentity::from_session(session.graph_session());
+    read_authenticated_material_tick(
         client,
-        StoredTickReadSourceV1::Runtime,
+        StoredTickReadSource::Runtime,
         campaign,
         tick,
         &scope,
@@ -751,18 +912,18 @@ fn read_stored_material_tick(
     )
 }
 
-fn read_authenticated_material_tick_v3(
+fn read_authenticated_material_tick(
     client: &mut impl GenericClient,
-    source: StoredTickReadSourceV1,
+    source: StoredTickReadSource,
     campaign: CampaignId,
     tick: u64,
     scope: &str,
     foundation_digest: [u8; 32],
-    components: &MaterialComponentIdentityV1,
-) -> Result<StoredMaterialTickV3, MaterialRuntimeErrorV3> {
+    components: &MaterialComponentIdentity,
+) -> Result<StoredMaterialTick, MaterialRuntimeError> {
     let stored = read_stored_material_tick_rows(client, source, campaign, tick, scope)?;
     if stored.identity.foundation_digest() != foundation_digest {
-        return Err(MaterialRuntimeErrorV3::InvalidCheckpoint);
+        return Err(MaterialRuntimeError::InvalidCheckpoint);
     }
     validate_component_identity(client, source, campaign, tick, components, &stored.sections)?;
     Ok(stored)
@@ -770,19 +931,19 @@ fn read_authenticated_material_tick_v3(
 
 fn read_stored_material_tick_rows(
     client: &mut impl GenericClient,
-    source: StoredTickReadSourceV1,
+    source: StoredTickReadSource,
     campaign: CampaignId,
     tick: u64,
     scope: &str,
-) -> Result<StoredMaterialTickV3, MaterialRuntimeErrorV3> {
-    let tick_sql = i64::try_from(tick).map_err(|_| MaterialRuntimeErrorV3::Bounds)?;
-    let row=client.query_opt(&format!("SELECT identity_bytes,register_bytes,receipt_bytes FROM {} WHERE campaign_id=$1::uuid AND resolve_tick=$2", source.relation(StoredTickRelationV1::MaterialTickV3)),&[campaign.as_uuid(),&tick_sql])?.ok_or(MaterialRuntimeErrorV3::InvalidCheckpoint)?;
-    let identity = IdentifiedMaterialTickV3::decode(&row.try_get::<_, Vec<u8>>(0)?)?;
+) -> Result<StoredMaterialTick, MaterialRuntimeError> {
+    let tick_sql = i64::try_from(tick).map_err(|_| MaterialRuntimeError::Bounds)?;
+    let row=client.query_opt(&format!("SELECT identity_bytes,register_bytes,receipt_bytes FROM {} WHERE campaign_id=$1::uuid AND resolve_tick=$2", source.relation(StoredTickRelation::MaterialTick)),&[campaign.as_uuid(),&tick_sql])?.ok_or(MaterialRuntimeError::InvalidCheckpoint)?;
+    let identity = IdentifiedMaterialTick::decode(&row.try_get::<_, Vec<u8>>(0)?)?;
     let register: Vec<u8> = row.try_get(1)?;
     let receipts: Vec<u8> = row.try_get(2)?;
-    let decoded_register = MaterialWorldRegisterV3::decode(&register)?;
+    let decoded_register = MaterialWorldRegister::decode(&register)?;
     if identity.resolve_tick() != tick || decoded_register.completed_tick() != tick {
-        return Err(MaterialRuntimeErrorV3::InvalidCheckpoint);
+        return Err(MaterialRuntimeError::InvalidCheckpoint);
     }
     let graph = stored_tick::read_graph_state(client, source, campaign, tick_sql, scope)?;
     let material = stored_tick::read_material_rows(client, source, campaign, tick_sql)?;
@@ -790,13 +951,13 @@ fn read_stored_material_tick_rows(
         client, source, campaign, tick, tick_sql, &graph, &material,
     )?;
     let (graph_rows, _) =
-        compose_graph_rows_with_encoder_v1(graph.rows(), &mut |row: StableGraphRowRefV1<'_>| {
+        compose_graph_rows_with_encoder(graph.rows(), &mut |row: StableGraphRowRef<'_>| {
             row.encode()
         })?;
     let events = stored_tick::read_event_rows(client, source, campaign, tick_sql)?;
-    let families = CommittedTickRowFamiliesV2 {
+    let families = CommittedTickRowFamilies {
         graph: graph_rows,
-        state: compose_material_state_rows_v1(&material)?,
+        state: compose_material_state_rows(&material)?,
         event: events.encoded,
         choice_receipt: stored_tick::read_choice_receipt_rows(client, source, campaign, tick_sql)?,
         checkpoint,
@@ -804,13 +965,13 @@ fn read_stored_material_tick_rows(
             client, source, campaign, tick_sql,
         )?,
     };
-    let envelope = CommittedMaterialTickEnvelopeV3::compose(
+    let envelope = CommittedMaterialTickEnvelope::compose(
         campaign, &identity, families, &register, &receipts,
     )?;
     if !marker_matches(client, source, campaign, &identity, &envelope)? {
-        return Err(MaterialRuntimeErrorV3::InvalidCheckpoint);
+        return Err(MaterialRuntimeError::InvalidCheckpoint);
     }
-    Ok(StoredMaterialTickV3 {
+    Ok(StoredMaterialTick {
         identity,
         envelope,
         graph,
@@ -822,24 +983,24 @@ fn read_stored_material_tick_rows(
 }
 fn validate_component_identity(
     client: &mut impl GenericClient,
-    source: StoredTickReadSourceV1,
+    source: StoredTickReadSource,
     campaign: CampaignId,
     tick: u64,
-    components: &MaterialComponentIdentityV1,
+    components: &MaterialComponentIdentity,
     sections: &[Vec<u8>],
-) -> Result<(), MaterialRuntimeErrorV3> {
+) -> Result<(), MaterialRuntimeError> {
     components.validate_sections(sections)?;
-    let tick_sql = i64::try_from(tick).map_err(|_| MaterialRuntimeErrorV3::Bounds)?;
+    let tick_sql = i64::try_from(tick).map_err(|_| MaterialRuntimeError::Bounds)?;
     let row = client
         .query_opt(
             &format!(
                 "SELECT layout_version,action_batch_digest,exact_action_batch_bytes FROM {} \
             WHERE campaign_id=$1::uuid AND resolve_tick=$2",
-                source.relation(StoredTickRelationV1::TickActionBatchV1)
+                source.relation(StoredTickRelation::TickActionBatch)
             ),
             &[campaign.as_uuid(), &tick_sql],
         )?
-        .ok_or(MaterialRuntimeErrorV3::InvalidCheckpoint)?;
+        .ok_or(MaterialRuntimeError::InvalidCheckpoint)?;
     components.validate_actions(
         tick,
         row.try_get(0)?,
@@ -864,7 +1025,7 @@ mod writer_bounds_tests {
             .dbname("campaigns")
             .connect_timeout(Duration::from_secs(3600))
             .tcp_user_timeout(Duration::from_secs(3600));
-        let bounded = bounded_material_writer_config_v3(&caller).unwrap();
+        let bounded = bounded_material_writer_config(&caller).unwrap();
         assert_eq!(bounded.get_user(), caller.get_user());
         assert_eq!(bounded.get_dbname(), caller.get_dbname());
         assert_eq!(
@@ -877,7 +1038,7 @@ mod writer_bounds_tests {
         );
         assert_eq!(bounded.get_options(), Some(WRITER_STARTUP_OPTIONS));
         assert_eq!(caller.get_options(), None);
-        crate::validate_connection_target(&caller).unwrap();
+        crate::postgres_catalog::validate_connection_target(&caller).unwrap();
         assert!(!WRITER_STARTUP_OPTIONS.contains("default_transaction_read_only=on"));
     }
 
@@ -891,9 +1052,11 @@ mod writer_bounds_tests {
             let mut caller = Config::new();
             caller.host("127.0.0.1").options(options);
             assert!(matches!(
-                bounded_material_writer_config_v3(&caller),
-                Err(MaterialRuntimeErrorV3::Graph(
-                    RustPersistenceRuntimeErrorV2::ActivationRequired
+                bounded_material_writer_config(&caller),
+                Err(MaterialRuntimeError::Graph(
+                    RustPersistenceRuntimeError::CurrentSchema(
+                        crate::CurrentSchemaError::ConnectionTarget(_)
+                    )
                 ))
             ));
             assert_eq!(caller.get_options(), Some(options));
@@ -905,9 +1068,11 @@ mod writer_bounds_tests {
         let mut caller = Config::new();
         caller.host("192.0.2.1");
         assert!(matches!(
-            bounded_material_writer_config_v3(&caller),
-            Err(MaterialRuntimeErrorV3::Graph(
-                RustPersistenceRuntimeErrorV2::ActivationRequired
+            bounded_material_writer_config(&caller),
+            Err(MaterialRuntimeError::Graph(
+                RustPersistenceRuntimeError::CurrentSchema(
+                    crate::CurrentSchemaError::ConnectionTarget(_)
+                )
             ))
         ));
     }
@@ -919,14 +1084,14 @@ mod writer_bounds_tests {
             .expect("explicit bootstrapped local runtime target")
             .parse()
             .expect("runtime connection configuration");
-        let bounded = bounded_material_writer_config_v3(&raw).unwrap();
+        let bounded = bounded_material_writer_config(&raw).unwrap();
         let mut client = bounded.connect(NoTls).expect("bounded writer connection");
         let mut transaction = client
             .build_transaction()
             .read_only(true)
             .start()
             .expect("read-only authority probe");
-        require_active_authority_client(&mut transaction)
+        verify_runtime_schema_client(&mut transaction)
             .expect("trusted timeout options preserve the active authority check");
         let settings = transaction
             .query_one(
@@ -944,3 +1109,6 @@ mod writer_bounds_tests {
         assert_eq!(raw.get_options(), None);
     }
 }
+
+#[cfg(test)]
+mod diagnostics_tests;

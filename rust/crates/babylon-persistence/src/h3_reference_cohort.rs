@@ -3,8 +3,8 @@
 use std::collections::BTreeSet;
 use std::sync::OnceLock;
 
-use babylon_kernel::tick_content_hash::RefDigestV1;
-use babylon_kernel::{sha256_of, H3CellId, H3CellIdError};
+use babylon_kernel::tick_content_hash::RefDigest;
+use babylon_kernel::{content_digest::sha256_of, H3CellId, H3CellIdError};
 
 const SOURCE_DOMAIN: &[u8] = b"babylon.h3.reference-source.v1\0";
 const ROW_DOMAIN: &[u8] = b"babylon.h3.reference-rows.v1\0";
@@ -120,15 +120,15 @@ impl H3ReferenceCellRow {
 /// Exact provenance and equivalence receipt for one built cohort.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct H3ReferenceCohortReceipt {
-    artifact_digest: RefDigestV1,
+    artifact_digest: RefDigest,
     source_counts: [u32; MAX_H3_RESOLUTIONS],
     closure_counts: [u32; MAX_H3_RESOLUTIONS],
-    source_digest: RefDigestV1,
-    source_r5_digest: RefDigestV1,
-    source_r7_digest: RefDigestV1,
-    closure_digest: RefDigestV1,
-    membership_digest: RefDigestV1,
-    ref_digest: RefDigestV1,
+    source_digest: RefDigest,
+    source_r5_digest: RefDigest,
+    source_r7_digest: RefDigest,
+    closure_digest: RefDigest,
+    membership_digest: RefDigest,
+    ref_digest: RefDigest,
     direct_cell_count: usize,
     derived_ancestor_count: usize,
 }
@@ -136,7 +136,7 @@ pub struct H3ReferenceCohortReceipt {
 impl H3ReferenceCohortReceipt {
     /// SHA-256 identity of the pinned source artifact bytes.
     #[must_use]
-    pub fn artifact_digest(&self) -> RefDigestV1 {
+    pub fn artifact_digest(&self) -> RefDigest {
         self.artifact_digest
     }
 
@@ -160,37 +160,37 @@ impl H3ReferenceCohortReceipt {
 
     /// Container-independent digest of the direct source identities.
     #[must_use]
-    pub fn source_digest(&self) -> RefDigestV1 {
+    pub fn source_digest(&self) -> RefDigest {
         self.source_digest
     }
 
     /// Container-independent digest of the direct resolution-5 subset.
     #[must_use]
-    pub fn source_r5_digest(&self) -> RefDigestV1 {
+    pub fn source_r5_digest(&self) -> RefDigest {
         self.source_r5_digest
     }
 
     /// Container-independent digest of the direct resolution-7 subset.
     #[must_use]
-    pub fn source_r7_digest(&self) -> RefDigestV1 {
+    pub fn source_r7_digest(&self) -> RefDigest {
         self.source_r7_digest
     }
 
     /// Digest of the complete canonical H3 identity and hierarchy rows.
     #[must_use]
-    pub fn closure_digest(&self) -> RefDigestV1 {
+    pub fn closure_digest(&self) -> RefDigest {
         self.closure_digest
     }
 
     /// Digest of direct-versus-derived cohort membership.
     #[must_use]
-    pub fn membership_digest(&self) -> RefDigestV1 {
+    pub fn membership_digest(&self) -> RefDigest {
         self.membership_digest
     }
 
     /// Durable identity of the complete H3 reference cohort.
     #[must_use]
-    pub fn ref_digest(&self) -> RefDigestV1 {
+    pub fn ref_digest(&self) -> RefDigest {
         self.ref_digest
     }
 
@@ -243,15 +243,15 @@ pub enum H3ReferenceCohortError {
     FixtureInvalidCell { index: usize, source: H3CellIdError },
     /// The checked-in fixture bytes did not match their source identity.
     FixtureDigestMismatch {
-        expected: RefDigestV1,
-        actual: RefDigestV1,
+        expected: RefDigest,
+        actual: RefDigest,
     },
     /// The checked-in source identities could not be reserved fallibly.
     FixtureAllocation,
     /// The artifact bytes did not match the governed release pin.
     ArtifactDigestMismatch {
-        expected: RefDigestV1,
-        actual: RefDigestV1,
+        expected: RefDigest,
+        actual: RefDigest,
     },
     /// No source identities were supplied.
     EmptySource,
@@ -271,8 +271,8 @@ pub enum H3ReferenceCohortError {
     },
     /// The direct identity set did not match the governed artifact.
     SourceDigestMismatch {
-        expected: RefDigestV1,
-        actual: RefDigestV1,
+        expected: RefDigest,
+        actual: RefDigest,
     },
     /// Semantic H3 ancestry construction failed.
     AncestorConstruction {
@@ -302,16 +302,16 @@ impl std::error::Error for H3ReferenceCohortError {}
 /// # Errors
 /// Returns [`H3ReferenceCohortError`] when the embedded domain, count, length, H3 identities,
 /// digest, allocation, or resulting cohort receipt differs from the governed v1 source.
-pub fn representative_h3_reference_cohort_v1(
+pub fn representative_h3_reference_cohort(
 ) -> Result<&'static H3ReferenceCohort, H3ReferenceCohortError> {
     static COHORT: OnceLock<Result<H3ReferenceCohort, H3ReferenceCohortError>> = OnceLock::new();
     COHORT
-        .get_or_init(|| parse_representative_h3_reference_cohort_v1(SOURCE_FIXTURE))
+        .get_or_init(|| parse_representative_h3_reference_cohort(SOURCE_FIXTURE))
         .as_ref()
         .map_err(Clone::clone)
 }
 
-fn parse_representative_h3_reference_cohort_v1(
+fn parse_representative_h3_reference_cohort(
     fixture: &[u8],
 ) -> Result<H3ReferenceCohort, H3ReferenceCohortError> {
     if !fixture.starts_with(SOURCE_DOMAIN) {
@@ -377,16 +377,16 @@ fn parse_representative_h3_reference_cohort_v1(
         source_cells.push(cell);
     }
 
-    let expected_digest = RefDigestV1::from_bytes(EXPECTED_SOURCE_DIGEST);
-    let actual_digest = RefDigestV1::from_bytes(sha256_of(fixture));
+    let expected_digest = RefDigest::from_bytes(EXPECTED_SOURCE_DIGEST);
+    let actual_digest = RefDigest::from_bytes(sha256_of(fixture));
     if actual_digest != expected_digest {
         return Err(H3ReferenceCohortError::FixtureDigestMismatch {
             expected: expected_digest,
             actual: actual_digest,
         });
     }
-    build_representative_h3_cohort_v1(
-        RefDigestV1::from_bytes(EXPECTED_ARTIFACT_DIGEST),
+    build_representative_h3_cohort(
+        RefDigest::from_bytes(EXPECTED_ARTIFACT_DIGEST),
         &source_cells,
     )
 }
@@ -396,8 +396,8 @@ fn parse_representative_h3_reference_cohort_v1(
 /// # Errors
 /// Returns [`H3ReferenceCohortError`] before publication when provenance,
 /// source shape, ancestry, or canonical framing differs from the v1 contract.
-pub fn build_representative_h3_cohort_v1(
-    artifact_digest: RefDigestV1,
+pub fn build_representative_h3_cohort(
+    artifact_digest: RefDigest,
     source_cells: &[H3CellId],
 ) -> Result<H3ReferenceCohort, H3ReferenceCohortError> {
     validate_artifact_and_bound(artifact_digest, source_cells.len())?;
@@ -405,7 +405,7 @@ pub fn build_representative_h3_cohort_v1(
     let source_counts = count_resolutions(&ordered_source)?;
     validate_source_counts(&source_counts)?;
     let source_digest = digest_source_cells(&ordered_source, None)?;
-    let expected_source_digest = RefDigestV1::from_bytes(EXPECTED_SOURCE_DIGEST);
+    let expected_source_digest = RefDigest::from_bytes(EXPECTED_SOURCE_DIGEST);
     if source_digest != expected_source_digest {
         return Err(H3ReferenceCohortError::SourceDigestMismatch {
             expected: expected_source_digest,
@@ -449,10 +449,10 @@ pub fn build_representative_h3_cohort_v1(
 }
 
 fn validate_artifact_and_bound(
-    artifact_digest: RefDigestV1,
+    artifact_digest: RefDigest,
     source_count: usize,
 ) -> Result<(), H3ReferenceCohortError> {
-    let expected = RefDigestV1::from_bytes(EXPECTED_ARTIFACT_DIGEST);
+    let expected = RefDigest::from_bytes(EXPECTED_ARTIFACT_DIGEST);
     if artifact_digest != expected {
         return Err(H3ReferenceCohortError::ArtifactDigestMismatch {
             expected,
@@ -629,7 +629,7 @@ fn count_row_resolutions(
 fn digest_source_cells(
     cells: &[H3CellId],
     resolution: Option<u8>,
-) -> Result<RefDigestV1, H3ReferenceCohortError> {
+) -> Result<RefDigest, H3ReferenceCohortError> {
     let count = cells
         .iter()
         .take(MAX_H3_REFERENCE_SOURCE_CELLS)
@@ -646,10 +646,10 @@ fn digest_source_cells(
     {
         bytes.extend_from_slice(&cell.to_be_bytes());
     }
-    Ok(RefDigestV1::from_bytes(sha256_of(&bytes)))
+    Ok(RefDigest::from_bytes(sha256_of(&bytes)))
 }
 
-fn digest_closure_rows(rows: &[H3ReferenceCellRow]) -> Result<RefDigestV1, H3ReferenceCohortError> {
+fn digest_closure_rows(rows: &[H3ReferenceCellRow]) -> Result<RefDigest, H3ReferenceCohortError> {
     let capacity = framed_capacity(ROW_DOMAIN.len(), rows.len(), CLOSURE_ROW_BYTES)?;
     let mut bytes = Vec::with_capacity(capacity);
     bytes.extend_from_slice(ROW_DOMAIN);
@@ -663,12 +663,12 @@ fn digest_closure_rows(rows: &[H3ReferenceCellRow]) -> Result<RefDigestV1, H3Ref
         push_optional_cell(&mut bytes, row.ancestor_r6);
         push_optional_cell(&mut bytes, row.ancestor_r7);
     }
-    Ok(RefDigestV1::from_bytes(sha256_of(&bytes)))
+    Ok(RefDigest::from_bytes(sha256_of(&bytes)))
 }
 
 fn digest_membership_rows(
     rows: &[H3ReferenceCellRow],
-) -> Result<RefDigestV1, H3ReferenceCohortError> {
+) -> Result<RefDigest, H3ReferenceCohortError> {
     let capacity = framed_capacity(MEMBERSHIP_DOMAIN.len(), rows.len(), MEMBERSHIP_ROW_BYTES)?;
     let mut bytes = Vec::with_capacity(capacity);
     bytes.extend_from_slice(MEMBERSHIP_DOMAIN);
@@ -677,15 +677,15 @@ fn digest_membership_rows(
         bytes.extend_from_slice(&row.cell_id.to_be_bytes());
         bytes.push(row.origin.code());
     }
-    Ok(RefDigestV1::from_bytes(sha256_of(&bytes)))
+    Ok(RefDigest::from_bytes(sha256_of(&bytes)))
 }
 
 fn digest_cohort(
-    artifact_digest: RefDigestV1,
-    source_digest: RefDigestV1,
-    closure_digest: RefDigestV1,
-    membership_digest: RefDigestV1,
-) -> Result<RefDigestV1, H3ReferenceCohortError> {
+    artifact_digest: RefDigest,
+    source_digest: RefDigest,
+    closure_digest: RefDigest,
+    membership_digest: RefDigest,
+) -> Result<RefDigest, H3ReferenceCohortError> {
     let capacity = COHORT_DOMAIN
         .len()
         .checked_add(32 * 4)
@@ -696,7 +696,7 @@ fn digest_cohort(
     bytes.extend_from_slice(source_digest.as_bytes());
     bytes.extend_from_slice(closure_digest.as_bytes());
     bytes.extend_from_slice(membership_digest.as_bytes());
-    Ok(RefDigestV1::from_bytes(sha256_of(&bytes)))
+    Ok(RefDigest::from_bytes(sha256_of(&bytes)))
 }
 
 fn framed_capacity(
@@ -731,12 +731,12 @@ mod fixture_tests {
 
     #[test]
     fn checked_in_fixture_has_the_exact_governed_receipt() {
-        let cohort = representative_h3_reference_cohort_v1().unwrap();
+        let cohort = representative_h3_reference_cohort().unwrap();
         assert_eq!(cohort.rows().len(), 59_849);
         assert_eq!(cohort.receipt().source_cell_count(), EXPECTED_SOURCE_CELLS);
         assert_eq!(
             cohort.receipt().source_digest(),
-            RefDigestV1::from_bytes(EXPECTED_SOURCE_DIGEST)
+            RefDigest::from_bytes(EXPECTED_SOURCE_DIGEST)
         );
     }
 
@@ -745,13 +745,13 @@ mod fixture_tests {
         let mut wrong_domain = SOURCE_FIXTURE.to_vec();
         wrong_domain[0] ^= 1;
         assert_eq!(
-            parse_representative_h3_reference_cohort_v1(&wrong_domain),
+            parse_representative_h3_reference_cohort(&wrong_domain),
             Err(H3ReferenceCohortError::FixtureDomainMismatch)
         );
 
         let truncated = &SOURCE_FIXTURE[..SOURCE_DOMAIN.len()];
         assert_eq!(
-            parse_representative_h3_reference_cohort_v1(truncated),
+            parse_representative_h3_reference_cohort(truncated),
             Err(H3ReferenceCohortError::FixtureTruncated {
                 expected: SOURCE_DOMAIN.len() + SOURCE_COUNT_BYTES,
                 actual: SOURCE_DOMAIN.len(),
@@ -763,7 +763,7 @@ mod fixture_tests {
         wrong_count[SOURCE_DOMAIN.len()..count_end]
             .copy_from_slice(&(EXPECTED_SOURCE_CELLS as u64 - 1).to_be_bytes());
         assert_eq!(
-            parse_representative_h3_reference_cohort_v1(&wrong_count),
+            parse_representative_h3_reference_cohort(&wrong_count),
             Err(H3ReferenceCohortError::FixtureCountMismatch {
                 expected: EXPECTED_SOURCE_CELLS as u64,
                 actual: EXPECTED_SOURCE_CELLS as u64 - 1,
@@ -773,7 +773,7 @@ mod fixture_tests {
         let mut trailing = SOURCE_FIXTURE.to_vec();
         trailing.push(0);
         assert_eq!(
-            parse_representative_h3_reference_cohort_v1(&trailing),
+            parse_representative_h3_reference_cohort(&trailing),
             Err(H3ReferenceCohortError::FixtureTrailingBytes {
                 expected: SOURCE_FIXTURE.len(),
                 actual: SOURCE_FIXTURE.len() + 1,
@@ -784,7 +784,7 @@ mod fixture_tests {
         let mut invalid_cell = SOURCE_FIXTURE.to_vec();
         invalid_cell[payload_offset..payload_offset + SOURCE_ROW_BYTES].fill(0);
         assert!(matches!(
-            parse_representative_h3_reference_cohort_v1(&invalid_cell),
+            parse_representative_h3_reference_cohort(&invalid_cell),
             Err(H3ReferenceCohortError::FixtureInvalidCell { index: 0, .. })
         ));
 
@@ -797,7 +797,7 @@ mod fixture_tests {
         wrong_digest[payload_offset..second].copy_from_slice(&second_cell);
         wrong_digest[second..third].copy_from_slice(&first_cell);
         assert!(matches!(
-            parse_representative_h3_reference_cohort_v1(&wrong_digest),
+            parse_representative_h3_reference_cohort(&wrong_digest),
             Err(H3ReferenceCohortError::FixtureDigestMismatch { .. })
         ));
     }

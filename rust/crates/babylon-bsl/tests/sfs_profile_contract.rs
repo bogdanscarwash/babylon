@@ -7,13 +7,16 @@ use babylon_bsl::scenario::{load_scenario, LoadedScenario};
 use babylon_bsl::typecheck::TypeEnv;
 use babylon_bsl::vocabulary::EnumKind;
 use babylon_bsl::{
-    audit_rule_footprint, canonical_bytes, check_rule, read, validate_sfs_rule_profile, Atom,
-    BindingVocabulary, BoundError, CardinalityCeilings, ClosedVocabulary, ForbiddenBindingSource,
-    GovernedComparisonSite, IntrinsicCosts, SExpr, SfsAuditPolicy, SfsComparisonContext,
-    SfsFuelIdentityError, SfsProfileError, Value,
+    bindings::BindingVocabulary, bound_checker::check_rule, bound_checker::BoundError,
+    canonical_ast::canonical_bytes, evaluator::Value, fuel::CardinalityCeilings,
+    fuel::IntrinsicCosts, fuel::SfsFuelIdentityError, reader::read, reader::Atom, reader::SExpr,
+    sfs_profile::audit_rule_footprint, sfs_profile::validate_sfs_rule_profile,
+    sfs_profile::ForbiddenBindingSource, sfs_profile::GovernedComparisonSite,
+    sfs_profile::SfsAuditPolicy, sfs_profile::SfsComparisonContext, sfs_profile::SfsProfileError,
+    vocabulary::ClosedVocabulary,
 };
 use babylon_graph::memory::MemoryGraph;
-use babylon_kernel::sha256_of;
+use babylon_kernel::content_digest::sha256_of;
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::fmt::Write as _;
 use std::fs::File;
@@ -39,7 +42,7 @@ const FORBIDDEN_INTRINSIC_HEX: &str =
 const FORBIDDEN_MANIFEST_HEX: &str =
     "e3e7d0c90b7302c441005a4cb482a1aff86c2e9178b06a514b2f9c6304aeca74";
 const AUDIT_SOURCE_MANIFEST_HEX: &str =
-    "91cfca31b605e3297db7e440db4007b0d15f228ce24461afdde6cb3859ce8487";
+    "a08c5c355d2f6b326860839e4c54a171331137fee3c032804e8b1913683413a9";
 static READER_SCRATCH_COUNTER: AtomicU64 = AtomicU64::new(0);
 const FIXTURE_DECLARATIONS: &str = r"(scenario synthetic-source/declarations
   (defvocabulary NodeType (SYNTHETIC_SOURCE ORGANIZATION))
@@ -168,8 +171,8 @@ fn assert_allowed_fixture_loads_through_declaration_and_type_gates() {
         &["SYNTHETIC_LINK".to_owned()]
     );
     let quanta = &declared.fields["synthetic-source/quanta"];
-    assert_eq!(quanta.ty, babylon_bsl::BslType::Int);
-    assert_eq!(quanta.kind, babylon_bsl::FieldKind::Extensive);
+    assert_eq!(quanta.ty, babylon_bsl::types::BslType::Int);
+    assert_eq!(quanta.kind, babylon_bsl::types::FieldKind::Extensive);
     assert_eq!(
         vocabulary
             .owner_of_field("synthetic-source/quanta")
@@ -178,8 +181,8 @@ fn assert_allowed_fixture_loads_through_declaration_and_type_gates() {
     );
     let implicit = FieldRegistry::with_implicit_edge_strength(&vocabulary);
     let strength = implicit.get("synthetic-link/strength").unwrap();
-    assert_eq!(strength.decl.ty, babylon_bsl::BslType::Coefficient);
-    assert_eq!(strength.decl.kind, babylon_bsl::FieldKind::Extensive);
+    assert_eq!(strength.decl.ty, babylon_bsl::types::BslType::Coefficient);
+    assert_eq!(strength.decl.kind, babylon_bsl::types::FieldKind::Extensive);
     assert_eq!(strength.owner_kind, EnumKind::EdgeType);
     assert_eq!(strength.owner_member, "SYNTHETIC_LINK");
     assert!(strength.implicit);

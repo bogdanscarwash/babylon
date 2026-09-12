@@ -32,75 +32,39 @@
 
 use crate::evaluator::{EvalCode, EvalError, Value};
 use babylon_graph::stable_element::{
-    StableElementKeyV1, StableElementResolverV1, MAX_STABLE_CARRIER_ACTIVE_ELEMENTS_V2,
+    StableElementKey, StableElementResolver, MAX_STABLE_CARRIER_ACTIVE_ELEMENTS,
 };
-use babylon_kernel::replay::{ReplaySeed, ReplaySessionIdV1, RngDomainV2};
-use babylon_kernel::{KernelRng, SessionId};
+use babylon_kernel::replay::{ReplaySeed, ReplaySessionId, RngDomain};
+use babylon_kernel::rng::KernelRng;
 
 /// The typed identity inputs for one engine-private deterministic draw.
-pub enum DrawIdentityContext<'a> {
-    /// Current V1 identity and string carriers.
-    V1 {
-        /// Current V1 session identity.
-        session: &'a SessionId,
-        /// Current V1 rule domain.
-        domain: &'a str,
-        /// Current V1 subject content id or fixture fallback.
-        subject: &'a str,
-        /// Current V1 node-name map used by active-element resolution.
-        node_content_ids:
-            Option<&'a std::collections::HashMap<babylon_graph::substrate::NodeId, String>>,
-    },
-    /// Seed-aware V2 identity with graph-owned stable provenance.
-    V2 {
-        /// Checked replay session identity.
-        session: &'a ReplaySessionIdV1,
-        /// Explicit replay seed.
-        seed: ReplaySeed,
-        /// Checked firing-rule qname.
-        domain: RngDomainV2,
-        /// Resolver that sealed every accepted graph identity.
-        resolver: &'a StableElementResolverV1,
-        /// Resolver-produced subject identity.
-        subject: StableElementKeyV1,
-    },
+pub struct DrawIdentityContext<'a> {
+    /// Checked replay session identity.
+    pub session: &'a ReplaySessionId,
+    /// Explicit replay seed.
+    pub seed: ReplaySeed,
+    /// Checked firing-rule qname.
+    pub domain: RngDomain,
+    /// Resolver that sealed every accepted graph identity.
+    pub resolver: &'a StableElementResolver,
+    /// Resolver-produced subject identity.
+    pub subject: StableElementKey,
 }
 
-/// The non-operand half of a draw key. V1 keeps its existing session,
-/// rule-domain, content-id, and fixture-fallback inputs byte-for-byte. V2
-/// accepts only a checked replay session, explicit seed, checked rule qname,
-/// and graph-resolver-produced stable subject identity. Neither layout lets
-/// a rule supply session, tick, or domain as an operand.
+/// Private draw identity and tick supplied by the engine, never author operands.
 pub struct DrawContext<'a> {
-    /// Typed V1 or V2 identity inputs.
+    /// Seeded identity and sealed graph provenance.
     pub identity: DrawIdentityContext<'a>,
-    /// The host's construction-time tick — never an operand.
+    /// The host's construction-time tick.
     pub tick: u64,
 }
 
-/// One active-element identity already resolved for the selected private draw layout.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum DrawActiveElement {
-    /// Current V1 content-id string or fixture fallback.
-    V1(String),
-    /// Resolver-produced V2 stable graph identity.
-    V2(StableElementKeyV1),
-}
-
-/// The full context one `IntrinsicHost::call` sees: the optional
-/// [`DrawContext`] (`None` for a context-free expression caller) plus the
-/// chapter C8 element stack in outermost-first order. V1 entries retain
-/// their current resolved string representation. V2 entries are stable
-/// graph keys that the resolver validates again while composing the carrier.
-///
-/// Every author-declarable intrinsic ignores this entirely. The engine-owned
-/// finite-kernel realization path consumes it directly rather than dispatching
-/// an author-callable intrinsic.
+/// Engine draw context plus the ordered active-element stack.
 pub struct IntrinsicCallCtx<'a> {
-    /// `None` for a pure-expression caller (see this struct's own doc).
+    /// Absent for pure-expression callers.
     pub draw_context: Option<&'a DrawContext<'a>>,
-    /// The typed active-element chain, outermost-first.
-    pub active_elements: Vec<DrawActiveElement>,
+    /// Sealed graph keys, outermost-first.
+    pub active_elements: Vec<StableElementKey>,
 }
 
 impl IntrinsicCallCtx<'_> {
@@ -116,21 +80,6 @@ impl IntrinsicCallCtx<'_> {
             active_elements: Vec::new(),
         }
     }
-}
-
-/// Compose string segments into ONE string, injective by construction
-/// (plan §3.3): each segment is emitted as `<decimal-len> ":" <segment>`,
-/// segments joined by `"|"` — mirroring `babylon_kernel::rng::seed_for`'s
-/// own length-prefix discipline, so two different segment chains can never
-/// render to the same string (no ambiguity from where one segment ends and
-/// the next begins).
-#[must_use]
-pub(crate) fn framed(segments: &[&str]) -> String {
-    segments
-        .iter()
-        .map(|segment| format!("{}:{segment}", segment.len()))
-        .collect::<Vec<_>>()
-        .join("|")
 }
 
 /// Dispatches a named intrinsic call. The declared signature/cost checks
@@ -216,8 +165,7 @@ impl IntrinsicHost for KernelIntrinsicHost {
 ///
 /// This function is crate-private by design under Amendment AJ. The draw key
 /// binds the V2 replay session, signed seed, tick, firing rule, sample `QName`,
-/// append-only slot, stable subject, and ordered active elements. V1 has no
-/// signed replay seed and is refused rather than silently substituting one.
+/// append-only slot, stable subject, and ordered active elements.
 pub(crate) fn draw_finite_kernel_ticket(
     sample: &str,
     slot: u32,
@@ -225,40 +173,25 @@ pub(crate) fn draw_finite_kernel_ticket(
 ) -> Result<u64, EvalError> {
     let Some(draw_context) = ctx.draw_context else {
         return Err(EvalError::plain(
-            "finite-kernel realization requires a V2 replay context".to_owned(),
+            "finite-kernel realization requires a seeded replay context".to_owned(),
         ));
     };
-    let DrawIdentityContext::V2 {
+    let DrawIdentityContext {
         session,
         seed,
         domain,
         resolver,
         subject,
-    } = &draw_context.identity
-    else {
-        return Err(EvalError::plain(
-            "finite-kernel realization requires the sealed V2 replay path; V1 has no signed replay seed"
-                .to_owned(),
-        ));
-    };
-    if ctx.active_elements.len() > MAX_STABLE_CARRIER_ACTIVE_ELEMENTS_V2 {
+    } = &draw_context.identity;
+    if ctx.active_elements.len() > MAX_STABLE_CARRIER_ACTIVE_ELEMENTS {
         return Err(EvalError::plain(format!(
             "finite-kernel active-element count {} exceeds {}",
             ctx.active_elements.len(),
-            MAX_STABLE_CARRIER_ACTIVE_ELEMENTS_V2
+            MAX_STABLE_CARRIER_ACTIVE_ELEMENTS
         )));
     }
-    let mut stable = Vec::with_capacity(ctx.active_elements.len());
-    for element in &ctx.active_elements {
-        let DrawActiveElement::V2(key) = element else {
-            return Err(EvalError::plain(
-                "finite-kernel V2 realization refused a V1 active-element identity".to_owned(),
-            ));
-        };
-        stable.push(key.clone());
-    }
     let carrier = resolver
-        .carrier_key(subject, &stable, i64::from(slot))
+        .carrier_key(subject, &ctx.active_elements, i64::from(slot))
         .map_err(|error| {
             EvalError::plain(format!(
                 "finite-kernel stable carrier identity refused: {error:?}"
@@ -273,13 +206,12 @@ pub(crate) fn draw_finite_kernel_ticket(
     keyed_carrier.extend_from_slice(sample.as_bytes());
     keyed_carrier.extend_from_slice(&carrier_len.to_be_bytes());
     keyed_carrier.extend_from_slice(carrier.validated_bytes());
-    let mut rng =
-        KernelRng::for_carrier_v2(session, *seed, draw_context.tick, domain, &keyed_carrier)
-            .map_err(|error| {
-                EvalError::plain(format!(
-                    "finite-kernel V2 seed derivation refused: {error:?}"
-                ))
-            })?;
+    let mut rng = KernelRng::for_carrier(session, *seed, draw_context.tick, domain, &keyed_carrier)
+        .map_err(|error| {
+            EvalError::plain(format!(
+                "finite-kernel V2 seed derivation refused: {error:?}"
+            ))
+        })?;
     Ok(rng.next_u64())
 }
 
@@ -733,8 +665,8 @@ fn eval_clamp(args: &[Value]) -> Result<Value, EvalError> {
 #[cfg(test)]
 mod tests {
     use super::{
-        draw_finite_kernel_ticket, DrawActiveElement, DrawContext, DrawIdentityContext, EvalCode,
-        IntrinsicCallCtx, IntrinsicHost, KernelIntrinsicHost, Value,
+        draw_finite_kernel_ticket, DrawContext, DrawIdentityContext, EvalCode, IntrinsicCallCtx,
+        IntrinsicHost, KernelIntrinsicHost, Value,
     };
 
     fn floor(x: f64) -> Result<Value, crate::evaluator::EvalError> {
@@ -1384,9 +1316,9 @@ mod tests {
     #[allow(clippy::items_after_statements, clippy::too_many_lines)]
     fn private_finite_draw_is_keyed_by_every_aj_identity_component_and_has_no_call_order_state() {
         use babylon_graph::memory::MemoryGraph;
-        use babylon_graph::stable_element::{StableElementKeyV1, StableElementResolverV1};
+        use babylon_graph::stable_element::{StableElementKey, StableElementResolver};
         use babylon_graph::substrate::GraphSubstrate as _;
-        use babylon_kernel::replay::{ReplaySeed, ReplaySessionIdV1, RngDomainV2};
+        use babylon_kernel::replay::{ReplaySeed, ReplaySessionId, RngDomain};
         use std::collections::HashMap;
 
         let mut graph = MemoryGraph::new();
@@ -1394,7 +1326,7 @@ mod tests {
         let subject_b = graph.add_node("class").unwrap();
         let active_a = graph.add_node("organization").unwrap();
         let active_b = graph.add_node("organization").unwrap();
-        let resolver = StableElementResolverV1::seal(
+        let resolver = StableElementResolver::seal(
             &graph,
             "demo/world",
             &HashMap::from([
@@ -1412,26 +1344,26 @@ mod tests {
         let active_b = resolver.node_key(active_b).unwrap().clone();
         let ordered_active = vec![active_a.clone(), active_b.clone()];
         let reversed_active = vec![active_b, active_a];
-        let session_a = ReplaySessionIdV1::try_from("demo/session-a").unwrap();
-        let session_b = ReplaySessionIdV1::try_from("demo/session-b").unwrap();
+        let session_a = ReplaySessionId::try_from("demo/session-a").unwrap();
+        let session_b = ReplaySessionId::try_from("demo/session-b").unwrap();
 
         #[derive(Clone, Copy)]
         struct Key<'a> {
-            session: &'a ReplaySessionIdV1,
+            session: &'a ReplaySessionId,
             seed: ReplaySeed,
             tick: u64,
             domain: &'a str,
             sample: &'a str,
             slot: u32,
-            subject: &'a StableElementKeyV1,
-            active: &'a [StableElementKeyV1],
+            subject: &'a StableElementKey,
+            active: &'a [StableElementKey],
         }
         let draw = |key: Key<'_>| {
             let draw_context = DrawContext {
-                identity: DrawIdentityContext::V2 {
+                identity: DrawIdentityContext {
                     session: key.session,
                     seed: key.seed,
-                    domain: RngDomainV2::try_from(key.domain).unwrap(),
+                    domain: RngDomain::try_from(key.domain).unwrap(),
                     resolver: &resolver,
                     subject: key.subject.clone(),
                 },
@@ -1442,12 +1374,7 @@ mod tests {
                 key.slot,
                 &IntrinsicCallCtx {
                     draw_context: Some(&draw_context),
-                    active_elements: key
-                        .active
-                        .iter()
-                        .cloned()
-                        .map(DrawActiveElement::V2)
-                        .collect(),
+                    active_elements: key.active.to_vec(),
                 },
             )
             .unwrap()
@@ -1541,23 +1468,5 @@ mod tests {
         for (component, key) in changed {
             assert_ne!(base, draw(key), "changing {component} must change the draw");
         }
-    }
-
-    // ---- `framed` (plan §3.3): the length-prefix injectivity property
-    // `evaluator::eval_intrinsic` relies on when it renders an `Element::
-    // Edge`'s source/target/edge-type into ONE chain entry (Task 4.3, I1).
-    #[test]
-    fn framed_renders_each_segment_length_prefixed_and_pipe_joined() {
-        assert_eq!(super::framed(&["ab", "c"]), "2:ab|1:c");
-        assert_eq!(super::framed(&["a"]), "1:a");
-        assert_eq!(super::framed(&[]), "");
-    }
-
-    /// The whole point of the discipline: naive concatenation would let
-    /// `("ab", "c")` and `("a", "bc")` collide on `"abc"`. Length-prefixing
-    /// makes that impossible.
-    #[test]
-    fn framed_is_injective_where_naive_concatenation_would_collide() {
-        assert_ne!(super::framed(&["ab", "c"]), super::framed(&["a", "bc"]));
     }
 }

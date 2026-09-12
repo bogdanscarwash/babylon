@@ -7,18 +7,18 @@
 //! successful tick.
 
 use babylon_bsl::probability::{
-    validate_kernel_realization, KernelInstanceIdentityV1, KernelRealizationV1, ProbabilityError,
-    RealizedBranchV1,
+    validate_kernel_realization, KernelInstanceIdentity, KernelRealization, ProbabilityError,
+    RealizedBranch,
 };
-use babylon_graph::stable_element::StableElementKeyV1;
+use babylon_graph::stable_element::StableElementKey;
 
 /// Reference from one committed event to the finite choice it projects.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct ChoiceReceiptRefV1 {
+pub struct ChoiceReceiptRef {
     pub(crate) encounter_ordinal: u32,
 }
 
-impl ChoiceReceiptRefV1 {
+impl ChoiceReceiptRef {
     /// Construct a reference to one tick-local receipt ordinal.
     #[must_use]
     pub const fn new(encounter_ordinal: u32) -> Self {
@@ -34,12 +34,12 @@ impl ChoiceReceiptRefV1 {
 
 /// Exact evidence for one successful finite-kernel realization.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ChoiceReceiptV1 {
+pub struct ChoiceReceipt {
     encounter_ordinal: u32,
-    realization: KernelRealizationV1,
+    realization: KernelRealization,
 }
 
-impl ChoiceReceiptV1 {
+impl ChoiceReceipt {
     /// Validate and own one successful realization at its tick-wide ordinal.
     ///
     /// # Errors
@@ -47,8 +47,8 @@ impl ChoiceReceiptV1 {
     /// instance-identity, or digest mismatch.
     pub fn try_new(
         encounter_ordinal: u32,
-        identity: &KernelInstanceIdentityV1,
-        realization: KernelRealizationV1,
+        identity: &KernelInstanceIdentity,
+        realization: KernelRealization,
     ) -> Result<Self, ProbabilityError> {
         validate_kernel_realization(&realization, identity)?;
         Ok(Self {
@@ -65,8 +65,8 @@ impl ChoiceReceiptV1 {
 
     /// Return the stable reference used by a finite-projection event.
     #[must_use]
-    pub const fn reference(&self) -> ChoiceReceiptRefV1 {
-        ChoiceReceiptRefV1::new(self.encounter_ordinal)
+    pub const fn reference(&self) -> ChoiceReceiptRef {
+        ChoiceReceiptRef::new(self.encounter_ordinal)
     }
 
     /// Borrow the firing rule identity.
@@ -95,19 +95,19 @@ impl ChoiceReceiptV1 {
 
     /// Borrow the stable carrier subject.
     #[must_use]
-    pub const fn stable_carrier(&self) -> &StableElementKeyV1 {
+    pub const fn stable_carrier(&self) -> &StableElementKey {
         &self.realization.subject
     }
 
     /// Borrow ordered active-element stable identities.
     #[must_use]
-    pub fn active_elements(&self) -> &[StableElementKeyV1] {
+    pub fn active_elements(&self) -> &[StableElementKey] {
         &self.realization.active_elements
     }
 
     /// Borrow enum-ordered exact masses and ticket intervals.
     #[must_use]
-    pub fn branches(&self) -> &[RealizedBranchV1] {
+    pub fn branches(&self) -> &[RealizedBranch] {
         &self.realization.branches
     }
 
@@ -137,7 +137,7 @@ impl ChoiceReceiptV1 {
 
     /// Borrow the validated engine-neutral realization.
     #[must_use]
-    pub const fn realization(&self) -> &KernelRealizationV1 {
+    pub const fn realization(&self) -> &KernelRealization {
         &self.realization
     }
 }
@@ -148,7 +148,7 @@ impl ChoiceReceiptV1 {
 /// Returns the first received ordinal that differs from its zero-based
 /// position. This check is shared by tick-payload encoding and persistence
 /// reconstruction so neither silently accepts a sparse or reordered ledger.
-pub fn validate_choice_receipt_order(receipts: &[ChoiceReceiptV1]) -> Result<(), u32> {
+pub fn validate_choice_receipt_order(receipts: &[ChoiceReceipt]) -> Result<(), u32> {
     for (expected, receipt) in receipts.iter().enumerate() {
         let expected = u32::try_from(expected).map_err(|_| u32::MAX)?;
         if receipt.encounter_ordinal != expected {
@@ -161,19 +161,19 @@ pub fn validate_choice_receipt_order(receipts: &[ChoiceReceiptV1]) -> Result<(),
 #[cfg(test)]
 mod tests {
     use super::*;
-    use babylon_bsl::probability::{realize_kernel, FiniteKernelV1, KernelBranchV1, Mass};
+    use babylon_bsl::probability::{realize_kernel, FiniteKernel, KernelBranch, Mass};
     use babylon_bsl::reader::{Atom, SExpr};
     use babylon_bsl::types::EnumTypeId;
 
-    fn stable_node(local_name: &str) -> StableElementKeyV1 {
-        StableElementKeyV1::Node {
+    fn stable_node(local_name: &str) -> StableElementKey {
+        StableElementKey::Node {
             scenario: "pilot/struggle".to_owned(),
             local_name: local_name.to_owned(),
         }
     }
 
-    fn identity() -> KernelInstanceIdentityV1 {
-        KernelInstanceIdentityV1 {
+    fn identity() -> KernelInstanceIdentity {
+        KernelInstanceIdentity {
             replay_session: b"campaign/session".to_vec(),
             replay_seed: 17_i64.to_be_bytes(),
             tick: 3,
@@ -183,8 +183,8 @@ mod tests {
         }
     }
 
-    fn kernel() -> FiniteKernelV1 {
-        FiniteKernelV1 {
+    fn kernel() -> FiniteKernel {
+        FiniteKernel {
             sample: "struggle/spark".to_owned(),
             sample_path: vec![0, 1, 2],
             slot: 0,
@@ -194,7 +194,7 @@ mod tests {
             branches: ["EXCESSIVE_FORCE", "NO_INCIDENT"]
                 .into_iter()
                 .enumerate()
-                .map(|(ordinal, member)| KernelBranchV1 {
+                .map(|(ordinal, member)| KernelBranch {
                     enum_type: "StruggleSparkOutcome".to_owned(),
                     member: member.to_owned(),
                     ordinal: u32::try_from(ordinal).expect("two branches"),
@@ -213,7 +213,7 @@ mod tests {
         }
     }
 
-    fn receipt(ordinal: u32) -> ChoiceReceiptV1 {
+    fn receipt(ordinal: u32) -> ChoiceReceipt {
         let identity = identity();
         let realization = realize_kernel(
             &identity,
@@ -222,7 +222,7 @@ mod tests {
             0,
         )
         .expect("valid realization");
-        ChoiceReceiptV1::try_new(ordinal, &identity, realization).expect("valid receipt")
+        ChoiceReceipt::try_new(ordinal, &identity, realization).expect("valid receipt")
     }
 
     #[test]
@@ -252,7 +252,7 @@ mod tests {
         )
         .expect("valid realization");
         realization.instance_digest[0] ^= 0xff;
-        assert!(ChoiceReceiptV1::try_new(0, &identity, realization).is_err());
+        assert!(ChoiceReceipt::try_new(0, &identity, realization).is_err());
     }
 
     #[test]

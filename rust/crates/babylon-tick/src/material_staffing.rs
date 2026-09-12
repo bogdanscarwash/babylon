@@ -10,32 +10,26 @@ use babylon_bsl::causal_contract::{
     reduce_audit_receipts, AuditReceipt, ContractError, EvidenceClass, RuleContract, RuleRole,
 };
 use babylon_bsl::evaluator::{EvalCode, EvalError, Value};
-use babylon_bsl::identity_codec::{
-    project_stored_field_value_v1, IdentityCodecError, StableBslValueV1,
-};
+use babylon_bsl::identity_codec::{project_stored_field_value, IdentityCodecError, StableBslValue};
 use babylon_bsl::structural_verbs::{
     EffectExecutor, PendingWrite, UpdateOp, WriteOperand, WriteTarget,
 };
 use babylon_bsl::typecheck::TypeEnv;
 use babylon_bsl::types::{BslType, EnumRegistry, FieldKind};
-use babylon_bsl::vocabulary::ClosedVocabulary;
 use babylon_bsl::write_log::{CollectingWriteLog, WriteRecord};
-use babylon_graph::stable_element::{
-    StableElementKeyV1, StableElementResolverV1, StableIdentityError,
-};
+use babylon_graph::stable_element::{StableElementKey, StableElementResolver, StableIdentityError};
 use babylon_graph::substrate::{GraphError, GraphSubstrate, NodeId};
 use babylon_material_circuit::{
-    advance_staffing_v2, LaborCapacityRowV1, StaffingErrorV2, StaffingPoolBindingV2,
-    StaffingPoolStateV2, StaffingReceiptV2, StaffingStateV2, StaffingWorkRequestV2,
-    MAX_MATERIAL_CIRCUIT_ROWS_V1,
+    advance_staffing, LaborCapacityRow, StaffingError, StaffingPoolBinding, StaffingPoolState,
+    StaffingReceipt, StaffingState, StaffingWorkRequest, MAX_MATERIAL_CIRCUIT_ROWS,
 };
 
-use crate::committed_event::CommittedEventV2;
+use crate::committed_event::CommittedEvent;
 
 /// This identity's placement and content must be independently admitted by the caller.
-pub const STAFFING_COMPOSITION_ID_V1: &str = "g4-workforce-staffing";
+pub const STAFFING_COMPOSITION_ID: &str = "g4-workforce-staffing";
 /// Graph fields retain exact integers only through this inclusive boundary.
-pub const MAX_EXACT_STAFFING_INTEGER_V1: u64 = 1_u64 << 53;
+pub const MAX_EXACT_STAFFING_INTEGER: u64 = 1_u64 << 53;
 /// Exact employed persons in the modeled site-bound pool.
 pub const EMPLOYED_POPULATION: &str = "social-class/employed-population";
 /// Exact reserve persons in that same closed pool.
@@ -43,7 +37,7 @@ pub const RESERVE_POPULATION: &str = "social-class/reserve-population";
 /// Last period's actual unretained work request, never its retained maximum.
 pub const PREVIOUS_UNRETAINED_HOURS: &str = "social-class/previous-unretained-labor-hours";
 /// The composition's complete write footprint, in application order per pool.
-pub const STAFFING_FIELDS_V1: [&str; 3] = [
+pub const STAFFING_FIELDS: [&str; 3] = [
     EMPLOYED_POPULATION,
     RESERVE_POPULATION,
     PREVIOUS_UNRETAINED_HOURS,
@@ -51,7 +45,7 @@ pub const STAFFING_FIELDS_V1: [&str; 3] = [
 
 /// Closed composition, graph projection and effect refusals.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum MaterialStaffingErrorV2 {
+pub enum MaterialStaffingError {
     EmptyBindings,
     NodeBinding,
     NodeOwner,
@@ -66,7 +60,7 @@ pub enum MaterialStaffingErrorV2 {
     Graph(GraphError),
     Stable(StableIdentityError),
     StoredValue(IdentityCodecError),
-    Core(StaffingErrorV2),
+    Core(StaffingError),
     Effect {
         code: Option<EvalCode>,
         message: String,
@@ -75,23 +69,23 @@ pub enum MaterialStaffingErrorV2 {
     Allocation,
 }
 
-impl std::fmt::Display for MaterialStaffingErrorV2 {
+impl std::fmt::Display for MaterialStaffingError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "material staffing refused: {self:?}")
     }
 }
-impl std::error::Error for MaterialStaffingErrorV2 {}
-impl From<StaffingErrorV2> for MaterialStaffingErrorV2 {
-    fn from(error: StaffingErrorV2) -> Self {
+impl std::error::Error for MaterialStaffingError {}
+impl From<StaffingError> for MaterialStaffingError {
+    fn from(error: StaffingError) -> Self {
         Self::Core(error)
     }
 }
-impl From<StableIdentityError> for MaterialStaffingErrorV2 {
+impl From<StableIdentityError> for MaterialStaffingError {
     fn from(error: StableIdentityError) -> Self {
         Self::Stable(error)
     }
 }
-impl From<EvalError> for MaterialStaffingErrorV2 {
+impl From<EvalError> for MaterialStaffingError {
     fn from(error: EvalError) -> Self {
         Self::Effect {
             code: error.code,
@@ -102,55 +96,53 @@ impl From<EvalError> for MaterialStaffingErrorV2 {
 
 /// One authored workforce node and its distinct, closed physical labor pool.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct StaffingNodeBindingV1 {
-    subject: StableElementKeyV1,
-    pool: StaffingPoolBindingV2,
+pub struct StaffingNodeBinding {
+    subject: StableElementKey,
+    pool: StaffingPoolBinding,
 }
 
-impl StaffingNodeBindingV1 {
+impl StaffingNodeBinding {
     /// Check the node identity and exact population with the supplied typed policy.
     /// The caller admits the authored schedule as part of campaign content.
     /// # Errors
     /// Refuses another key kind, malformed key or unrepresentable population.
     pub fn try_new(
-        subject: StableElementKeyV1,
-        pool: StaffingPoolBindingV2,
-    ) -> Result<Self, MaterialStaffingErrorV2> {
-        if !matches!(subject, StableElementKeyV1::Node { .. }) {
-            return Err(MaterialStaffingErrorV2::NodeBinding);
+        subject: StableElementKey,
+        pool: StaffingPoolBinding,
+    ) -> Result<Self, MaterialStaffingError> {
+        if !matches!(subject, StableElementKey::Node { .. }) {
+            return Err(MaterialStaffingError::NodeBinding);
         }
         subject.canonical_bytes()?;
         exact_real(pool.labor_force())?;
         Ok(Self { subject, pool })
     }
     #[must_use]
-    pub const fn subject(&self) -> &StableElementKeyV1 {
+    pub const fn subject(&self) -> &StableElementKey {
         &self.subject
     }
     #[must_use]
-    pub const fn pool(&self) -> &StaffingPoolBindingV2 {
+    pub const fn pool(&self) -> &StaffingPoolBinding {
         &self.pool
     }
 }
 
 /// Immutable, complete bindings, ordered by pool identity without duplicate principals.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct StaffingCompositionV1 {
-    bindings: Vec<StaffingNodeBindingV1>,
+pub struct StaffingComposition {
+    bindings: Vec<StaffingNodeBinding>,
 }
 
-impl StaffingCompositionV1 {
+impl StaffingComposition {
     /// Validate the complete roster. No population or political role is inferred.
     /// # Errors
     /// Refuses empty, excessive, duplicate or overlapping ownership.
-    pub fn try_new(
-        mut bindings: Vec<StaffingNodeBindingV1>,
-    ) -> Result<Self, MaterialStaffingErrorV2> {
+    pub fn try_new(mut bindings: Vec<StaffingNodeBinding>) -> Result<Self, MaterialStaffingError> {
         if bindings.is_empty() {
-            return Err(MaterialStaffingErrorV2::EmptyBindings);
+            return Err(MaterialStaffingError::EmptyBindings);
         }
-        if bindings.len() > MAX_MATERIAL_CIRCUIT_ROWS_V1 {
-            return Err(StaffingErrorV2::RowLimit.into());
+        if bindings.len() > MAX_MATERIAL_CIRCUIT_ROWS {
+            return Err(StaffingError::RowLimit.into());
         }
         bindings.sort_unstable_by_key(|row| row.pool.pool_id());
         let mut nodes = BTreeSet::new();
@@ -159,56 +151,55 @@ impl StaffingCompositionV1 {
         let mut work_sources = BTreeSet::new();
         for row in &bindings {
             if !nodes.insert(row.subject.canonical_bytes()?) {
-                return Err(MaterialStaffingErrorV2::DuplicateNode);
+                return Err(MaterialStaffingError::DuplicateNode);
             }
             if !pools.insert(row.pool.pool_id()) {
-                return Err(StaffingErrorV2::DuplicatePool.into());
+                return Err(StaffingError::DuplicatePool.into());
             }
             if !sites.insert((row.pool.site_id(), row.pool.unit_id())) {
-                return Err(StaffingErrorV2::DuplicateSiteUnit.into());
+                return Err(StaffingError::DuplicateSiteUnit.into());
             }
             for source in row.pool.work_sources() {
                 if !work_sources.insert(*source) {
-                    return Err(StaffingErrorV2::DuplicateWorkSource.into());
+                    return Err(StaffingError::DuplicateWorkSource.into());
                 }
-                if work_sources.len() > MAX_MATERIAL_CIRCUIT_ROWS_V1 {
-                    return Err(StaffingErrorV2::RowLimit.into());
+                if work_sources.len() > MAX_MATERIAL_CIRCUIT_ROWS {
+                    return Err(StaffingError::RowLimit.into());
                 }
             }
         }
         Ok(Self { bindings })
     }
     #[must_use]
-    pub fn bindings(&self) -> &[StaffingNodeBindingV1] {
+    pub fn bindings(&self) -> &[StaffingNodeBinding] {
         &self.bindings
     }
 }
 
 /// Exact registries already owned by the prepared replay environment.
 #[derive(Clone, Copy)]
-pub struct StaffingEffectContextV1<'a> {
+pub struct StaffingEffectContext<'a> {
     pub types: &'a TypeEnv,
     pub enums: &'a EnumRegistry,
-    pub vocabulary: Option<&'a ClosedVocabulary>,
-    pub resolver: &'a StableElementResolverV1,
+    pub resolver: &'a StableElementResolver,
 }
 
 /// Completed effects and evidence. Next labor rows remain a transient physical input.
 #[derive(Debug)]
-pub struct StaffingEffectsV1 {
-    staffing_receipts: Vec<StaffingReceiptV2>,
-    next_labor: Vec<LaborCapacityRowV1>,
+pub struct StaffingEffects {
+    staffing_receipts: Vec<StaffingReceipt>,
+    next_labor: Vec<LaborCapacityRow>,
     writes: Vec<WriteRecord>,
     audit_receipts: Vec<AuditReceipt>,
-    committed_events: Vec<CommittedEventV2>,
+    committed_events: Vec<CommittedEvent>,
 }
-impl StaffingEffectsV1 {
+impl StaffingEffects {
     #[must_use]
-    pub fn staffing_receipts(&self) -> &[StaffingReceiptV2] {
+    pub fn staffing_receipts(&self) -> &[StaffingReceipt] {
         &self.staffing_receipts
     }
     #[must_use]
-    pub fn next_labor(&self) -> &[LaborCapacityRowV1] {
+    pub fn next_labor(&self) -> &[LaborCapacityRow] {
         &self.next_labor
     }
     #[must_use]
@@ -221,25 +212,25 @@ impl StaffingEffectsV1 {
     }
     /// Derive sink records from these events; never append a second independently built batch.
     #[must_use]
-    pub fn committed_events(&self) -> &[CommittedEventV2] {
+    pub fn committed_events(&self) -> &[CommittedEvent] {
         &self.committed_events
     }
 }
 
-fn reserved<T>(count: usize) -> Result<Vec<T>, MaterialStaffingErrorV2> {
+fn reserved<T>(count: usize) -> Result<Vec<T>, MaterialStaffingError> {
     let mut values = Vec::new();
     values
         .try_reserve_exact(count)
-        .map_err(|_| MaterialStaffingErrorV2::Allocation)?;
+        .map_err(|_| MaterialStaffingError::Allocation)?;
     Ok(values)
 }
 
-fn validate_fields(context: StaffingEffectContextV1<'_>) -> Result<(), MaterialStaffingErrorV2> {
-    for field in STAFFING_FIELDS_V1 {
+fn validate_fields(context: StaffingEffectContext<'_>) -> Result<(), MaterialStaffingError> {
+    for field in STAFFING_FIELDS {
         if !context.types.fields.get(field).is_some_and(|declaration| {
             declaration.ty == BslType::Int && declaration.kind == FieldKind::Extensive
         }) {
-            return Err(MaterialStaffingErrorV2::FieldDeclaration(field));
+            return Err(MaterialStaffingError::FieldDeclaration(field));
         }
     }
     Ok(())
@@ -247,28 +238,28 @@ fn validate_fields(context: StaffingEffectContextV1<'_>) -> Result<(), MaterialS
 
 fn resolve_node(
     graph: &impl GraphSubstrate,
-    context: StaffingEffectContextV1<'_>,
-    row: &StaffingNodeBindingV1,
-) -> Result<NodeId, MaterialStaffingErrorV2> {
+    context: StaffingEffectContext<'_>,
+    row: &StaffingNodeBinding,
+) -> Result<NodeId, MaterialStaffingError> {
     if !context
         .resolver
         .sealed_node_has_type(&row.subject, "SOCIAL_CLASS")?
     {
-        return Err(MaterialStaffingErrorV2::NodeOwner);
+        return Err(MaterialStaffingError::NodeOwner);
     }
-    let StableElementKeyV1::Node { local_name, .. } = &row.subject else {
-        return Err(MaterialStaffingErrorV2::NodeBinding);
+    let StableElementKey::Node { local_name, .. } = &row.subject else {
+        return Err(MaterialStaffingError::NodeBinding);
     };
     let node = context.resolver.node_handle_by_local_name(local_name)?;
     if context.resolver.node_key(node)? != &row.subject {
-        return Err(MaterialStaffingErrorV2::NodeBinding);
+        return Err(MaterialStaffingError::NodeBinding);
     }
     if graph
         .node_type_of(node)
-        .map_err(MaterialStaffingErrorV2::Graph)?
+        .map_err(MaterialStaffingError::Graph)?
         != "SOCIAL_CLASS"
     {
-        return Err(MaterialStaffingErrorV2::NodeOwner);
+        return Err(MaterialStaffingError::NodeOwner);
     }
     Ok(node)
 }
@@ -277,42 +268,42 @@ fn read_stock(
     graph: &impl GraphSubstrate,
     node: NodeId,
     field: &'static str,
-    context: &StaffingEffectContextV1<'_>,
-) -> Result<u64, MaterialStaffingErrorV2> {
+    context: &StaffingEffectContext<'_>,
+) -> Result<u64, MaterialStaffingError> {
     let declaration = context
         .types
         .fields
         .get(field)
-        .ok_or(MaterialStaffingErrorV2::FieldDeclaration(field))?;
+        .ok_or(MaterialStaffingError::FieldDeclaration(field))?;
     let value = graph
         .node_attribute(node, field)
-        .map_err(|source| MaterialStaffingErrorV2::FieldRead { field, source })?;
+        .map_err(|source| MaterialStaffingError::FieldRead { field, source })?;
     let stable =
-        project_stored_field_value_v1(declaration, Some(value.to_bits()), None, context.enums)
-            .map_err(MaterialStaffingErrorV2::StoredValue)?;
-    let StableBslValueV1::Int(value) = stable else {
-        return Err(MaterialStaffingErrorV2::FieldDeclaration(field));
+        project_stored_field_value(declaration, Some(value.to_bits()), None, context.enums)
+            .map_err(MaterialStaffingError::StoredValue)?;
+    let StableBslValue::Int(value) = stable else {
+        return Err(MaterialStaffingError::FieldDeclaration(field));
     };
-    u64::try_from(value).map_err(|_| MaterialStaffingErrorV2::ExactInteger)
+    u64::try_from(value).map_err(|_| MaterialStaffingError::ExactInteger)
 }
 
-fn exact_real(value: u64) -> Result<f64, MaterialStaffingErrorV2> {
-    if value > MAX_EXACT_STAFFING_INTEGER_V1 {
-        return Err(MaterialStaffingErrorV2::ExactInteger);
+fn exact_real(value: u64) -> Result<f64, MaterialStaffingError> {
+    if value > MAX_EXACT_STAFFING_INTEGER {
+        return Err(MaterialStaffingError::ExactInteger);
     }
     // Two exact u32 conversions avoid an unchecked integer-to-binary64 cast.
-    let high = u32::try_from(value >> 32).map_err(|_| MaterialStaffingErrorV2::ExactInteger)?;
+    let high = u32::try_from(value >> 32).map_err(|_| MaterialStaffingError::ExactInteger)?;
     let low = u32::try_from(value & u64::from(u32::MAX))
-        .map_err(|_| MaterialStaffingErrorV2::ExactInteger)?;
+        .map_err(|_| MaterialStaffingError::ExactInteger)?;
     Ok(f64::from(high) * 4_294_967_296.0 + f64::from(low))
 }
 
 fn read_opening(
     graph: &impl GraphSubstrate,
-    context: StaffingEffectContextV1<'_>,
-    composition: &StaffingCompositionV1,
+    context: StaffingEffectContext<'_>,
+    composition: &StaffingComposition,
     period: u64,
-) -> Result<(StaffingStateV2, Vec<NodeId>), MaterialStaffingErrorV2> {
+) -> Result<(StaffingState, Vec<NodeId>), MaterialStaffingError> {
     validate_fields(context)?;
     let mut pools = reserved(composition.bindings.len())?;
     let mut nodes = reserved(composition.bindings.len())?;
@@ -320,9 +311,9 @@ fn read_opening(
     for row in &composition.bindings {
         let node = resolve_node(graph, context, row)?;
         if !seen.insert(node) {
-            return Err(MaterialStaffingErrorV2::DuplicateNode);
+            return Err(MaterialStaffingError::DuplicateNode);
         }
-        pools.push(StaffingPoolStateV2::try_new(
+        pools.push(StaffingPoolState::try_new(
             row.pool.clone(),
             read_stock(graph, node, EMPLOYED_POPULATION, &context)?,
             read_stock(graph, node, RESERVE_POPULATION, &context)?,
@@ -330,13 +321,13 @@ fn read_opening(
         )?);
         nodes.push(node);
     }
-    Ok((StaffingStateV2::try_new(period, pools)?, nodes))
+    Ok((StaffingState::try_new(period, pools)?, nodes))
 }
 
 fn staffing_event(
     node: NodeId,
-    receipt: &StaffingReceiptV2,
-) -> Result<CommittedEventV2, MaterialStaffingErrorV2> {
+    receipt: &StaffingReceipt,
+) -> Result<CommittedEvent, MaterialStaffingError> {
     let fields = [
         ("period", receipt.period()),
         ("opening-employed", receipt.opening_employed()),
@@ -364,11 +355,11 @@ fn staffing_event(
     for (name, value) in fields {
         payload.push((
             name.to_owned(),
-            Value::Int(i64::try_from(value).map_err(|_| MaterialStaffingErrorV2::EvidenceInteger)?),
+            Value::Int(i64::try_from(value).map_err(|_| MaterialStaffingError::EvidenceInteger)?),
         ));
     }
-    Ok(CommittedEventV2::new(
-        STAFFING_COMPOSITION_ID_V1.to_owned(),
+    Ok(CommittedEvent::new(
+        STAFFING_COMPOSITION_ID.to_owned(),
         None,
         "WORKFORCE_STAFFING".to_owned(),
         payload,
@@ -377,19 +368,19 @@ fn staffing_event(
 
 fn prepare_effects(
     nodes: &[NodeId],
-    receipts: &[StaffingReceiptV2],
-) -> Result<(Vec<PendingWrite>, Vec<CommittedEventV2>), MaterialStaffingErrorV2> {
+    receipts: &[StaffingReceipt],
+) -> Result<(Vec<PendingWrite>, Vec<CommittedEvent>), MaterialStaffingError> {
     if nodes.len() != receipts.len() {
-        return Err(MaterialStaffingErrorV2::NodeBinding);
+        return Err(MaterialStaffingError::NodeBinding);
     }
     let count = nodes
         .len()
         .checked_mul(3)
-        .ok_or(MaterialStaffingErrorV2::Allocation)?;
+        .ok_or(MaterialStaffingError::Allocation)?;
     let mut writes = reserved(count)?;
     let mut events = reserved(nodes.len())?;
     for (node, receipt) in nodes.iter().zip(receipts) {
-        for (field, value) in STAFFING_FIELDS_V1.into_iter().zip([
+        for (field, value) in STAFFING_FIELDS.into_iter().zip([
             receipt.closing_employed(),
             receipt.closing_reserve(),
             receipt.current_unretained_hours(),
@@ -413,15 +404,15 @@ fn prepare_effects(
 /// function makes no publication or durability claim and returns no persistent staffing owner.
 /// # Errors
 /// Refuses invalid declarations, ownership, numeric values, requests, core transitions or effects.
-pub fn apply_material_staffing_v1(
+pub fn apply_material_staffing(
     graph: &mut impl GraphSubstrate,
-    context: StaffingEffectContextV1<'_>,
-    composition: &StaffingCompositionV1,
+    context: StaffingEffectContext<'_>,
+    composition: &StaffingComposition,
     period: u64,
-    requests: &[StaffingWorkRequestV2],
-) -> Result<StaffingEffectsV1, MaterialStaffingErrorV2> {
+    requests: &[StaffingWorkRequest],
+) -> Result<StaffingEffects, MaterialStaffingError> {
     let (opening, nodes) = read_opening(graph, context, composition, period)?;
-    let transition = advance_staffing_v2(&opening, requests)?;
+    let transition = advance_staffing(&opening, requests)?;
     let (pending, committed_events) = prepare_effects(&nodes, transition.receipts())?;
     let mut staffing_receipts = reserved(transition.receipts().len())?;
     staffing_receipts.extend_from_slice(transition.receipts());
@@ -430,19 +421,18 @@ pub fn apply_material_staffing_v1(
     let mut log = CollectingWriteLog::new();
     log.records
         .try_reserve_exact(pending.len())
-        .map_err(|_| MaterialStaffingErrorV2::Allocation)?;
+        .map_err(|_| MaterialStaffingError::Allocation)?;
     {
         let mut executor = EffectExecutor::observed(
             context.types,
             context.enums,
-            context.vocabulary,
-            STAFFING_COMPOSITION_ID_V1,
+            STAFFING_COMPOSITION_ID,
             &mut log,
         );
         for write in &pending {
             executor
                 .apply_pending_write(write, graph)
-                .map_err(MaterialStaffingErrorV2::from)?;
+                .map_err(MaterialStaffingError::from)?;
         }
     }
     let event_types = committed_events
@@ -450,13 +440,13 @@ pub fn apply_material_staffing_v1(
         .map(|event| event.event_type().to_owned())
         .collect::<Vec<_>>();
     let contract = RuleContract {
-        rule_id: STAFFING_COMPOSITION_ID_V1.to_owned(),
+        rule_id: STAFFING_COMPOSITION_ID.to_owned(),
         role: RuleRole::Mechanic,
         evidence: EvidenceClass::Designed,
     };
     let audit_receipts = reduce_audit_receipts(&contract, &event_types, &log.records)
-        .map_err(MaterialStaffingErrorV2::Audit)?;
-    Ok(StaffingEffectsV1 {
+        .map_err(MaterialStaffingError::Audit)?;
+    Ok(StaffingEffects {
         staffing_receipts,
         next_labor,
         writes: log.records,

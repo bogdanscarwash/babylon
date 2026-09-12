@@ -141,7 +141,9 @@ fn type_env() -> TypeEnv {
 /// could still be rejected by `load_rule` — which is what happened to every
 /// `:as`-using rule, including §2.6's own worked example. Vectors that
 /// claim a construct is *authorable* must go through here.
-fn load(source: &str) -> Result<babylon_bsl::LoadedRule, babylon_bsl::LoadError> {
+fn load(
+    source: &str,
+) -> Result<babylon_bsl::rule_pipeline::LoadedRule, babylon_bsl::rule_pipeline::LoadError> {
     let v = vocabulary();
     let types = type_env();
     let ceilings = ceilings();
@@ -778,7 +780,7 @@ mod c7_computed_bindings {
     use babylon_bsl::fuel::IntrinsicCosts;
     use babylon_bsl::intrinsic_host::EmptyIntrinsicHost;
     use babylon_bsl::rule_pipeline::resolve_expr_bindings;
-    use babylon_kernel::Currency;
+    use babylon_kernel::currency::Currency;
     use std::collections::HashMap;
 
     fn decls(bindings: &str) -> Vec<babylon_bsl::bindings::BindingDecl> {
@@ -1399,7 +1401,7 @@ mod c5_element_selection {
             elements: Vec::new(),
             draw_context: None,
         };
-        let mut executor = EffectExecutor::new(&types, &enum_registry, None);
+        let mut executor = EffectExecutor::new(&types, &enum_registry);
         let mut sink = CollectingSink::default();
         let mut fuel2 = 1_000;
         let pending = executor
@@ -1414,7 +1416,7 @@ mod c5_element_selection {
         // Pass 2 uses a FRESH executor, exactly as `tick.rs::run_tick`
         // does — the apply half must not depend on any state the
         // collecting executor accumulated (Copilot harvest, #520).
-        let mut apply_executor = EffectExecutor::new(&types, &enum_registry, None);
+        let mut apply_executor = EffectExecutor::new(&types, &enum_registry);
         for write in &pending {
             apply_executor
                 .apply_pending_write(write, &mut graph)
@@ -1590,10 +1592,10 @@ mod c6_effect_position_iteration {
                 elements: Vec::new(),
                 draw_context: None,
             };
-            let mut collector = EffectExecutor::new(&types, &enum_registry, None);
+            let mut collector = EffectExecutor::new(&types, &enum_registry);
             collector.collect_effects(&items[1..], &env, &EmptyIntrinsicHost, &mut sink, fuel)?
         };
-        let mut applier = EffectExecutor::new(&types, &enum_registry, None);
+        let mut applier = EffectExecutor::new(&types, &enum_registry);
         for write in &pending {
             applier.apply_pending_write(write, &mut *graph)?;
         }

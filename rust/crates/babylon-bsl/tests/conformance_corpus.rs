@@ -30,6 +30,7 @@
 //! `metric_conditions_load_and_evaluate` below) — unchanged.
 #![allow(clippy::doc_markdown)] // doc comments cite Python test names and file paths verbatim
 
+use babylon_bsl::bindings::BindingVocabulary;
 use babylon_bsl::evaluator::{evaluate, EvalEnv, Value};
 use babylon_bsl::fuel::{CardinalityCeilings, IntrinsicCosts};
 use babylon_bsl::intrinsic_host::EmptyIntrinsicHost;
@@ -38,7 +39,6 @@ use babylon_bsl::rule_pipeline::{bind_environment, load_rule, LoadContext, LoadE
 use babylon_bsl::structural_verbs::{CollectingSink, EffectExecutor};
 use babylon_bsl::typecheck::TypeEnv;
 use babylon_bsl::types::{BslType, EnumRegistry, FieldDecl, FieldKind};
-use babylon_bsl::BindingVocabulary;
 use babylon_graph::memory::MemoryGraph;
 use babylon_graph::substrate::GraphSubstrate;
 use std::collections::{HashMap, HashSet};
@@ -182,15 +182,15 @@ fn load(source: &str, rule_file: &str) -> Result<LoadedRule, LoadError> {
 /// The `<when>` clause of a loaded rule — shared by `eval_when` and its
 /// graph-bearing twin `eval_when_over_graph` (PR 4, Task 14), plus the
 /// slice-2-refusal vector for `event_edge_count.bsl`.
-fn when_clause(rule: &LoadedRule) -> &babylon_bsl::SExpr {
-    let babylon_bsl::SExpr::List(items) = &rule.rule else {
+fn when_clause(rule: &LoadedRule) -> &babylon_bsl::reader::SExpr {
+    let babylon_bsl::reader::SExpr::List(items) = &rule.rule else {
         unreachable!()
     };
     items
         .iter()
         .find_map(|child| match child {
-            babylon_bsl::SExpr::List(inner)
-                if matches!(inner.first(), Some(babylon_bsl::SExpr::Atom(babylon_bsl::Atom::Symbol(h))) if h == "when") =>
+            babylon_bsl::reader::SExpr::List(inner)
+                if matches!(inner.first(), Some(babylon_bsl::reader::SExpr::Atom(babylon_bsl::reader::Atom::Symbol(h))) if h == "when") =>
             {
                 inner.get(1)
             }
@@ -715,7 +715,9 @@ fn wealth_aggregates_execute_over_a_real_graph() {
     let bindings = owned(vec![
         (
             "wealth",
-            Value::Currency(babylon_kernel::Currency::from_micro_units(300_000_000)),
+            Value::Currency(babylon_kernel::currency::Currency::from_micro_units(
+                300_000_000,
+            )),
         ),
         ("agitation", real(0.4)),
         ("population", int(10)),
@@ -730,7 +732,9 @@ fn wealth_aggregates_execute_over_a_real_graph() {
             &graph,
             &mut fuel,
         ),
-        Value::Currency(babylon_kernel::Currency::from_micro_units(600_000_000)),
+        Value::Currency(babylon_kernel::currency::Currency::from_micro_units(
+            600_000_000
+        )),
     );
     assert_eq!(
         10_000 - fuel,
@@ -747,7 +751,9 @@ fn wealth_aggregates_execute_over_a_real_graph() {
             &graph,
             &mut fuel2,
         ),
-        Value::Currency(babylon_kernel::Currency::from_micro_units(300_000_000)),
+        Value::Currency(babylon_kernel::currency::Currency::from_micro_units(
+            300_000_000
+        )),
     );
     let mut fuel3 = 10_000;
     assert_eq!(
@@ -757,7 +763,9 @@ fn wealth_aggregates_execute_over_a_real_graph() {
             &graph,
             &mut fuel3,
         ),
-        Value::Currency(babylon_kernel::Currency::from_micro_units(300_000_000)),
+        Value::Currency(babylon_kernel::currency::Currency::from_micro_units(
+            300_000_000
+        )),
     );
 
     // The weighted mean of a constant is that constant, whatever N and
@@ -951,20 +959,20 @@ fn bifurcation_routes_by_solidarity_density() {
         let env = EvalEnv {
             bindings: env_map,
             intrinsic_costs: &costs,
-            graph: None,
+            graph: Some(&graph),
             types: None,
             enums: None,
             elements: Vec::new(),
             draw_context: None,
         };
-        let babylon_bsl::SExpr::List(items) = &loaded.rule else {
+        let babylon_bsl::reader::SExpr::List(items) = &loaded.rule else {
             unreachable!()
         };
         let effects = items
             .iter()
             .find_map(|child| match child {
-                babylon_bsl::SExpr::List(inner)
-                    if matches!(inner.first(), Some(babylon_bsl::SExpr::Atom(babylon_bsl::Atom::Symbol(h))) if h == "effects") =>
+                babylon_bsl::reader::SExpr::List(inner)
+                    if matches!(inner.first(), Some(babylon_bsl::reader::SExpr::Atom(babylon_bsl::reader::Atom::Symbol(h))) if h == "effects") =>
                 {
                     Some(&inner[1..])
                 }
@@ -972,19 +980,15 @@ fn bifurcation_routes_by_solidarity_density() {
             })
             .unwrap();
         let registries = registries();
-        let mut executor = EffectExecutor::new(&registries.types, &registries.enums, None);
+        let mut executor = EffectExecutor::new(&registries.types, &registries.enums);
         let mut sink = CollectingSink::default();
         let mut fuel = 512;
-        executor
-            .execute_effects(
-                effects,
-                &env,
-                &EmptyIntrinsicHost,
-                &mut graph,
-                &mut sink,
-                &mut fuel,
-            )
+        let pending = executor
+            .collect_effects(effects, &env, &EmptyIntrinsicHost, &mut sink, &mut fuel)
             .unwrap();
+        for write in &pending {
+            executor.apply_pending_write(write, &mut graph).unwrap();
+        }
         let after = graph.node_attribute(self_id, touched_field).unwrap();
         assert!(
             (after - (before + 0.15)).abs() < 1e-12,
@@ -1034,7 +1038,7 @@ fn correction_3_unknown_comparison_operator_is_a_lex_error_not_false() {
     let err = read("(~= agitation 0.5p)").unwrap_err();
     assert!(matches!(
         err.kind,
-        babylon_bsl::ReadErrorKind::Lex(babylon_bsl::LexCode::UnclassifiableToken)
+        babylon_bsl::reader::ReadErrorKind::Lex(babylon_bsl::reader::LexCode::UnclassifiableToken)
     ));
 }
 
@@ -1108,7 +1112,7 @@ fn eval_cond(source: &str, env_pairs: &[(&str, Value)]) -> bool {
     }
 }
 
-fn eval_cond_err(source: &str, env_pairs: &[(&str, Value)]) -> babylon_bsl::EvalError {
+fn eval_cond_err(source: &str, env_pairs: &[(&str, Value)]) -> babylon_bsl::evaluator::EvalError {
     let costs = IntrinsicCosts::default();
     let env = EvalEnv {
         bindings: owned(env_pairs.to_vec()),

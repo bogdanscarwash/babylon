@@ -144,7 +144,7 @@ depends = ["check:static", "check:governance-mass", "check:adr-catalog", "test:u
 
 [tasks."check:static"]
 description = "Hosted Fast Gate leaves, reusable locally without source rewrites or reference data"
-depends = ["check:hygiene", "check:dynamic-linking-fence", "check:h3-readers", "check:rust-persistence-cutover", "lint:check", "format:check", "typecheck", "check:lock"]
+depends = ["check:hygiene", "check:dynamic-linking-fence", "lint:check", "format:check", "typecheck", "check:lock"]
 
 [tasks."check:full-local"]
 description = "Canonical check plus workstation data-path and reference-catalog probes"
@@ -197,14 +197,6 @@ arg "[base]" help="Base ref to diff from" default="origin/dev"
 arg "[head]" help="Head ref" default="HEAD"
 '''
 run = "uv run python tools/generate_pr_body.py --base ${usage_base} --head ${usage_head}"
-
-[tasks."check:h3-readers"]
-description = "PER-280 canonical H3 reader inventory: schema-qualified BIGINT reads only"
-run = "uv run --frozen python tools/verify_h3_reader_cutover_v1.py"
-
-[tasks."check:rust-persistence-cutover"]
-description = "PER-311 active PostgreSQL 17 persistence V2 authority, envelope, and receipt contract"
-run = "uv run --frozen python tools/verify_rust_persistence_cutover_v2.py"
 
 [tasks.cap]
 description = "Run a command under a HARD memory+CPU cgroup cap (can't freeze the machine). Use for any heavy run: mise run cap -- mise run test:unit"

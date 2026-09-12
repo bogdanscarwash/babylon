@@ -1,8 +1,8 @@
 //! Admission checks consume captured authority only, including on restart.
 use super::{
-    MichiganDeliveryPresetV1, MichiganInterventionV2, MichiganMaterialCorridorV1,
-    MichiganMaterialErrorV1, MichiganMaterialGoodV1, MichiganMaterialPathV2,
-    MichiganMaterialSiteV1, MichiganNormalizedContentV2, MichiganOwnerSourceV2, MichiganSiteRoleV2,
+    MichiganDeliveryPreset, MichiganIntervention, MichiganMaterialCorridor, MichiganMaterialError,
+    MichiganMaterialGood, MichiganMaterialPath, MichiganMaterialSite, MichiganNormalizedContent,
+    MichiganOwnerSource, MichiganSiteRole,
 };
 use std::collections::{BTreeMap, BTreeSet};
 mod physical;
@@ -27,8 +27,8 @@ fn unique<'a>(mut values: impl Iterator<Item = &'a str>) -> bool {
     values.all(|v| key(v) && seen.insert(v))
 }
 pub(super) fn canonicalize(
-    c: &mut MichiganNormalizedContentV2,
-    interventions: &mut [MichiganInterventionV2],
+    c: &mut MichiganNormalizedContent,
+    interventions: &mut [MichiganIntervention],
 ) {
     c.sites.sort_by(|a, b| a.key.cmp(&b.key));
     c.goods.sort_by(|a, b| a.key.cmp(&b.key));
@@ -72,13 +72,13 @@ pub(super) fn canonicalize(
         }
     }
 }
-fn path(path: &mut MichiganMaterialPathV2) {
-    if let MichiganMaterialPathV2::Routed { capacity_keys, .. } = path {
+fn path(path: &mut MichiganMaterialPath) {
+    if let MichiganMaterialPath::Routed { capacity_keys, .. } = path {
         capacity_keys.sort();
     }
 }
-pub(super) fn content(c: &MichiganNormalizedContentV2) -> Result<(), MichiganMaterialErrorV1> {
-    use MichiganMaterialErrorV1::{ArtifactShape, ContentReference, ContentValue};
+pub(super) fn content(c: &MichiganNormalizedContent) -> Result<(), MichiganMaterialError> {
+    use MichiganMaterialError::{ArtifactShape, ContentReference, ContentValue};
     if c.schema != "MichiganNormalizedContentV2"
         || c.evidence_class != "Designed"
         || c.tick_duration_days != babylon_kernel::clock::DAYS_PER_TICK
@@ -127,8 +127,8 @@ pub(super) fn content(c: &MichiganNormalizedContentV2) -> Result<(), MichiganMat
     physical::validate(c)?;
     Ok(())
 }
-fn workforce(c: &MichiganNormalizedContentV2) -> Result<(), MichiganMaterialErrorV1> {
-    use MichiganMaterialErrorV1::ContentValue;
+fn workforce(c: &MichiganNormalizedContent) -> Result<(), MichiganMaterialError> {
+    use MichiganMaterialError::ContentValue;
     let d = &c.staffing;
     if d.composition_id != "g4-workforce-staffing"
         || d.role != "Mechanic"
@@ -165,7 +165,7 @@ fn workforce(c: &MichiganNormalizedContentV2) -> Result<(), MichiganMaterialErro
             .collect();
         if pool.process_keys.iter().collect::<BTreeSet<_>>() != expected
             || pool.process_keys.len() != expected.len()
-            || pool.merchant_handling != (site.role != MichiganSiteRoleV2::Production)
+            || pool.merchant_handling != (site.role != MichiganSiteRole::Production)
             || (expected.is_empty() && !pool.merchant_handling)
         {
             return Err(ContentValue);
@@ -186,12 +186,12 @@ fn workforce(c: &MichiganNormalizedContentV2) -> Result<(), MichiganMaterialErro
     }
     Ok(())
 }
-fn merchants(c: &MichiganNormalizedContentV2) -> Result<(), MichiganMaterialErrorV1> {
-    use MichiganMaterialErrorV1::ContentReference;
+fn merchants(c: &MichiganNormalizedContent) -> Result<(), MichiganMaterialError> {
+    use MichiganMaterialError::ContentReference;
     let expected: BTreeSet<_> = c
         .sites
         .iter()
-        .filter(|s| s.role != MichiganSiteRoleV2::Production)
+        .filter(|s| s.role != MichiganSiteRole::Production)
         .map(|s| s.key.as_str())
         .collect();
     if c.merchants
@@ -234,7 +234,7 @@ fn merchants(c: &MichiganNormalizedContentV2) -> Result<(), MichiganMaterialErro
         }
     }
     for route in &c.routes {
-        if let MichiganMaterialPathV2::Routed {
+        if let MichiganMaterialPath::Routed {
             capacity_keys: keys,
             ..
         } = &route.path
@@ -250,7 +250,7 @@ fn merchants(c: &MichiganNormalizedContentV2) -> Result<(), MichiganMaterialErro
             || !c.sites.iter().any(|s| {
                 s.key == demand.retailer_site_key
                     && s.county_geoid == demand.county_geoid
-                    && s.role == MichiganSiteRoleV2::Retail
+                    && s.role == MichiganSiteRole::Retail
             })
         {
             return Err(ContentReference);
@@ -259,10 +259,10 @@ fn merchants(c: &MichiganNormalizedContentV2) -> Result<(), MichiganMaterialErro
     Ok(())
 }
 pub(super) fn interventions(
-    c: &MichiganNormalizedContentV2,
-    base: MichiganDeliveryPresetV1,
-    rows: &[MichiganInterventionV2],
-) -> Result<(), MichiganMaterialErrorV1> {
+    c: &MichiganNormalizedContent,
+    base: MichiganDeliveryPreset,
+    rows: &[MichiganIntervention],
+) -> Result<(), MichiganMaterialError> {
     let mut seen = BTreeSet::new();
     for row in rows {
         if row.preset == base
@@ -270,7 +270,7 @@ pub(super) fn interventions(
             || !unique(row.capacities.iter().map(|r| r.capacity_key.as_str()))
             || !unique(row.routes.iter().map(|r| r.route_key.as_str()))
         {
-            return Err(MichiganMaterialErrorV1::Preset);
+            return Err(MichiganMaterialError::Preset);
         }
         let mut keys = BTreeSet::new();
         if row
@@ -278,7 +278,7 @@ pub(super) fn interventions(
             .iter()
             .any(|r| !keys.insert((&r.process_key, &r.good_key)))
         {
-            return Err(MichiganMaterialErrorV1::Preset);
+            return Err(MichiganMaterialError::Preset);
         }
         let mut modified = c.clone();
         apply(&mut modified, row)?;
@@ -287,10 +287,10 @@ pub(super) fn interventions(
     Ok(())
 }
 pub(super) fn apply(
-    c: &mut MichiganNormalizedContentV2,
-    row: &MichiganInterventionV2,
-) -> Result<(), MichiganMaterialErrorV1> {
-    use MichiganMaterialErrorV1::ContentReference;
+    c: &mut MichiganNormalizedContent,
+    row: &MichiganIntervention,
+) -> Result<(), MichiganMaterialError> {
+    use MichiganMaterialError::ContentReference;
     for item in &row.capacities {
         c.corridors
             .iter_mut()
@@ -320,8 +320,8 @@ pub(super) fn apply(
     Ok(())
 }
 
-fn source_authority(c: &MichiganNormalizedContentV2) -> Result<(), MichiganMaterialErrorV1> {
-    use MichiganMaterialErrorV1::SourceValue;
+fn source_authority(c: &MichiganNormalizedContent) -> Result<(), MichiganMaterialError> {
+    use MichiganMaterialError::SourceValue;
     let owners: BTreeMap<_, _> = c
         .owners
         .iter()
@@ -373,10 +373,10 @@ fn source_authority(c: &MichiganNormalizedContentV2) -> Result<(), MichiganMater
 }
 
 fn industry_authority(
-    c: &MichiganNormalizedContentV2,
-    owners: &BTreeMap<(&str, &str), &MichiganOwnerSourceV2>,
-) -> Result<(), MichiganMaterialErrorV1> {
-    use MichiganMaterialErrorV1::SourceValue;
+    c: &MichiganNormalizedContent,
+    owners: &BTreeMap<(&str, &str), &MichiganOwnerSource>,
+) -> Result<(), MichiganMaterialError> {
+    use MichiganMaterialError::SourceValue;
     let mut seen_industry = BTreeSet::new();
     for row in &c.industry {
         let metrics = [
@@ -416,16 +416,16 @@ fn industry_authority(
 }
 
 fn production_ceilings<'a>(
-    c: &'a MichiganNormalizedContentV2,
-    sites: &BTreeMap<&str, &MichiganMaterialSiteV1>,
-    goods: &BTreeMap<&str, &MichiganMaterialGoodV1>,
+    c: &'a MichiganNormalizedContent,
+    sites: &BTreeMap<&str, &MichiganMaterialSite>,
+    goods: &BTreeMap<&str, &MichiganMaterialGood>,
     ceilings: &mut BTreeMap<(&'a str, &'a str), u64>,
-) -> Result<(), MichiganMaterialErrorV1> {
-    use MichiganMaterialErrorV1::{ContentReference, ContentValue, SourceValue};
+) -> Result<(), MichiganMaterialError> {
+    use MichiganMaterialError::{ContentReference, ContentValue, SourceValue};
     // Bound all possible additions independently of allocation.
     for p in &c.processes {
         let site = sites.get(p.site_key.as_str()).ok_or(ContentReference)?;
-        if site.role != MichiganSiteRoleV2::Production
+        if site.role != MichiganSiteRole::Production
             || p.inputs.is_empty()
             || p.inputs.len() > 16
             || !unique(p.inputs.iter().map(|i| i.good_key.as_str()))
@@ -478,13 +478,13 @@ fn production_ceilings<'a>(
 }
 
 fn route_ceilings<'a>(
-    c: &'a MichiganNormalizedContentV2,
-    sites: &BTreeMap<&str, &MichiganMaterialSiteV1>,
-    goods: &BTreeMap<&str, &MichiganMaterialGoodV1>,
-    corridors: &BTreeMap<&str, &MichiganMaterialCorridorV1>,
+    c: &'a MichiganNormalizedContent,
+    sites: &BTreeMap<&str, &MichiganMaterialSite>,
+    goods: &BTreeMap<&str, &MichiganMaterialGood>,
+    corridors: &BTreeMap<&str, &MichiganMaterialCorridor>,
     ceilings: &mut BTreeMap<(&'a str, &'a str), u64>,
-) -> Result<(), MichiganMaterialErrorV1> {
-    use MichiganMaterialErrorV1::{ContentReference, ContentValue};
+) -> Result<(), MichiganMaterialError> {
+    use MichiganMaterialError::{ContentReference, ContentValue};
     for r in &c.routes {
         let supplier = sites
             .get(r.supplier_site_key.as_str())
@@ -503,12 +503,12 @@ fn route_ceilings<'a>(
             .or_default();
         *n = n.checked_add(r.ordered_quantity).ok_or(ContentValue)?;
         match &r.path {
-            MichiganMaterialPathV2::Local => {
+            MichiganMaterialPath::Local => {
                 if supplier.county_geoid != buyer.county_geoid {
                     return Err(ContentValue);
                 }
             }
-            MichiganMaterialPathV2::Routed {
+            MichiganMaterialPath::Routed {
                 travel_periods,
                 capacity_keys,
                 ..

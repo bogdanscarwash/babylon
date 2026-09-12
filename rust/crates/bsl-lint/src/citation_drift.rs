@@ -32,7 +32,7 @@
 
 use crate::finding::{Finding, Severity};
 use crate::repo::Repo;
-use babylon_bsl::{read_all, Atom, SExpr};
+use babylon_bsl::{reader::read_all, reader::Atom, reader::SExpr};
 use regex::Regex;
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;

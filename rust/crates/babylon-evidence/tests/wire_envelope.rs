@@ -4,7 +4,7 @@ use babylon_evidence::{
     canonical_envelope, decode_envelope, record_digest, Digest32, PayloadCursor, PayloadEncoder,
     RecordDigest, SfsWireError, T3Record,
 };
-use babylon_kernel::sha256_of;
+use babylon_kernel::content_digest::sha256_of;
 
 #[derive(Debug, PartialEq, Eq)]
 struct OneByte(u8);

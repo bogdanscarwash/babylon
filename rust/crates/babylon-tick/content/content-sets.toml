@@ -434,7 +434,7 @@ prelude   = []
 rules     = ["rules/struggle-spark.bsl"]
 consumers = [
     "rust/crates/babylon-tick/src/lib.rs",
-    "rust/crates/babylon-tick/src/session.rs",
+    "rust/crates/babylon-tick/src/diagnostic.rs",
     "rust/crates/babylon-tick/tests/struggle_spark_conformance.rs",
 ]
 
@@ -475,7 +475,7 @@ prelude   = []
 rules     = ["rules/lifecycle.bsl", "rules/vitality.bsl"]
 consumers = [
     "rust/crates/babylon-tick/src/replay_identity.rs",
-    "rust/crates/babylon-tick/src/session.rs",
+    "rust/crates/babylon-tick/src/diagnostic.rs",
     "rust/crates/babylon-tick/tests/multi_rule_conformance.rs",
 ]
 

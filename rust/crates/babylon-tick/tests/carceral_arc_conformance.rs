@@ -7,7 +7,7 @@
 //! `content/rules/decomposition.bsl` (Pack A, which declares the ONE
 //! `floor` intrinsic this arc needs) and `content/rules/control-ratio.bsl`
 //! (Pack B, which declares none) CONCATENATED and loaded together against
-//! ONE scenario, over a multi-tick `TickSession`.
+//! ONE scenario, over a multi-tick `RuleDiagnosticSession`.
 //!
 //! # Derived tick schedule — verified against the frozen mirror, not
 //! trusted from the plan's own illustrative numbers (this task's own
@@ -70,7 +70,7 @@
 //! ```
 //!
 //! Both the hand-derived arithmetic and the frozen mirror agree exactly —
-//! the ported estate's own `TickSession` run below is measured
+//! the ported estate's own `RuleDiagnosticSession` run below is measured
 //! independently against this (ADR183: the mirror is the STRUCTURE/
 //! ORDERING oracle, never a byte oracle; every numeric assertion below is
 //! measured from THIS engine's own run).
@@ -88,12 +88,12 @@ use babylon_bsl::evaluator::Value;
 use babylon_bsl::structural_verbs::CollectingSink;
 use babylon_graph::hypergraph_store::HypergraphStore;
 use babylon_graph::substrate::{GraphSubstrate, NodeId};
-use babylon_kernel::SessionId;
-use babylon_tick::TickSession;
+use babylon_kernel::replay::ReplaySessionId;
+use babylon_tick::diagnostic::RuleDiagnosticSession;
 
 /// The one-shot driver identity (D179): deterministic, never a UUID or clock.
-fn run_once_session() -> SessionId {
-    SessionId::new("run-once").expect("literal is non-empty")
+fn run_once_session() -> ReplaySessionId {
+    ReplaySessionId::try_from("run-once").expect("literal is non-empty")
 }
 
 const ARC_SCENARIO: &str = include_str!("../content/scenarios/carceral-arc-conformance.bscn");
@@ -109,7 +109,7 @@ const LUMPEN: NodeId = NodeId(3);
 const BOURGEOIS: NodeId = NodeId(4);
 const CARCERAL_REGISTER: NodeId = NodeId(5);
 
-/// Both packs, concatenated — `TickSession::new`/`prepare_rules` resolves
+/// Both packs, concatenated — `RuleDiagnosticSession::new`/`prepare_rules` resolves
 /// the governed phase order regardless of concatenation order, so this
 /// order is arbitrary, matching
 /// `us_counties_lifecycle_demo_hashes_are_pinned`'s own `format!` idiom
@@ -135,21 +135,23 @@ type ArcEvent = (i64, String, Vec<(String, Value)>);
 
 /// `run_arc`'s own result: the finished session (for post-session state
 /// assertions) plus every event the whole run produced, in order.
-type ArcRun = (TickSession<HypergraphStore>, Vec<ArcEvent>);
+type ArcRun = (RuleDiagnosticSession<HypergraphStore>, Vec<ArcEvent>);
 
 /// One run of the whole arc: every event, tagged with the tick it fired on,
-/// in the order `TickSession::advance` produced them. A fresh
+/// in the order `RuleDiagnosticSession::advance` produced them. A fresh
 /// `CollectingSink` per tick (the `decomposition_conformance.rs`
 /// `the_delay_path_emits_the_warning_at_tick_1_and_decomposes_at_tick_53`
 /// idiom) is what makes the per-tick tagging possible — `advance` accepts
 /// whatever sink it is given and does not clear it itself.
 fn run_arc() -> ArcRun {
     let rule_src = joint_rule_src();
-    let mut session = TickSession::new(
+    let mut session = RuleDiagnosticSession::new(
         ARC_SCENARIO,
+        None,
         &rule_src,
         HypergraphStore::new(),
         run_once_session(),
+        babylon_kernel::replay::ReplaySeed::new(0),
     )
     .expect("both packs must load together against the arc scenario");
     let mut all_events = Vec::new();
@@ -500,11 +502,13 @@ const BOR_CARCERAL_REGISTER: NodeId = NodeId(2);
 #[test]
 fn governed_phase_order_exposes_decomposition_to_control_ratio_in_the_same_tick() {
     let rule_src = joint_rule_src();
-    let mut session = TickSession::new(
+    let mut session = RuleDiagnosticSession::new(
         BYTE_ORDER_SCENARIO,
+        None,
         &rule_src,
         HypergraphStore::new(),
         run_once_session(),
+        babylon_kernel::replay::ReplaySeed::new(0),
     )
     .expect("the byte-order fixture must load against both packs");
 

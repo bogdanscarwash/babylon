@@ -54,7 +54,7 @@ and evidence class. Built-in declarations must match
 
 Mechanics have typed effects. Recognizers, external events, and intents are exact-allowlist and default-deny. Restricted production footprints must equal their unique allowance rows, so CI rejects dead permissions. Executable shocks and intents do not exist.
 
-Same-rank rules compose sequentially. `TickSession` publishes graph, events, identity-free event-then-write `AuditReceipt` rows,
+Same-rank rules compose sequentially. `MaterialReplaySession` publishes material state, graph, events, and event-then-write `AuditReceipt` rows,
 completed time, and `NominalWorldHash` only after the detached tick succeeds. `GraphStateHash` stays graph-only.
 The Bevy viewer shows the world hash.
 

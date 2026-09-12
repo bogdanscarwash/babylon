@@ -3,16 +3,15 @@
 use super::DisposableTarget;
 use babylon_graph::hypergraph_store::HypergraphStore;
 use babylon_persistence::{
-    material_runtime::{
-        DurableMaterialRuntimeV3, MaterialRuntimeErrorV3, MaterialRuntimeFoundationV2,
-    },
-    michigan_content::MichiganContentPresetV1,
-    michigan_dynamic_hex_foundation_v1, CampaignId, FoundationContentBundleV2,
+    identity::CampaignId,
+    material_runtime::{DurableMaterialRuntime, MaterialRuntimeError, MaterialRuntimeFoundation},
+    michigan_content::MichiganContentPreset,
+    michigan_dynamic_hex_foundation, FoundationContentBundle,
 };
 use babylon_tick::{
-    material_replay::{MaterialBaseErrorV1, MaterialReplayErrorV3},
+    material_replay::{MaterialBaseError, MaterialReplayError},
     material_staffing::EMPLOYED_POPULATION,
-    material_state::MaterialStateV1,
+    material_state::MaterialState,
     replay_session::{ReplayTickError, ReplayTickSession},
 };
 use postgres::NoTls;
@@ -30,8 +29,8 @@ const FOREIGN_WRITER: &str = r#"
   (effects (update-node self social-class/employed-population (set 0))))
 "#;
 
-fn captured_foreign_writer() -> MaterialRuntimeFoundationV2 {
-    let original = MichiganContentPresetV1::FourWeekStandardV7
+fn captured_foreign_writer() -> MaterialRuntimeFoundation {
+    let original = MichiganContentPreset::FourWeekStandard
         .create_foundation(&crate::test_support::catalog())
         .unwrap();
     let foundation = original.graph_foundation();
@@ -40,7 +39,7 @@ fn captured_foreign_writer() -> MaterialRuntimeFoundationV2 {
     let prelude = content
         .prelude_source_bytes()
         .map(|bytes| std::str::from_utf8(bytes).unwrap());
-    let bundle = FoundationContentBundleV2::try_new(
+    let bundle = FoundationContentBundle::try_new(
         scenario,
         prelude,
         FOREIGN_WRITER,
@@ -57,10 +56,10 @@ fn captured_foreign_writer() -> MaterialRuntimeFoundationV2 {
         foundation.rng_seed(),
         bundle.content_digest().clone(),
         bundle.reference_digest(),
-        MaterialStateV1::try_new(michigan_dynamic_hex_foundation_v1().unwrap()).unwrap(),
+        MaterialState::try_new(michigan_dynamic_hex_foundation().unwrap()).unwrap(),
     )
     .expect("the ordinary BSL loader admits this Mechanic field write");
-    MaterialRuntimeFoundationV2::capture_v2(
+    MaterialRuntimeFoundation::capture(
         graph,
         bundle,
         original.initial_register().state().clone(),
@@ -75,11 +74,9 @@ fn campaign_row_counts(client: &mut postgres::Client, campaign: CampaignId) -> V
             "SELECT 'state campaign', count(*) FROM babylon_state.campaign WHERE campaign_id=$1 \
              UNION ALL SELECT 'catalog campaign', count(*) FROM babylon_meta.campaign WHERE campaign_id=$1 \
              UNION ALL SELECT 'graph foundation', count(*) FROM babylon_state.campaign_foundation WHERE campaign_id=$1 \
-             UNION ALL SELECT 'foundation layout', count(*) FROM babylon_state.campaign_foundation_content_layout_v2 WHERE campaign_id=$1 \
              UNION ALL SELECT 'material foundation', count(*) FROM babylon_state.material_campaign_foundation_v2 WHERE campaign_id=$1 \
              UNION ALL SELECT 'county map', count(*) FROM babylon_meta.territory_county_map_v1 WHERE campaign_id=$1 \
              UNION ALL SELECT 'knowledge grants', count(*) FROM babylon_meta.archive_knowledge_grant_v1 WHERE campaign_id=$1 \
-             UNION ALL SELECT 'Archive enrollment', count(*) FROM babylon_meta.archive_retention_v2 WHERE campaign_id=$1 \
              UNION ALL SELECT 'commit marker', count(*) FROM babylon_state.tick_commit WHERE campaign_id=$1",
             &[campaign.as_uuid()],
         )
@@ -91,18 +88,18 @@ fn campaign_row_counts(client: &mut postgres::Client, campaign: CampaignId) -> V
 
 #[test]
 #[ignore = "requires the existing disposable PostgreSQL harness; independent clone ownership"]
-fn live_staffing_owner_refusal_rolls_back_foundation_grants_and_enrollment() {
+fn live_staffing_owner_refusal_rolls_back_foundation_and_grants() {
     let target = DisposableTarget::create();
     let campaign = CampaignId::from_uuid(Uuid::from_u128(32_001));
     let invalid = captured_foreign_writer();
-    let error = DurableMaterialRuntimeV3::create(&target.writer, campaign, invalid)
+    let error = DurableMaterialRuntime::create(&target.writer, campaign, invalid)
         .err()
         .expect("the foreign staffing writer must refuse runtime creation");
     assert!(
         matches!(
             &error,
-            MaterialRuntimeErrorV3::Replay(MaterialReplayErrorV3::Graph(
-                ReplayTickError::MaterialBase(MaterialBaseErrorV1::StaffingFieldOwner {
+            MaterialRuntimeError::Replay(MaterialReplayError::Graph(
+                ReplayTickError::MaterialBase(MaterialBaseError::StaffingFieldOwner {
                     rule_id,
                     field,
                 })
@@ -118,14 +115,14 @@ fn live_staffing_owner_refusal_rolls_back_foundation_grants_and_enrollment() {
     );
 
     // A valid retry uses the same UUID, proving the refused attempt retained no owner.
-    let valid = MichiganContentPresetV1::FourWeekStandardV7
+    let valid = MichiganContentPreset::FourWeekStandard
         .create_foundation(&crate::test_support::catalog())
         .unwrap();
     let digest = valid.digest();
-    let runtime = DurableMaterialRuntimeV3::create(&target.writer, campaign, valid).unwrap();
+    let runtime = DurableMaterialRuntime::create(&target.writer, campaign, valid).unwrap();
     assert_eq!(runtime.session().completed_tick(), 0);
     assert_eq!(
-        DurableMaterialRuntimeV3::open(&target.writer, campaign, digest)
+        DurableMaterialRuntime::open(&target.writer, campaign, digest)
             .unwrap()
             .session()
             .completed_tick(),

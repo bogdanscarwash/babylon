@@ -54,7 +54,7 @@
 //! `"INFILTRATION"` means.
 
 use crate::substrate::{GraphError, NodeId};
-use babylon_kernel::Currency;
+use babylon_kernel::currency::Currency;
 use std::cmp::Ordering;
 use std::collections::BTreeMap;
 
@@ -386,7 +386,7 @@ impl Capacity {
 mod tests {
     use super::{Candidate, Capacity};
     use crate::substrate::NodeId;
-    use babylon_kernel::Currency;
+    use babylon_kernel::currency::Currency;
 
     /// The organization whose budget every test below spends.
     const ACTOR: NodeId = NodeId(7);

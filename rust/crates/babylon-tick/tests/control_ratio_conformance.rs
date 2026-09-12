@@ -311,7 +311,7 @@
 //! against all six fixtures (the four `.bscn` siblings plus the two inline
 //! ad-hoc worlds this task adds — `c04_at_exactly_the_threshold_routes_to_
 //! revolution`'s and `the_avg_organization_is_population_weighted_not_a_
-//! bare_mean`'s own scenarios — plus the terminal-delay `TickSession`
+//! bare_mean`'s own scenarios — plus the terminal-delay `RuleDiagnosticSession`
 //! fixture).
 //!
 //! ## Mutation evidence
@@ -323,7 +323,7 @@
 //! `0.5 < 0.5` is false), so `outcome` reads back as the ZERO default
 //! (`left: 0, right: 1`) rather than the frozen `>=`'s REVOLUTION — every
 //! other test stays green (exercised directly against this file's own
-//! `run()`/`TickSession` harness, restored byte-identical afterward, `git
+//! `run()`/`RuleDiagnosticSession` harness, restored byte-identical afterward, `git
 //! diff` clean before commit). Swapping the two outcome codes (`(outcome
 //! 1)` <-> `(outcome 0)` across the two guard bodies) flips FOUR tests red
 //! simultaneously, not merely the two routing tests: `c04_routes_to_
@@ -404,12 +404,12 @@ use babylon_bsl::scenario::load_scenario;
 use babylon_bsl::structural_verbs::CollectingSink;
 use babylon_graph::hypergraph_store::HypergraphStore;
 use babylon_graph::substrate::{GraphSubstrate, NodeId};
-use babylon_kernel::SessionId;
-use babylon_tick::{run_once_into, TickSession};
+use babylon_kernel::replay::ReplaySessionId;
+use babylon_tick::{diagnostic::RuleDiagnosticSession, run_once_into};
 
 /// The one-shot driver identity (D179): deterministic, never a UUID or clock.
-fn run_once_session() -> SessionId {
-    SessionId::new("run-once").expect("literal is non-empty")
+fn run_once_session() -> ReplaySessionId {
+    ReplaySessionId::try_from("run-once").expect("literal is non-empty")
 }
 
 const RULE: &str = include_str!("../content/rules/control-ratio.bsl");
@@ -1162,18 +1162,20 @@ fn c03_omits_the_ratio_keys_when_there_are_no_enforcers() {
 }
 
 /// The latch (`_control_crisis_emitted`, `control_ratio.py:154,158`): a
-/// two-tick `TickSession` run over the primary world (which stays
+/// two-tick `RuleDiagnosticSession` run over the primary world (which stays
 /// over-capacity at tick 2 — nothing in this pack ever reduces the
 /// published census back down) emits exactly ONE `CONTROL_RATIO_CRISIS`
 /// across both ticks, never a second one at tick 2 once `control-
 /// crisis-emitted` is latched to 1.
 #[test]
 fn c03_latches_once() {
-    let mut session = TickSession::new(
+    let mut session = RuleDiagnosticSession::new(
         PRIMARY_SCENARIO,
+        None,
         RULE,
         HypergraphStore::new(),
         run_once_session(),
+        babylon_kernel::replay::ReplaySeed::new(0),
     )
     .expect("the pack must load into a session");
     let mut sink = CollectingSink::default();
@@ -1630,11 +1632,13 @@ fn c04_respects_the_terminal_delay() {
     (institution/prisoner-org-weighted 0)))
 "#;
     const TD_CARCERAL_REGISTER: NodeId = NodeId(3);
-    let mut session = TickSession::new(
+    let mut session = RuleDiagnosticSession::new(
         TERMINAL_DELAY_SCENARIO,
+        None,
         RULE,
         HypergraphStore::new(),
         run_once_session(),
+        babylon_kernel::replay::ReplaySeed::new(0),
     )
     .expect("the pack must load into a session");
 
@@ -1703,18 +1707,20 @@ fn c04_respects_the_terminal_delay() {
 }
 
 /// The latch (`_terminal_decision_emitted`, `control_ratio.py:124-125,173`):
-/// a two-tick `TickSession` run over the primary world (which stays
+/// a two-tick `RuleDiagnosticSession` run over the primary world (which stays
 /// over-capacity and post-crisis at tick 2 — nothing in this pack ever
 /// reduces the census or resets the latches) emits exactly ONE
 /// `TERMINAL_DECISION` across both ticks, never a second one at tick 2 once
 /// `terminal-decision-emitted` is latched to 1.
 #[test]
 fn c04_emits_once() {
-    let mut session = TickSession::new(
+    let mut session = RuleDiagnosticSession::new(
         PRIMARY_SCENARIO,
+        None,
         RULE,
         HypergraphStore::new(),
         run_once_session(),
+        babylon_kernel::replay::ReplaySeed::new(0),
     )
     .expect("the pack must load into a session");
     let mut sink = CollectingSink::default();

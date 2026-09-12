@@ -1,13 +1,13 @@
 //! Exact historical staffing and complete-envelope refusal in an owned clone.
 
 use super::{
-    advance_material_period, assert_known_material_absence, install_observer_economy_schema_v1,
-    install_reader_role_v1, CampaignId, Config, DisposableTarget, DurableMaterialRuntimeV3,
-    MichiganContentPresetV1, NoTls, ObserverEconomyErrorV1, ObserverEconomyReaderV1,
-    ObserverVisibilityV1, Uuid,
+    advance_material_period, assert_known_material_absence, install_reader_role,
+    provision_observer_role, CampaignId, Config, DisposableTarget, DurableMaterialRuntime,
+    MichiganContentPreset, NoTls, ObserverEconomyError, ObserverEconomyReader, ObserverVisibility,
+    Uuid,
 };
-use babylon_graph::stable_element::StableElementKeyV1;
-use babylon_persistence::ObserverEconomySnapshotV1;
+use babylon_graph::stable_element::StableElementKey;
+use babylon_persistence::observer_reader::ObserverEconomySnapshot;
 use postgres::{
     types::{FromSqlOwned, ToSql},
     Client,
@@ -16,9 +16,9 @@ use postgres::{
 struct Fixture {
     target: DisposableTarget,
     campaign: CampaignId,
-    runtime: DurableMaterialRuntimeV3,
-    observer: ObserverEconomyReaderV1,
-    preview: ObserverEconomyReaderV1,
+    runtime: DurableMaterialRuntime,
+    observer: ObserverEconomyReader,
+    preview: ObserverEconomyReader,
     observer_config: Config,
     foundation_digest: [u8; 32],
 }
@@ -27,21 +27,20 @@ impl Fixture {
     fn new() -> Self {
         let mut target = DisposableTarget::create();
         let campaign = CampaignId::from_uuid(Uuid::from_u128(41_101));
-        let foundation = MichiganContentPresetV1::FourWeekDelayedV7
+        let foundation = MichiganContentPreset::FourWeekDelayed
             .create_foundation(&crate::test_support::catalog())
             .unwrap();
         let foundation_digest = foundation.digest();
-        let runtime =
-            DurableMaterialRuntimeV3::create(&target.writer, campaign, foundation).unwrap();
-        install_reader_role_v1(&target.writer).unwrap();
-        install_observer_economy_schema_v1(&target.writer).unwrap();
+        let runtime = DurableMaterialRuntime::create(&target.writer, campaign, foundation).unwrap();
+        install_reader_role(&target.writer).unwrap();
+        provision_observer_role(&target.writer).unwrap();
         let observer_config = target.login("babylon_observer", "staffinghistory");
         let observer =
-            ObserverEconomyReaderV1::connect(&observer_config, ObserverVisibilityV1::FullObserver)
+            ObserverEconomyReader::connect(&observer_config, ObserverVisibility::FullObserver)
                 .unwrap();
-        let preview = ObserverEconomyReaderV1::connect(
+        let preview = ObserverEconomyReader::connect(
             &target.login("babylon_reader", "staffingpreview"),
-            ObserverVisibilityV1::KnownPreview,
+            ObserverVisibility::KnownPreview,
         )
         .unwrap();
         Self {
@@ -55,7 +54,7 @@ impl Fixture {
         }
     }
 
-    fn read(&self, tick: u64) -> ObserverEconomySnapshotV1 {
+    fn read(&self, tick: u64) -> ObserverEconomySnapshot {
         self.observer.snapshot(self.campaign, tick).unwrap()
     }
 
@@ -125,17 +124,15 @@ fn held_staffing_history_survives_advance_reopen_and_does_not_mutate_authority()
     fixture.advance_to(4);
     let committed = *fixture.runtime.tail().unwrap();
     let world = fixture.runtime.session().current_world_hash().unwrap();
-    fixture.runtime = DurableMaterialRuntimeV3::open(
+    fixture.runtime = DurableMaterialRuntime::open(
         &fixture.target.writer,
         fixture.campaign,
         fixture.foundation_digest,
     )
     .unwrap();
-    let reader = ObserverEconomyReaderV1::connect(
-        &fixture.observer_config,
-        ObserverVisibilityV1::FullObserver,
-    )
-    .unwrap();
+    let reader =
+        ObserverEconomyReader::connect(&fixture.observer_config, ObserverVisibility::FullObserver)
+            .unwrap();
     for tick in [4, 0, 2, 3, 2] {
         let snapshot = reader.snapshot(fixture.campaign, tick).unwrap();
         assert_eq!(snapshot.resolve_tick, tick);
@@ -151,7 +148,7 @@ fn held_staffing_history_survives_advance_reopen_and_does_not_mutate_authority()
             world
         );
     }
-    let reopened = DurableMaterialRuntimeV3::open(
+    let reopened = DurableMaterialRuntime::open(
         &fixture.target.writer,
         fixture.campaign,
         fixture.foundation_digest,
@@ -175,7 +172,7 @@ struct Fault {
 fn assert_fault<T: FromSqlOwned + ToSql + Sync + PartialEq + std::fmt::Debug>(
     fixture: &Fixture,
     writer: &mut Client,
-    healthy: &ObserverEconomySnapshotV1,
+    healthy: &ObserverEconomySnapshot,
     fault: Fault,
     change: impl FnOnce(&T) -> T,
 ) {
@@ -201,7 +198,7 @@ fn assert_fault<T: FromSqlOwned + ToSql + Sync + PartialEq + std::fmt::Debug>(
     assert_eq!(restored.len(), 1, "{fault:?}");
     assert_eq!(
         refusal,
-        Err(ObserverEconomyErrorV1::InvalidProjection),
+        Err(ObserverEconomyError::InvalidProjection),
         "{fault:?}"
     );
     assert_eq!(
@@ -220,7 +217,7 @@ fn flipped(bytes: &[u8]) -> Vec<u8> {
 fn assert_graph_and_state_faults(
     fixture: &Fixture,
     writer: &mut Client,
-    healthy: &ObserverEconomySnapshotV1,
+    healthy: &ObserverEconomySnapshot,
 ) {
     for tick in [2, 1] {
         assert_fault(
@@ -262,11 +259,7 @@ fn assert_graph_and_state_faults(
     );
 }
 
-fn assert_event_faults(
-    fixture: &Fixture,
-    writer: &mut Client,
-    healthy: &ObserverEconomySnapshotV1,
-) {
+fn assert_event_faults(fixture: &Fixture, writer: &mut Client, healthy: &ObserverEconomySnapshot) {
     assert_fault(
         fixture,
         writer,
@@ -290,15 +283,15 @@ fn assert_event_faults(
             tick: 2,
         },
         |bytes: &Vec<u8>| {
-            let StableElementKeyV1::Node {
+            let StableElementKey::Node {
                 scenario,
                 mut local_name,
-            } = StableElementKeyV1::from_canonical_bytes(bytes).unwrap()
+            } = StableElementKey::from_canonical_bytes(bytes).unwrap()
             else {
                 panic!("native staffing subject is a node");
             };
             local_name.push_str("-foreign");
-            StableElementKeyV1::Node {
+            StableElementKey::Node {
                 scenario,
                 local_name,
             }
@@ -321,7 +314,7 @@ fn assert_event_faults(
     swap_event_fields(writer, fixture.campaign);
     let refusal = fixture.observer.snapshot(fixture.campaign, 2);
     swap_event_fields(writer, fixture.campaign);
-    assert_eq!(refusal, Err(ObserverEconomyErrorV1::InvalidProjection));
+    assert_eq!(refusal, Err(ObserverEconomyError::InvalidProjection));
     assert_eq!(fixture.read(2), *healthy);
 }
 
@@ -342,11 +335,7 @@ fn swap_event_fields(writer: &mut Client, campaign: CampaignId) {
     tx.commit().unwrap();
 }
 
-fn assert_commit_faults(
-    fixture: &Fixture,
-    writer: &mut Client,
-    healthy: &ObserverEconomySnapshotV1,
-) {
+fn assert_commit_faults(fixture: &Fixture, writer: &mut Client, healthy: &ObserverEconomySnapshot) {
     for (relation, column, predicate) in [
         (
             "checkpoint_section_v1",
@@ -391,7 +380,7 @@ fn complete_marker_authentication_refuses_independent_staffing_and_auxiliary_row
         fixture.runtime.session().current_world_hash().unwrap(),
         world
     );
-    let reopened = DurableMaterialRuntimeV3::open(
+    let reopened = DurableMaterialRuntime::open(
         &fixture.target.writer,
         fixture.campaign,
         fixture.foundation_digest,

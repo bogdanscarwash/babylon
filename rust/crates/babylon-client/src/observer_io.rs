@@ -4,10 +4,12 @@ use std::io::{BufRead, Read, Write};
 use std::sync::{mpsc, Mutex};
 
 use babylon_persistence::{
-    ObserverEconomyReaderV1, ObserverEconomySnapshotV1, ObserverVisibilityV1,
-    RuntimeSessionPresetV3, RuntimeSessionRequestV3, RuntimeSessionResponseV3,
-    RuntimeSessionScopeV3, RuntimeSessionTailV3, RuntimeSessionTargetV3,
-    RUNTIME_SESSION_MAX_LINE_BYTES_V3, RUNTIME_SESSION_PROTOCOL_VERSION_V3,
+    observer_reader::ObserverEconomyReader, observer_reader::ObserverEconomySnapshot,
+    observer_reader::ObserverVisibility, runtime_session::RuntimeSessionPreset,
+    runtime_session::RuntimeSessionRequest, runtime_session::RuntimeSessionResponse,
+    runtime_session::RuntimeSessionScope, runtime_session::RuntimeSessionTail,
+    runtime_session::RuntimeSessionTarget, runtime_session::RUNTIME_SESSION_MAX_LINE_BYTES,
+    runtime_session::RUNTIME_SESSION_PROTOCOL_VERSION,
 };
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
@@ -40,8 +42,8 @@ pub enum ObserverSet {
 
 #[derive(Resource)]
 pub(crate) struct RuntimePipe {
-    requests: mpsc::SyncSender<RuntimeSessionRequestV3>,
-    responses: Mutex<mpsc::Receiver<Result<RuntimeSessionResponseV3, String>>>,
+    requests: mpsc::SyncSender<RuntimeSessionRequest>,
+    responses: Mutex<mpsc::Receiver<Result<RuntimeSessionResponse, String>>>,
 }
 
 #[cfg(test)]
@@ -60,7 +62,7 @@ impl RuntimePipe {
 struct PendingObservation(
     Option<(
         ObservationContext,
-        Task<Result<ObserverEconomySnapshotV1, String>>,
+        Task<Result<ObserverEconomySnapshot, String>>,
     )>,
 );
 
@@ -93,9 +95,9 @@ fn start_pipe(mut commands: Commands, mut state: ResMut<ObserverSession>) {
             return;
         }
     }
-    let (request_tx, request_rx) = mpsc::sync_channel::<RuntimeSessionRequestV3>(1);
+    let (request_tx, request_rx) = mpsc::sync_channel::<RuntimeSessionRequest>(1);
     let (response_tx, response_rx) =
-        mpsc::sync_channel::<Result<RuntimeSessionResponseV3, String>>(8);
+        mpsc::sync_channel::<Result<RuntimeSessionResponse, String>>(8);
     let errors = response_tx.clone();
     let writer = std::thread::Builder::new()
         .name("observer-control-writer".into())
@@ -105,7 +107,7 @@ fn start_pipe(mut commands: Commands, mut state: ResMut<ObserverSession>) {
                 let result = serde_json::to_vec(&request)
                     .map_err(|error| error.to_string())
                     .and_then(|mut bytes| {
-                        if bytes.len() >= RUNTIME_SESSION_MAX_LINE_BYTES_V3 {
+                        if bytes.len() >= RUNTIME_SESSION_MAX_LINE_BYTES {
                             return Err("Runtime request exceeds protocol bound".into());
                         }
                         bytes.push(b'\n');
@@ -131,7 +133,7 @@ fn start_pipe(mut commands: Commands, mut state: ResMut<ObserverSession>) {
             loop {
                 let mut line = Vec::new();
                 let result = (&mut input)
-                    .take((RUNTIME_SESSION_MAX_LINE_BYTES_V3 + 1) as u64)
+                    .take((RUNTIME_SESSION_MAX_LINE_BYTES + 1) as u64)
                     .read_until(b'\n', &mut line);
                 match result {
                     Ok(0) => {
@@ -141,9 +143,7 @@ fn start_pipe(mut commands: Commands, mut state: ResMut<ObserverSession>) {
                         ));
                         break;
                     }
-                    Ok(size)
-                        if size <= RUNTIME_SESSION_MAX_LINE_BYTES_V3 && line.ends_with(b"\n") =>
-                    {
+                    Ok(size) if size <= RUNTIME_SESSION_MAX_LINE_BYTES && line.ends_with(b"\n") => {
                         let response = serde_json::from_slice(&line)
                             .map_err(|error| format!("Invalid runtime response: {error}"));
                         if response_tx.send(response).is_err() {
@@ -176,14 +176,14 @@ fn send_advance(pipe: &RuntimePipe, state: &mut ObserverSession) {
     let Some(request_id) = state.begin_advance() else {
         return;
     };
-    let request = RuntimeSessionRequestV3::Advance {
-        protocol_version: RUNTIME_SESSION_PROTOCOL_VERSION_V3,
+    let request = RuntimeSessionRequest::Advance {
+        protocol_version: RUNTIME_SESSION_PROTOCOL_VERSION,
         scope: state
             .runtime_scope()
             .expect("admitted runtime scope")
             .clone(),
         request_id,
-        expected_tail: RuntimeSessionTailV3 {
+        expected_tail: RuntimeSessionTail {
             resolve_tick: state.durable_tick,
             tick_content_hash: state.content_hash.clone(),
         },
@@ -194,8 +194,8 @@ fn send_advance(pipe: &RuntimePipe, state: &mut ObserverSession) {
 }
 
 fn next_response(
-    receiver: &mpsc::Receiver<Result<RuntimeSessionResponseV3, String>>,
-) -> Result<Option<RuntimeSessionResponseV3>, String> {
+    receiver: &mpsc::Receiver<Result<RuntimeSessionResponse, String>>,
+) -> Result<Option<RuntimeSessionResponse>, String> {
     match receiver.try_recv() {
         Ok(response) => response.map(Some),
         Err(mpsc::TryRecvError::Disconnected) => {
@@ -278,41 +278,40 @@ fn receive(
     }
 }
 
-fn response_scope(response: &RuntimeSessionResponseV3) -> &RuntimeSessionScopeV3 {
+fn response_scope(response: &RuntimeSessionResponse) -> &RuntimeSessionScope {
     match response {
-        RuntimeSessionResponseV3::Hello { scope, .. }
-        | RuntimeSessionResponseV3::Switching { scope, .. }
-        | RuntimeSessionResponseV3::Ready { scope, .. }
-        | RuntimeSessionResponseV3::Committed { scope, .. }
-        | RuntimeSessionResponseV3::ArchiveProgress { scope, .. }
-        | RuntimeSessionResponseV3::Error { scope, .. }
-        | RuntimeSessionResponseV3::Stopped { scope, .. } => scope,
+        RuntimeSessionResponse::Hello { scope, .. }
+        | RuntimeSessionResponse::Switching { scope, .. }
+        | RuntimeSessionResponse::Ready { scope, .. }
+        | RuntimeSessionResponse::Committed { scope, .. }
+        | RuntimeSessionResponse::ArchiveProgress { scope, .. }
+        | RuntimeSessionResponse::Error { scope, .. }
+        | RuntimeSessionResponse::Stopped { scope, .. } => scope,
     }
 }
 
 fn admits_response_scope(
-    response: &RuntimeSessionResponseV3,
+    response: &RuntimeSessionResponse,
     state: &ObserverSession,
 ) -> Result<bool, String> {
     let scope = response_scope(response);
     if let Some(current) = state.runtime_scope() {
-        if scope.epoch < current.epoch
-            && !matches!(response, RuntimeSessionResponseV3::Hello { .. })
+        if scope.epoch < current.epoch && !matches!(response, RuntimeSessionResponse::Hello { .. })
         {
             log::debug!("Discarded an earlier runtime lifecycle response");
             return Ok(false);
         }
-        if !matches!(response, RuntimeSessionResponseV3::Switching { .. }) && scope != current {
+        if !matches!(response, RuntimeSessionResponse::Switching { .. }) && scope != current {
             return Err("Runtime response lifecycle identity mismatch".into());
         }
-    } else if !matches!(response, RuntimeSessionResponseV3::Hello { .. }) {
+    } else if !matches!(response, RuntimeSessionResponse::Hello { .. }) {
         return Err("Runtime did not begin with Hello".into());
     }
     Ok(true)
 }
 
 fn apply_response(
-    response: RuntimeSessionResponseV3,
+    response: RuntimeSessionResponse,
     state: &mut ObserverSession,
     refresh: &mut DossierRefresh,
     reset: &mut CampaignReset,
@@ -321,16 +320,16 @@ fn apply_response(
         return Ok(());
     }
     match response {
-        RuntimeSessionResponseV3::Hello {
+        RuntimeSessionResponse::Hello {
             protocol_version,
             scope,
         } => {
-            if protocol_version != RUNTIME_SESSION_PROTOCOL_VERSION_V3 {
+            if protocol_version != RUNTIME_SESSION_PROTOCOL_VERSION {
                 return Err("Runtime protocol version mismatch".into());
             }
             state.hello(scope)?;
         }
-        RuntimeSessionResponseV3::Switching {
+        RuntimeSessionResponse::Switching {
             request_id,
             previous_scope,
             scope,
@@ -339,7 +338,7 @@ fn apply_response(
             reset.clear(state);
             refresh.bump();
         }
-        RuntimeSessionResponseV3::Ready {
+        RuntimeSessionResponse::Ready {
             request_id,
             foundation_digest,
             tail,
@@ -359,7 +358,7 @@ fn apply_response(
                 }
             }
         }
-        RuntimeSessionResponseV3::Committed {
+        RuntimeSessionResponse::Committed {
             request_id, tail, ..
         } => {
             if !state.acknowledge(request_id, tail.resolve_tick, tail.tick_content_hash) {
@@ -367,7 +366,7 @@ fn apply_response(
             }
             refresh.bump();
         }
-        RuntimeSessionResponseV3::ArchiveProgress {
+        RuntimeSessionResponse::ArchiveProgress {
             durable_tick,
             verified_tick,
             ..
@@ -384,13 +383,14 @@ fn apply_response(
             }
             refresh.bump();
         }
-        RuntimeSessionResponseV3::Error {
+        RuntimeSessionResponse::Error {
             request_id,
             code,
             tail,
             ..
         } => {
-            let complete = code == babylon_persistence::RuntimeSessionErrorCodeV3::HorizonComplete
+            let complete = code
+                == babylon_persistence::runtime_session::RuntimeSessionErrorCode::HorizonComplete
                 && tail.as_ref().is_some_and(|tail| {
                     tail.resolve_tick == state.durable_tick
                         && tail.tick_content_hash == state.content_hash
@@ -403,7 +403,7 @@ fn apply_response(
                 state.complete();
             }
         }
-        RuntimeSessionResponseV3::Stopped { request_id, .. } => {
+        RuntimeSessionResponse::Stopped { request_id, .. } => {
             if !state.stopped(request_id) {
                 return Err("Unexpected shutdown acknowledgement; reopen the campaign.".into());
             }
@@ -523,10 +523,10 @@ fn apply_command(command: ObserverCommand, context: &mut CommandContext) {
             }
             state.pause_playback();
             let target = match command {
-                ObserverCommand::ReopenCampaign => RuntimeSessionTargetV3::Open {
+                ObserverCommand::ReopenCampaign => RuntimeSessionTarget::Open {
                     campaign_id: state.campaign.as_uuid().to_string(),
                 },
-                _ => RuntimeSessionTargetV3::New {
+                _ => RuntimeSessionTarget::New {
                     campaign_id: uuid::Uuid::new_v4().to_string(),
                     preset: campaign_preset(command),
                 },
@@ -539,25 +539,23 @@ fn apply_command(command: ObserverCommand, context: &mut CommandContext) {
     }
 }
 
-fn campaign_preset(command: ObserverCommand) -> RuntimeSessionPresetV3 {
+fn campaign_preset(command: ObserverCommand) -> RuntimeSessionPreset {
     match command {
-        ObserverCommand::NewStatewideBaselineCampaign => RuntimeSessionPresetV3::StatewideBaseline,
+        ObserverCommand::NewStatewideBaselineCampaign => RuntimeSessionPreset::StatewideBaseline,
         ObserverCommand::NewStatewideFreightConstraintCampaign => {
-            RuntimeSessionPresetV3::StatewideFreightConstraint
+            RuntimeSessionPreset::StatewideFreightConstraint
         }
         ObserverCommand::NewStatewidePackagingShortageCampaign => {
-            RuntimeSessionPresetV3::StatewidePackagingShortage
+            RuntimeSessionPreset::StatewidePackagingShortage
         }
-        ObserverCommand::NewStatewideBothCampaign => RuntimeSessionPresetV3::StatewideBoth,
+        ObserverCommand::NewStatewideBothCampaign => RuntimeSessionPreset::StatewideBoth,
 
-        ObserverCommand::NewSharedFreightAmpleCampaign => {
-            RuntimeSessionPresetV3::SharedFreightAmple
-        }
+        ObserverCommand::NewSharedFreightAmpleCampaign => RuntimeSessionPreset::SharedFreightAmple,
         ObserverCommand::NewSharedFreightConstrainedCampaign => {
-            RuntimeSessionPresetV3::SharedFreightConstrained
+            RuntimeSessionPreset::SharedFreightConstrained
         }
-        ObserverCommand::NewDelayedCampaign => RuntimeSessionPresetV3::Delayed,
-        _ => RuntimeSessionPresetV3::Standard,
+        ObserverCommand::NewDelayedCampaign => RuntimeSessionPreset::Delayed,
+        _ => RuntimeSessionPreset::Standard,
     }
 }
 
@@ -681,8 +679,8 @@ fn start_observation(
     let task = AsyncComputeTaskPool::get().spawn(async move {
         let started = std::time::Instant::now();
         let reader = match requested.perspective {
-            Perspective::FullObserver => ObserverEconomyReaderV1::from_observer_env(),
-            Perspective::PlayerKnowledge => ObserverEconomyReaderV1::from_known_env(),
+            Perspective::FullObserver => ObserverEconomyReader::from_observer_env(),
+            Perspective::PlayerKnowledge => ObserverEconomyReader::from_known_env(),
         }
         .map_err(|error| error.to_string())?;
         let result = reader
@@ -734,7 +732,7 @@ fn collect_observation(
 fn install_observation(
     state: &mut ObserverSession,
     context: &ObservationContext,
-    snapshot: ObserverEconomySnapshotV1,
+    snapshot: ObserverEconomySnapshot,
     frame: &mut ObserverFrame,
     stop_on_delivery: bool,
 ) {
@@ -742,8 +740,8 @@ fn install_observation(
         return;
     }
     let visibility = match context.perspective {
-        Perspective::FullObserver => ObserverVisibilityV1::FullObserver,
-        Perspective::PlayerKnowledge => ObserverVisibilityV1::KnownPreview,
+        Perspective::FullObserver => ObserverVisibility::FullObserver,
+        Perspective::PlayerKnowledge => ObserverVisibility::KnownPreview,
     };
     if snapshot.campaign_id != context.campaign.as_uuid().to_string()
         || snapshot.resolve_tick != context.tick
@@ -917,9 +915,9 @@ pub(crate) mod tests {
     use super::*;
     use crate::observer_audio::ObserverAudioSettings;
     use crate::observer_ui::ObserverDisclosure;
-    use babylon_persistence::CampaignId;
+    use babylon_persistence::identity::CampaignId;
 
-    fn command_app() -> (App, mpsc::Receiver<RuntimeSessionRequestV3>) {
+    fn command_app() -> (App, mpsc::Receiver<RuntimeSessionRequest>) {
         let mut state = ObserverSession::new(CampaignId::from_uuid(uuid::Uuid::from_u128(1)));
         state.ready(3, None);
         state.connected_fixture();
@@ -963,16 +961,16 @@ pub(crate) mod tests {
         app.update();
     }
 
-    fn test_scope(campaign_id: String) -> RuntimeSessionScopeV3 {
-        RuntimeSessionScopeV3 {
+    fn test_scope(campaign_id: String) -> RuntimeSessionScope {
+        RuntimeSessionScope {
             epoch: 1,
             campaign_id: Some(campaign_id),
         }
     }
 
-    type ResponseSender = mpsc::Sender<Result<RuntimeSessionResponseV3, String>>;
+    type ResponseSender = mpsc::Sender<Result<RuntimeSessionResponse, String>>;
 
-    pub(crate) fn quit_app() -> (App, mpsc::Receiver<RuntimeSessionRequestV3>, ResponseSender) {
+    pub(crate) fn quit_app() -> (App, mpsc::Receiver<RuntimeSessionRequest>, ResponseSender) {
         let (mut app, requests) = command_app();
         let (responses, receiver) = mpsc::channel();
         app.world_mut().resource_mut::<RuntimePipe>().responses = Mutex::new(receiver);
@@ -983,42 +981,42 @@ pub(crate) mod tests {
 
     pub(crate) fn refuse_initial_switch(
         app: &mut App,
-        requests: &mpsc::Receiver<RuntimeSessionRequestV3>,
+        requests: &mpsc::Receiver<RuntimeSessionRequest>,
         responses: &ResponseSender,
     ) -> CampaignId {
-        let previous_scope = RuntimeSessionScopeV3::default();
+        let previous_scope = RuntimeSessionScope::default();
         responses
-            .send(Ok(RuntimeSessionResponseV3::Hello {
-                protocol_version: RUNTIME_SESSION_PROTOCOL_VERSION_V3,
+            .send(Ok(RuntimeSessionResponse::Hello {
+                protocol_version: RUNTIME_SESSION_PROTOCOL_VERSION,
                 scope: previous_scope.clone(),
             }))
             .unwrap();
         app.update();
-        let RuntimeSessionRequestV3::Switch {
+        let RuntimeSessionRequest::Switch {
             request_id, target, ..
         } = requests.try_recv().unwrap()
         else {
             panic!("initial campaign switch");
         };
-        let (RuntimeSessionTargetV3::New { campaign_id, .. }
-        | RuntimeSessionTargetV3::Open { campaign_id }) = target;
+        let (RuntimeSessionTarget::New { campaign_id, .. }
+        | RuntimeSessionTarget::Open { campaign_id }) = target;
         let campaign = CampaignId::from_uuid(uuid::Uuid::parse_str(&campaign_id).unwrap());
-        let scope = RuntimeSessionScopeV3 {
+        let scope = RuntimeSessionScope {
             epoch: 1,
             campaign_id: Some(campaign_id),
         };
         responses
-            .send(Ok(RuntimeSessionResponseV3::Switching {
+            .send(Ok(RuntimeSessionResponse::Switching {
                 request_id,
                 previous_scope,
                 scope: scope.clone(),
             }))
             .unwrap();
         responses
-            .send(Ok(RuntimeSessionResponseV3::Error {
+            .send(Ok(RuntimeSessionResponse::Error {
                 request_id: Some(request_id),
                 scope,
-                code: babylon_persistence::RuntimeSessionErrorCodeV3::StorageRefused,
+                code: babylon_persistence::runtime_session::RuntimeSessionErrorCode::StorageRefused,
                 tail: None,
             }))
             .unwrap();
@@ -1184,41 +1182,40 @@ pub(crate) mod tests {
                 .fail("Admission refused".into());
             dispatch(&mut app, &[command]);
             assert_eq!(exit_count(&app), 0);
-            let RuntimeSessionRequestV3::Switch { scope, target, .. } =
-                requests.try_recv().unwrap()
+            let RuntimeSessionRequest::Switch { scope, target, .. } = requests.try_recv().unwrap()
             else {
                 panic!("one campaign switch");
             };
             assert_eq!(scope, test_scope(uuid::Uuid::from_u128(1).to_string()));
             match (command, target) {
-                (ObserverCommand::ReopenCampaign, RuntimeSessionTargetV3::Open { campaign_id }) => {
+                (ObserverCommand::ReopenCampaign, RuntimeSessionTarget::Open { campaign_id }) => {
                     assert_eq!(campaign_id, uuid::Uuid::from_u128(1).to_string());
                 }
                 (
                     ObserverCommand::NewCampaign,
-                    RuntimeSessionTargetV3::New {
-                        preset: RuntimeSessionPresetV3::Standard,
+                    RuntimeSessionTarget::New {
+                        preset: RuntimeSessionPreset::Standard,
                         ..
                     },
                 )
                 | (
                     ObserverCommand::NewDelayedCampaign,
-                    RuntimeSessionTargetV3::New {
-                        preset: RuntimeSessionPresetV3::Delayed,
+                    RuntimeSessionTarget::New {
+                        preset: RuntimeSessionPreset::Delayed,
                         ..
                     },
                 )
                 | (
                     ObserverCommand::NewSharedFreightAmpleCampaign,
-                    RuntimeSessionTargetV3::New {
-                        preset: RuntimeSessionPresetV3::SharedFreightAmple,
+                    RuntimeSessionTarget::New {
+                        preset: RuntimeSessionPreset::SharedFreightAmple,
                         ..
                     },
                 )
                 | (
                     ObserverCommand::NewSharedFreightConstrainedCampaign,
-                    RuntimeSessionTargetV3::New {
-                        preset: RuntimeSessionPresetV3::SharedFreightConstrained,
+                    RuntimeSessionTarget::New {
+                        preset: RuntimeSessionPreset::SharedFreightConstrained,
                         ..
                     },
                 ) => {}
@@ -1258,7 +1255,7 @@ pub(crate) mod tests {
         assert_eq!(
             state.error.as_deref(),
             Some(
-                babylon_persistence::RuntimeSessionErrorCodeV3::StorageRefused
+                babylon_persistence::runtime_session::RuntimeSessionErrorCode::StorageRefused
                     .to_string()
                     .as_str()
             )
@@ -1308,7 +1305,7 @@ pub(crate) mod tests {
         assert!(app.world().resource::<ObserverSession>().quit_requested);
         assert!(matches!(
             requests.try_recv().unwrap(),
-            RuntimeSessionRequestV3::Stop { .. }
+            RuntimeSessionRequest::Stop { .. }
         ));
     }
 
@@ -1346,9 +1343,9 @@ pub(crate) mod tests {
             .resource_mut::<ObserverSession>()
             .foundation_digest = None;
         responses
-            .send(Ok(RuntimeSessionResponseV3::Hello {
+            .send(Ok(RuntimeSessionResponse::Hello {
                 protocol_version: 2,
-                scope: RuntimeSessionScopeV3 {
+                scope: RuntimeSessionScope {
                     epoch: 0,
                     campaign_id: None,
                 },
@@ -1400,11 +1397,10 @@ pub(crate) mod tests {
             .as_uuid()
             .to_string();
         responses
-            .send(Ok(RuntimeSessionResponseV3::ArchiveProgress {
+            .send(Ok(RuntimeSessionResponse::ArchiveProgress {
                 scope: test_scope(campaign_id),
                 durable_tick: 3,
                 verified_tick: 1,
-                retention_ready: true,
                 request_id: None,
             }))
             .unwrap();
@@ -1457,16 +1453,15 @@ pub(crate) mod tests {
                     "Archive work is pushed; a paused client never polls"
                 );
             }
-            // A partial publication can advance even when P and the retention
-            // flag are unchanged. Every genuine push invalidates the held read.
-            for (index, retention_ready) in [false, false, true].into_iter().enumerate() {
+            // A partial publication can advance even when the processed tick
+            // is unchanged. Every genuine push invalidates the held read.
+            for index in 0..3 {
                 responses
-                    .send(Ok(RuntimeSessionResponseV3::ArchiveProgress {
+                    .send(Ok(RuntimeSessionResponse::ArchiveProgress {
                         request_id: None,
                         scope: test_scope(campaign_id.clone()),
                         durable_tick: tick,
                         verified_tick: tick,
-                        retention_ready,
                     }))
                     .unwrap();
                 app.update();
@@ -1514,12 +1509,11 @@ pub(crate) mod tests {
             };
             let context = state.context();
             responses
-                .send(Ok(RuntimeSessionResponseV3::ArchiveProgress {
+                .send(Ok(RuntimeSessionResponse::ArchiveProgress {
                     request_id: None,
                     scope: test_scope(campaign_id),
                     durable_tick,
                     verified_tick,
-                    retention_ready: true,
                 }))
                 .unwrap();
             app.update();
@@ -1537,10 +1531,9 @@ pub(crate) mod tests {
     fn archive_push_invalidates_a_held_read_without_certifying_its_page() {
         use crate::ui::dossier_card::{ActiveCountyDossier, DossierRequestScope, InstalledDossier};
         use babylon_persistence::archive_revision::{
-            ArchiveDossierPendingV2, ArchiveDossierReadV2, ArchiveDossierStateV2,
-            ArchiveReadScopeV2,
+            ArchiveDossierPending, ArchiveDossierRead, ArchiveDossierState, ArchiveReadScope,
         };
-        use babylon_persistence::{ArchivePageRefV1, ArchiveSubjectKindV1};
+        use babylon_persistence::{ArchivePageRef, ArchiveSubjectKind};
         let (mut app, requests, responses) = quit_app();
         {
             let mut state = app.world_mut().resource_mut::<ObserverSession>();
@@ -1552,18 +1545,16 @@ pub(crate) mod tests {
         let campaign = state.campaign;
         let context = state.context();
         let frame = ObserverFrame(Some(snapshot_with_event(state, "production", 3)));
-        let scope = ArchiveReadScopeV2::committed(campaign, 3, [0xaa; 32]).unwrap();
-        let subject =
-            ArchivePageRefV1::try_new(ArchiveSubjectKindV1::County, "26163".into()).unwrap();
-        let read = ArchiveDossierReadV2 {
+        let scope = ArchiveReadScope::committed(campaign, 3, [0xaa; 32]).unwrap();
+        let subject = ArchivePageRef::try_new(ArchiveSubjectKind::County, "26163".into()).unwrap();
+        let read = ArchiveDossierRead {
             scope: scope.clone(),
             subject: subject.clone(),
             durable_tick: 3,
             processed_tick: 2,
-            history_floor_tick: 0,
-            state: ArchiveDossierStateV2::Pending {
+            state: ArchiveDossierState::Pending {
                 page: None,
-                reason: ArchiveDossierPendingV2::ReceiptProcessing,
+                reason: ArchiveDossierPending::ReceiptProcessing,
             },
         };
         let active = ActiveCountyDossier(Some(InstalledDossier {
@@ -1580,12 +1571,11 @@ pub(crate) mod tests {
         assert!(active.for_observer(state, &frame, 0, "26163").is_some());
         app.insert_resource(frame).insert_resource(active);
         responses
-            .send(Ok(RuntimeSessionResponseV3::ArchiveProgress {
+            .send(Ok(RuntimeSessionResponse::ArchiveProgress {
                 request_id: None,
                 scope: test_scope(campaign.as_uuid().to_string()),
                 durable_tick: 3,
                 verified_tick: 2,
-                retention_ready: true,
             }))
             .unwrap();
         app.update();
@@ -1610,7 +1600,7 @@ pub(crate) mod tests {
     fn archive_push_during_an_advance_never_substitutes_for_its_commit_ack() {
         let (mut app, requests, responses) = quit_app();
         dispatch(&mut app, &[ObserverCommand::Step]);
-        let RuntimeSessionRequestV3::Advance {
+        let RuntimeSessionRequest::Advance {
             request_id, scope, ..
         } = requests.try_recv().unwrap()
         else {
@@ -1618,12 +1608,11 @@ pub(crate) mod tests {
         };
         let campaign_id = scope.campaign_id.unwrap();
         responses
-            .send(Ok(RuntimeSessionResponseV3::ArchiveProgress {
+            .send(Ok(RuntimeSessionResponse::ArchiveProgress {
                 request_id: None,
                 scope: test_scope(campaign_id.clone()),
                 durable_tick: 3,
                 verified_tick: 2,
-                retention_ready: false,
             }))
             .unwrap();
         app.update();
@@ -1632,22 +1621,21 @@ pub(crate) mod tests {
         assert_eq!(state.phase, SessionPhase::Advancing);
         assert_eq!(state.durable_tick, 3);
         responses
-            .send(Ok(RuntimeSessionResponseV3::Committed {
+            .send(Ok(RuntimeSessionResponse::Committed {
                 request_id,
                 scope: test_scope(campaign_id.clone()),
-                tail: RuntimeSessionTailV3 {
+                tail: RuntimeSessionTail {
                     resolve_tick: 4,
                     tick_content_hash: Some("4".repeat(64)),
                 },
             }))
             .unwrap();
         responses
-            .send(Ok(RuntimeSessionResponseV3::ArchiveProgress {
+            .send(Ok(RuntimeSessionResponse::ArchiveProgress {
                 request_id: None,
                 scope: test_scope(campaign_id),
                 durable_tick: 4,
                 verified_tick: 3,
-                retention_ready: true,
             }))
             .unwrap();
         app.update();
@@ -1677,7 +1665,7 @@ pub(crate) mod tests {
             .horizon_tick = Some(5);
         dispatch(&mut app, &[ObserverCommand::TogglePlay]);
         for expected_period in [4, 5] {
-            let RuntimeSessionRequestV3::Advance {
+            let RuntimeSessionRequest::Advance {
                 request_id,
                 expected_tail,
                 ..
@@ -1720,44 +1708,48 @@ pub(crate) mod tests {
         state: &ObserverSession,
         kind: &str,
         period: u64,
-    ) -> ObserverEconomySnapshotV1 {
-        ObserverEconomySnapshotV1 {
+    ) -> ObserverEconomySnapshot {
+        ObserverEconomySnapshot {
             campaign_id: state.campaign.as_uuid().to_string(),
             resolve_tick: state.viewed_tick,
             foundation_digest: "foundation".into(),
             nominal_world_hash: None,
             tick_content_hash: state.content_hash.clone(),
             envelope_digest: None,
-            visibility: ObserverVisibilityV1::FullObserver,
+            visibility: ObserverVisibility::FullObserver,
             counties: Vec::new(),
-            production: Some(babylon_persistence::ProductionSnapshotV2 {
-                content_authority_sha256: "a".repeat(64),
-                road_source: None,
-                physical_edges: Vec::new(),
-                merchant_handling_accounts: Vec::new(),
-                final_demand_accounts: Vec::new(),
-                freight_capacity_accounts: Vec::new(),
-                material_balance: None,
-                labor_accounts: Vec::new(),
-                staffing_accounts: Vec::new(),
-                scenario_label: "bounded observer fixture".into(),
-                horizon_period: 16,
-                sites: Vec::new(),
-                routes: Vec::new(),
-                freight: Vec::new(),
-                observed_contexts: Vec::new(),
-                process_attributions: Vec::new(),
-                provenance: Vec::new(),
-                events: vec![babylon_persistence::ProductionEventV1 {
-                    id: "committed-event".into(),
-                    period,
-                    subject_site_ids: Vec::new(),
-                    kind: kind.into(),
-                    description: "disclosed committed development".into(),
-                    receipt_digest: "receipt".into(),
-                    delivery_evidence: None,
-                }],
-            }),
+            production: Some(
+                babylon_persistence::production_observation::ProductionSnapshot {
+                    content_authority_sha256: "a".repeat(64),
+                    road_source: None,
+                    physical_edges: Vec::new(),
+                    merchant_handling_accounts: Vec::new(),
+                    final_demand_accounts: Vec::new(),
+                    freight_capacity_accounts: Vec::new(),
+                    material_balance: None,
+                    labor_accounts: Vec::new(),
+                    staffing_accounts: Vec::new(),
+                    scenario_label: "bounded observer fixture".into(),
+                    horizon_period: 16,
+                    sites: Vec::new(),
+                    routes: Vec::new(),
+                    freight: Vec::new(),
+                    observed_contexts: Vec::new(),
+                    process_attributions: Vec::new(),
+                    provenance: Vec::new(),
+                    events: vec![
+                        babylon_persistence::production_observation::ProductionEvent {
+                            id: "committed-event".into(),
+                            period,
+                            subject_site_ids: Vec::new(),
+                            kind: kind.into(),
+                            description: "disclosed committed development".into(),
+                            receipt_digest: "receipt".into(),
+                            delivery_evidence: None,
+                        },
+                    ],
+                },
+            ),
         }
     }
 
@@ -1814,7 +1806,7 @@ pub(crate) mod tests {
         assert!(frame.0.is_none());
         let context = state.context();
         let mut known = snapshot_with_event(&state, "freight loss", 3);
-        known.visibility = ObserverVisibilityV1::KnownPreview;
+        known.visibility = ObserverVisibility::KnownPreview;
         known.production = None;
         install_observation(&mut state, &context, known, &mut frame, true);
         assert!(state.playing);
@@ -1827,12 +1819,12 @@ pub(crate) mod tests {
         dispatch(&mut app, &[ObserverCommand::Step]);
         assert!(matches!(
             requests.try_recv().unwrap(),
-            RuntimeSessionRequestV3::Advance { .. }
+            RuntimeSessionRequest::Advance { .. }
         ));
         dispatch(&mut app, &[ObserverCommand::Quit]);
         assert!(matches!(
             requests.try_recv().unwrap(),
-            RuntimeSessionRequestV3::Stop { request_id: 2, .. }
+            RuntimeSessionRequest::Stop { request_id: 2, .. }
         ));
         assert_eq!(exit_count(&app), 0);
         assert!(app.world().resource::<ObserverSession>().advance_pending());
@@ -1843,7 +1835,7 @@ pub(crate) mod tests {
         assert!(!app.world().resource::<ObserverSession>().playing);
         assert!(requests.try_recv().is_err());
         responses
-            .send(Ok(RuntimeSessionResponseV3::Committed {
+            .send(Ok(RuntimeSessionResponse::Committed {
                 request_id: 1,
                 scope: app
                     .world()
@@ -1851,7 +1843,7 @@ pub(crate) mod tests {
                     .runtime_scope()
                     .unwrap()
                     .clone(),
-                tail: RuntimeSessionTailV3 {
+                tail: RuntimeSessionTail {
                     resolve_tick: 4,
                     tick_content_hash: Some("committed".into()),
                 },
@@ -1861,7 +1853,7 @@ pub(crate) mod tests {
         assert_eq!(app.world().resource::<ObserverSession>().durable_tick, 4);
         assert_eq!(exit_count(&app), 0);
         responses
-            .send(Ok(RuntimeSessionResponseV3::Stopped {
+            .send(Ok(RuntimeSessionResponse::Stopped {
                 request_id: 2,
                 scope: app
                     .world()
@@ -1890,12 +1882,12 @@ pub(crate) mod tests {
         assert!(!app.world().resource::<ShutdownProgress>().stop_sent);
         assert!(matches!(
             requests.try_recv().unwrap(),
-            RuntimeSessionRequestV3::Advance { .. }
+            RuntimeSessionRequest::Advance { .. }
         ));
         app.update();
         assert!(matches!(
             requests.try_recv().unwrap(),
-            RuntimeSessionRequestV3::Stop { .. }
+            RuntimeSessionRequest::Stop { .. }
         ));
         dispatch(&mut app, &[ObserverCommand::Quit]);
         assert!(requests.try_recv().is_err());
@@ -1952,9 +1944,9 @@ pub(crate) mod tests {
         dispatch(&mut app, &[ObserverCommand::Step, ObserverCommand::Step]);
         assert!(matches!(
             receiver.try_recv().unwrap(),
-            RuntimeSessionRequestV3::Advance {
+            RuntimeSessionRequest::Advance {
                 request_id: 1,
-                expected_tail: RuntimeSessionTailV3 {
+                expected_tail: RuntimeSessionTail {
                     resolve_tick: 3,
                     ..
                 },

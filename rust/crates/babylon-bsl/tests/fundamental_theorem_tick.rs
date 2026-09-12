@@ -28,6 +28,7 @@
 //! A rule that fired on everything would pass a weaker test. The periphery
 //! class is here so the guard has to actually discriminate.
 
+use babylon_bsl::bindings::BindingVocabulary;
 use babylon_bsl::fuel::{CardinalityCeilings, IntrinsicCosts};
 use babylon_bsl::intrinsic_host::EmptyIntrinsicHost;
 use babylon_bsl::rule_pipeline::{load_rule, LoadContext};
@@ -36,18 +37,17 @@ use babylon_bsl::structural_verbs::CollectingSink;
 use babylon_bsl::tick::{run_tick, DefinesEnv};
 use babylon_bsl::typecheck::TypeEnv;
 use babylon_bsl::types::{BslType, EnumRegistry, FieldDecl, FieldKind};
-use babylon_bsl::BindingVocabulary;
 use babylon_graph::memory::MemoryGraph;
 use babylon_graph::state_hash::CanonicalState;
 use babylon_graph::substrate::{GraphSubstrate, NodeId};
-use babylon_kernel::SessionId;
+use babylon_kernel::replay::{ReplaySeed, ReplaySessionId, RngSeedContext};
 use std::collections::{HashMap, HashSet};
 
 /// Fixed deterministic V1 namespace for these one-shot conformance drivers.
 /// They contain no finite kernel, so the byte-identical state-hash theorem
 /// remains independent of governed replay realization.
-fn fixture_session() -> SessionId {
-    SessionId::new("fundamental-theorem-tick-fixture").expect("literal is non-empty")
+fn fixture_session() -> ReplaySessionId {
+    ReplaySessionId::try_from("fundamental-theorem-tick-fixture").expect("literal is non-empty")
 }
 
 const SCENARIO: &str = r"
@@ -150,6 +150,13 @@ fn run_one_tick() -> (MemoryGraph, usize, usize) {
     let loaded = load_rule(FUNDAMENTAL_THEOREM, &ctx).expect("the rule must pass every load gate");
 
     let mut sink = CollectingSink::default();
+    let resolver = babylon_graph::stable_element::StableElementResolver::seal(
+        &graph,
+        &loaded_scenario.id,
+        &loaded_scenario.node_content_ids,
+        &HashMap::new(),
+    )
+    .unwrap();
     let outcome = run_tick(
         &loaded,
         &r.types,
@@ -160,8 +167,11 @@ fn run_one_tick() -> (MemoryGraph, usize, usize) {
         &r.intrinsics,
         &DefinesEnv::new(),
         1,
-        Some(&loaded_scenario.node_content_ids),
-        &fixture_session(),
+        RngSeedContext {
+            session: &fixture_session(),
+            seed: ReplaySeed::new(0),
+        },
+        &resolver,
         None,
     )
     .expect("the tick must run");
@@ -265,6 +275,13 @@ fn a_changed_scenario_changes_the_hash() {
     };
     let loaded = load_rule(FUNDAMENTAL_THEOREM, &ctx).unwrap();
     let mut sink = CollectingSink::default();
+    let resolver = babylon_graph::stable_element::StableElementResolver::seal(
+        &richer,
+        &loaded_scenario.id,
+        &loaded_scenario.node_content_ids,
+        &HashMap::new(),
+    )
+    .unwrap();
     run_tick(
         &loaded,
         &r.types,
@@ -275,8 +292,11 @@ fn a_changed_scenario_changes_the_hash() {
         &r.intrinsics,
         &DefinesEnv::new(),
         1,
-        Some(&loaded_scenario.node_content_ids),
-        &fixture_session(),
+        RngSeedContext {
+            session: &fixture_session(),
+            seed: ReplaySeed::new(0),
+        },
+        &resolver,
         None,
     )
     .unwrap();
@@ -381,6 +401,13 @@ fn run_expr_tick(rule: &str) -> Result<(MemoryGraph, usize), String> {
     };
     let loaded = load_rule(rule, &ctx).map_err(|e| format!("load: {e}"))?;
     let mut sink = CollectingSink::default();
+    let resolver = babylon_graph::stable_element::StableElementResolver::seal(
+        &graph,
+        &loaded_scenario.id,
+        &loaded_scenario.node_content_ids,
+        &HashMap::new(),
+    )
+    .unwrap();
     let outcome = run_tick(
         &loaded,
         &r.types,
@@ -391,8 +418,11 @@ fn run_expr_tick(rule: &str) -> Result<(MemoryGraph, usize), String> {
         &r.intrinsics,
         &DefinesEnv::new(),
         1,
-        Some(&loaded_scenario.node_content_ids),
-        &fixture_session(),
+        RngSeedContext {
+            session: &fixture_session(),
+            seed: ReplaySeed::new(0),
+        },
+        &resolver,
         None,
     )
     .map_err(|e| format!("tick: {e}"))?;

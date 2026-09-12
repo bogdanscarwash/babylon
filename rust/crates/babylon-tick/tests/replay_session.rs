@@ -8,48 +8,46 @@ use std::process::Command;
 #[path = "../../babylon-persistence/src/michigan_dynamic_hex_foundation.rs"]
 mod michigan_dynamic_hex_foundation;
 
+use babylon_bsl::canonical_ast::rules_hash_of;
 use babylon_bsl::causal_contract::{AuditReceipt, EffectSignature, EvidenceClass, RuleRole};
 use babylon_bsl::evaluator::Value;
-use babylon_bsl::identity_codec::StableBslValueV1;
+use babylon_bsl::identity_codec::StableBslValue;
 use babylon_bsl::rule_pipeline::split_content;
-use babylon_bsl::rules_hash_of;
 use babylon_graph::hypergraph_store::HypergraphStore;
 use babylon_graph::memory::MemoryGraph;
-use babylon_graph::stable_element::{StableElementKeyV1, StableElementResolverV1};
-use babylon_graph::stable_state::encode_stable_graph_state_v1;
+use babylon_graph::stable_element::{StableElementKey, StableElementResolver};
+use babylon_graph::stable_state::encode_stable_graph_state;
 use babylon_graph::state_hash::CanonicalState;
 use babylon_graph::substrate::{GraphSubstrate, NodeId};
 use babylon_graph::{allocator_state::AllocatorState, working_copy::DetachedCopy};
-use babylon_kernel::replay::{ReplaySeed, ReplaySessionIdV1};
+use babylon_kernel::replay::{ReplaySeed, ReplaySessionId};
 use babylon_kernel::tick_content_hash::{
-    PreparedEnvironmentDigestV1, RefDigestV1, TickContentPartsV1, TickContentPreimageV1,
+    PreparedEnvironmentDigest, RefDigest, TickContentParts, TickContentPreimage,
 };
-use babylon_kernel::{sha256_of, ContentDigest};
-use babylon_practice_contract::actor_v2::ActorOrganizationIdV2;
-use babylon_practice_contract::ordered_action_v1::{
-    OrderedPracticeActionBatchV1, ORDERED_PRACTICE_ACTION_BATCH_V1_LAYOUT_VERSION,
+use babylon_kernel::{content_digest::sha256_of, content_digest::ContentDigest};
+use babylon_practice_contract::ActorOrganizationId;
+use babylon_practice_contract::{
+    input_authority_ledger_digest, CampaignId, InputAuthorityId, PracticeAuthorityKind, PracticeId,
+    PracticeInputAuthority, PracticeInputAuthorityLedger, PracticeIntent, PracticeTargetIdentity,
+    PracticeTargetTag, ProposalNonce, ResolvedPracticeBatch, ResolvedPracticeBatchItem,
+    TaggedPracticeTarget,
 };
 use babylon_practice_contract::{
-    input_authority_ledger_v2_digest, CampaignIdV2, InputAuthorityIdV2, PracticeAuthorityKindV2,
-    PracticeIdV2, PracticeInputAuthorityLedgerV2, PracticeInputAuthorityV2, PracticeIntentV2,
-    PracticeTargetIdentityV2, PracticeTargetTagV2, ProposalNonceV2, ResolvedPracticeBatchItemV2,
-    ResolvedPracticeBatchV2, TaggedPracticeTargetV2,
+    OrderedPracticeActionBatch, ORDERED_PRACTICE_ACTION_BATCH_LAYOUT_VERSION,
 };
-use babylon_tick::committed_event::CommittedEventV2;
+use babylon_tick::committed_event::CommittedEvent;
 use babylon_tick::material_state::{
-    MaterialStateErrorV1, MaterialStateRowRefV1, MaterialStateRowsV1, MaterialStateV1,
-    WorldRegisterRowV1,
+    MaterialState, MaterialStateError, MaterialStateRowRef, MaterialStateRows, WorldRegisterRow,
 };
 use babylon_tick::replay_identity::{
-    encode_stable_world_v1, encode_tick_payload_v2, encode_world_register_set_v1,
-    world_register_manifest_v1, ReplayTickIdentityError, STABLE_WORLD_LAYOUT_VERSION_V1,
-    TICK_PAYLOAD_LAYOUT_VERSION_V2, WORLD_REGISTER_MANIFEST_LAYOUT_VERSION_V1,
-    WORLD_REGISTER_SET_LAYOUT_VERSION_V1,
+    encode_stable_world, encode_tick_payload, encode_world_register_set, world_register_manifest,
+    ReplayTickIdentityError, STABLE_WORLD_LAYOUT_VERSION, TICK_PAYLOAD_LAYOUT_VERSION,
+    WORLD_REGISTER_MANIFEST_LAYOUT_VERSION, WORLD_REGISTER_SET_LAYOUT_VERSION,
 };
 use babylon_tick::replay_session::{
-    ReplayCommitAcknowledgementV1, ReplayCommitDispositionV1, ReplayTickError, ReplayTickSession,
+    ReplayCommitAcknowledgement, ReplayCommitDisposition, ReplayTickError, ReplayTickSession,
 };
-use michigan_dynamic_hex_foundation::michigan_dynamic_hex_foundation_v1;
+use michigan_dynamic_hex_foundation::michigan_dynamic_hex_foundation;
 
 const REPLAY_SCENARIO: &str = r"
 (scenario demo/finite-choice-two-classes
@@ -261,28 +259,28 @@ fn content_for(rule_src: &str) -> ContentDigest {
     }
 }
 
-fn michigan_foundation() -> &'static babylon_tick::h3_runtime::MichiganDynamicHexFoundationV1 {
-    michigan_dynamic_hex_foundation_v1().expect("the governed foundation must decode once")
+fn michigan_foundation() -> &'static babylon_tick::h3_runtime::MichiganDynamicHexFoundation {
+    michigan_dynamic_hex_foundation().expect("the governed foundation must decode once")
 }
 
-fn foundation_reference() -> RefDigestV1 {
-    RefDigestV1::from_bytes(michigan_foundation().reference_bundle_digest())
+fn foundation_reference() -> RefDigest {
+    RefDigest::from_bytes(michigan_foundation().reference_bundle_digest())
 }
 
-fn stable_material_node(local_name: &str) -> StableElementKeyV1 {
-    StableElementKeyV1::Node {
+fn stable_material_node(local_name: &str) -> StableElementKey {
+    StableElementKey::Node {
         scenario: "demo/material-state".to_owned(),
         local_name: local_name.to_owned(),
     }
 }
 
-fn foundation_material_state() -> MaterialStateV1 {
-    MaterialStateV1::try_new(michigan_foundation()).unwrap()
+fn foundation_material_state() -> MaterialState {
+    MaterialState::try_new(michigan_foundation()).unwrap()
 }
 
 #[test]
 fn material_state_is_foundation_only_with_exact_graph_derived_families() {
-    let replay_id = ReplaySessionIdV1::try_from("per281/foundation-only-material").unwrap();
+    let replay_id = ReplaySessionId::try_from("per281/foundation-only-material").unwrap();
     let mut session = ReplayTickSession::new(
         MATERIAL_SCENARIO,
         None,
@@ -292,10 +290,10 @@ fn material_state_is_foundation_only_with_exact_graph_derived_families() {
         ReplaySeed::new(37),
         content_for(RETAINED_OUTPUT_RULE),
         foundation_reference(),
-        MaterialStateV1::try_new(michigan_foundation()).unwrap(),
+        MaterialState::try_new(michigan_foundation()).unwrap(),
     )
     .unwrap();
-    let actions = OrderedPracticeActionBatchV1::empty(replay_id, 1).unwrap();
+    let actions = OrderedPracticeActionBatch::empty(replay_id, 1).unwrap();
     let mut sink = babylon_bsl::structural_verbs::CollectingSink::default();
     let report = session.advance(&mut sink, &actions).unwrap();
     let material = report.material_state_rows();
@@ -327,16 +325,16 @@ fn material_state_is_foundation_only_with_exact_graph_derived_families() {
 #[test]
 fn dynamic_h3_rows_are_activated_from_the_exact_foundation_and_reference() {
     let foundation =
-        michigan_dynamic_hex_foundation_v1().expect("the governed foundation must decode once");
-    let expected_reference = RefDigestV1::from_bytes(foundation.reference_bundle_digest());
-    let foreign_reference = RefDigestV1::from_bytes([0x55; 32]);
-    let foreign_material = MaterialStateV1::try_new(foundation).unwrap();
+        michigan_dynamic_hex_foundation().expect("the governed foundation must decode once");
+    let expected_reference = RefDigest::from_bytes(foundation.reference_bundle_digest());
+    let foreign_reference = RefDigest::from_bytes([0x55; 32]);
+    let foreign_material = MaterialState::try_new(foundation).unwrap();
     let foreign_error = ReplayTickSession::new(
         "this is deliberately not a scenario",
         None,
         RETAINED_OUTPUT_RULE,
         HypergraphStore::new(),
-        ReplaySessionIdV1::try_from("per281/foundation-reference-refusal").unwrap(),
+        ReplaySessionId::try_from("per281/foundation-reference-refusal").unwrap(),
         ReplaySeed::new(37),
         content_for(RETAINED_OUTPUT_RULE),
         foreign_reference,
@@ -346,14 +344,14 @@ fn dynamic_h3_rows_are_activated_from_the_exact_foundation_and_reference() {
     .expect("foreign reference must refuse before scenario preparation");
     assert_eq!(
         foreign_error,
-        ReplayTickError::MaterialState(MaterialStateErrorV1::ReferenceBundleMismatch {
+        ReplayTickError::MaterialState(MaterialStateError::ReferenceBundleMismatch {
             expected: foundation.reference_bundle_digest(),
             actual: *foreign_reference.as_bytes(),
         })
     );
 
-    let material = MaterialStateV1::try_new(foundation).unwrap();
-    let replay_id = ReplaySessionIdV1::try_from("per281/foundation-activation").unwrap();
+    let material = MaterialState::try_new(foundation).unwrap();
+    let replay_id = ReplaySessionId::try_from("per281/foundation-activation").unwrap();
     let mut session = ReplayTickSession::new(
         MATERIAL_SCENARIO,
         None,
@@ -366,7 +364,7 @@ fn dynamic_h3_rows_are_activated_from_the_exact_foundation_and_reference() {
         material,
     )
     .unwrap();
-    let actions = OrderedPracticeActionBatchV1::empty(replay_id, 1).unwrap();
+    let actions = OrderedPracticeActionBatch::empty(replay_id, 1).unwrap();
     let mut sink = babylon_bsl::structural_verbs::CollectingSink::default();
     let report = session.advance(&mut sink, &actions).unwrap();
     let dynamic = report.material_state_rows().dynamic_hexes();
@@ -392,48 +390,48 @@ fn dynamic_h3_rows_are_activated_from_the_exact_foundation_and_reference() {
     );
 }
 
-fn nonempty_action_batch(session: ReplaySessionIdV1) -> OrderedPracticeActionBatchV1 {
-    let authority = PracticeInputAuthorityV2 {
+fn nonempty_action_batch(session: ReplaySessionId) -> OrderedPracticeActionBatch {
+    let authority = PracticeInputAuthority {
         schema_version: 2,
-        campaign_id: CampaignIdV2::from_bytes([0x10; 16]),
-        authority_kind: PracticeAuthorityKindV2::PlayerSeat,
-        input_authority_id: InputAuthorityIdV2::from_bytes([0x20; 16]),
-        actor_org_id: ActorOrganizationIdV2::from_bytes(7_u64.to_be_bytes()),
+        campaign_id: CampaignId::from_bytes([0x10; 16]),
+        authority_kind: PracticeAuthorityKind::PlayerSeat,
+        input_authority_id: InputAuthorityId::from_bytes([0x20; 16]),
+        actor_org_id: ActorOrganizationId::from_bytes(7_u64.to_be_bytes()),
         effective_from_tick: 10,
         effective_through_tick_exclusive: 20,
         decision_content_digest: [0x30; 32],
     };
-    let ledger = PracticeInputAuthorityLedgerV2 {
+    let ledger = PracticeInputAuthorityLedger {
         schema_version: 2,
         rows: vec![authority.clone()],
     };
-    let intent = PracticeIntentV2 {
+    let intent = PracticeIntent {
         schema_version: 2,
         submit_after_tick: 10,
         resolve_tick: 11,
-        input_authority_id: InputAuthorityIdV2::from_bytes([0x20; 16]),
-        actor_org_id: ActorOrganizationIdV2::from_bytes(7_u64.to_be_bytes()),
-        practice_id: PracticeIdV2::Strike,
-        target: TaggedPracticeTargetV2 {
-            tag: PracticeTargetTagV2::LaborProcess,
-            identity: PracticeTargetIdentityV2::from_bytes([0x50; 32]),
+        input_authority_id: InputAuthorityId::from_bytes([0x20; 16]),
+        actor_org_id: ActorOrganizationId::from_bytes(7_u64.to_be_bytes()),
+        practice_id: PracticeId::Strike,
+        target: TaggedPracticeTarget {
+            tag: PracticeTargetTag::LaborProcess,
+            identity: PracticeTargetIdentity::from_bytes([0x50; 32]),
         },
-        proposal_nonce: ProposalNonceV2::from_bytes([0x60; 16]),
+        proposal_nonce: ProposalNonce::from_bytes([0x60; 16]),
         quoted_content_digest: [0x30; 32],
         quoted_resource_contract_digest: [0x40; 32],
         parameters: Vec::new(),
         evidence_digests: vec![[0x70; 32]],
     };
-    let source = ResolvedPracticeBatchV2 {
+    let source = ResolvedPracticeBatch {
         schema_version: 2,
-        campaign_id: CampaignIdV2::from_bytes([0x10; 16]),
+        campaign_id: CampaignId::from_bytes([0x10; 16]),
         resolve_tick: 11,
-        authority_ledger_digest: input_authority_ledger_v2_digest(&ledger).unwrap(),
+        authority_ledger_digest: input_authority_ledger_digest(&ledger).unwrap(),
         resource_allocation_contract_digest: [0x40; 32],
         content_digest: [0x30; 32],
-        items: vec![ResolvedPracticeBatchItemV2 { authority, intent }],
+        items: vec![ResolvedPracticeBatchItem { authority, intent }],
     };
-    OrderedPracticeActionBatchV1::project(session, &source, &ledger).unwrap()
+    OrderedPracticeActionBatch::project(session, &source, &ledger).unwrap()
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -454,7 +452,7 @@ fn run_replay<G>(seed: i64) -> ReplayRun
 where
     G: GraphSubstrate + CanonicalState + AllocatorState + DetachedCopy + Default,
 {
-    let replay_id = ReplaySessionIdV1::try_from("per60/cross-substrate").unwrap();
+    let replay_id = ReplaySessionId::try_from("per60/cross-substrate").unwrap();
     let mut session = ReplayTickSession::new(
         REPLAY_SCENARIO,
         None,
@@ -467,7 +465,7 @@ where
         foundation_material_state(),
     )
     .unwrap();
-    let actions = OrderedPracticeActionBatchV1::empty(replay_id, 1).unwrap();
+    let actions = OrderedPracticeActionBatch::empty(replay_id, 1).unwrap();
     let mut sink = babylon_bsl::structural_verbs::CollectingSink::default();
     let report = session.advance(&mut sink, &actions).unwrap();
     let choice_receipts = &report.report().choice_receipts;
@@ -501,13 +499,13 @@ where
 }
 
 #[test]
-fn replay_session_constructor_is_typed_to_v2_identity() {
+fn replay_session_constructor_is_typed_to_identity() {
     let _constructor = ReplayTickSession::<MemoryGraph>::new;
 }
 
 #[test]
 fn replay_session_publishes_exact_identity_and_retains_static_bytes_once() {
-    let replay_id = ReplaySessionIdV1::try_from("per60/session-a").unwrap();
+    let replay_id = ReplaySessionId::try_from("per60/session-a").unwrap();
     let seed = ReplaySeed::new(-71);
     let content = content_for(REPLAY_RULE);
     let reference = foundation_reference();
@@ -527,16 +525,16 @@ fn replay_session_publishes_exact_identity_and_retains_static_bytes_once() {
     let register_storage = session.register_manifest_bytes().as_ptr();
     let prepared_storage = session.prepared_environment_bytes().as_ptr();
     let prepared_digest =
-        PreparedEnvironmentDigestV1::from_bytes(sha256_of(session.prepared_environment_bytes()));
+        PreparedEnvironmentDigest::from_bytes(sha256_of(session.prepared_environment_bytes()));
     let mut sink = babylon_bsl::structural_verbs::CollectingSink::default();
-    let actions = OrderedPracticeActionBatchV1::empty(replay_id.clone(), 1).unwrap();
+    let actions = OrderedPracticeActionBatch::empty(replay_id.clone(), 1).unwrap();
     let identified = session.advance(&mut sink, &actions).unwrap();
 
     assert_eq!(session.completed_tick(), 1);
     assert_eq!(identified.action_batch_bytes(), actions.canonical_bytes());
     assert_eq!(
         identified.action_batch_layout_version(),
-        ORDERED_PRACTICE_ACTION_BATCH_V1_LAYOUT_VERSION
+        ORDERED_PRACTICE_ACTION_BATCH_LAYOUT_VERSION
     );
     assert_eq!(identified.action_batch_digest(), actions.digest());
     assert_eq!(identified.prior_registers().completed_tick(), 0);
@@ -571,7 +569,7 @@ fn replay_session_publishes_exact_identity_and_retains_static_bytes_once() {
         );
     }
 
-    let independently_composed = TickContentPreimageV1::compose(&TickContentPartsV1 {
+    let independently_composed = TickContentPreimage::compose(&TickContentParts {
         session: &replay_id,
         resolve_tick: 1,
         seed,
@@ -589,7 +587,7 @@ fn replay_session_publishes_exact_identity_and_retains_static_bytes_once() {
         independently_composed.as_bytes()
     );
 
-    let next_actions = OrderedPracticeActionBatchV1::empty(replay_id, 2).unwrap();
+    let next_actions = OrderedPracticeActionBatch::empty(replay_id, 2).unwrap();
     let second = session.advance(&mut sink, &next_actions).unwrap();
     assert_eq!(second.prior_registers().completed_tick(), 1);
     assert_eq!(second.result_registers().completed_tick(), 2);
@@ -603,7 +601,7 @@ fn replay_session_publishes_exact_identity_and_retains_static_bytes_once() {
 
 #[test]
 fn completed_replay_retains_typed_graph_rows_and_successful_event_batch() {
-    let replay_id = ReplaySessionIdV1::try_from("per281/retained-output").unwrap();
+    let replay_id = ReplaySessionId::try_from("per281/retained-output").unwrap();
     let mut session = ReplayTickSession::new(
         REPLAY_SCENARIO,
         None,
@@ -616,7 +614,7 @@ fn completed_replay_retains_typed_graph_rows_and_successful_event_batch() {
         foundation_material_state(),
     )
     .unwrap();
-    let actions = OrderedPracticeActionBatchV1::empty(replay_id, 1).unwrap();
+    let actions = OrderedPracticeActionBatch::empty(replay_id, 1).unwrap();
     let mut sink = babylon_bsl::structural_verbs::CollectingSink::default();
 
     let identified = session.advance(&mut sink, &actions).unwrap();
@@ -657,11 +655,11 @@ fn completed_replay_retains_typed_graph_rows_and_successful_event_batch() {
         &[
             (
                 "needs-roll".to_owned(),
-                StableBslValueV1::RealBits(0.0_f64.to_bits()),
+                StableBslValue::RealBits(0.0_f64.to_bits()),
             ),
             (
                 "subject".to_owned(),
-                StableBslValueV1::Node(StableElementKeyV1::Node {
+                StableBslValue::Node(StableElementKey::Node {
                     scenario: "demo/finite-choice-two-classes".to_owned(),
                     local_name: "class-a".to_owned(),
                 },),
@@ -674,11 +672,11 @@ fn completed_replay_retains_typed_graph_rows_and_successful_event_batch() {
         &[
             (
                 "needs-roll".to_owned(),
-                StableBslValueV1::RealBits(1.0_f64.to_bits()),
+                StableBslValue::RealBits(1.0_f64.to_bits()),
             ),
             (
                 "subject".to_owned(),
-                StableBslValueV1::Node(StableElementKeyV1::Node {
+                StableBslValue::Node(StableElementKey::Node {
                     scenario: "demo/finite-choice-two-classes".to_owned(),
                     local_name: "class-b".to_owned(),
                 },),
@@ -708,7 +706,7 @@ fn completed_replay_retains_typed_graph_rows_and_successful_event_batch() {
 
 #[test]
 fn prepared_replay_publishes_once_only_after_exact_commit_acknowledgement() {
-    let replay_id = ReplaySessionIdV1::try_from("per281/prepared-commit-ack").unwrap();
+    let replay_id = ReplaySessionId::try_from("per281/prepared-commit-ack").unwrap();
     let mut session = ReplayTickSession::new(
         REPLAY_SCENARIO,
         None,
@@ -721,7 +719,7 @@ fn prepared_replay_publishes_once_only_after_exact_commit_acknowledgement() {
         foundation_material_state(),
     )
     .unwrap();
-    let actions = OrderedPracticeActionBatchV1::empty(replay_id, 1).unwrap();
+    let actions = OrderedPracticeActionBatch::empty(replay_id, 1).unwrap();
     let before_graph = session.graph().encode_state().unwrap().as_bytes().to_vec();
     let before_cursors = session.graph().allocator_cursors();
     let before_material = foundation_material_state();
@@ -745,11 +743,8 @@ fn prepared_replay_publishes_once_only_after_exact_commit_acknowledgement() {
     let prepared = session.prepare_advance(&actions).unwrap();
     let stale_after_first_publication = session.prepare_advance(&actions).unwrap();
     let tick_content_hash = prepared.report().tick_content_hash();
-    let acknowledgement = ReplayCommitAcknowledgementV1::new(
-        ReplayCommitDispositionV1::Committed,
-        1,
-        tick_content_hash,
-    );
+    let acknowledgement =
+        ReplayCommitAcknowledgement::new(ReplayCommitDisposition::Committed, 1, tick_content_hash);
     let report = session
         .acknowledge_prepared(&mut sink, prepared, acknowledgement)
         .unwrap();
@@ -761,8 +756,8 @@ fn prepared_replay_publishes_once_only_after_exact_commit_acknowledgement() {
     assert_eq!(sink.events.len(), 3);
 
     let events_after_first_ack = sink.events.clone();
-    let ambiguous_acknowledgement = ReplayCommitAcknowledgementV1::new(
-        ReplayCommitDispositionV1::ReconciledAfterAmbiguousCommit,
+    let ambiguous_acknowledgement = ReplayCommitAcknowledgement::new(
+        ReplayCommitDisposition::ReconciledAfterAmbiguousCommit,
         1,
         stale_after_first_publication.report().tick_content_hash(),
     );
@@ -783,7 +778,7 @@ fn prepared_replay_publishes_once_only_after_exact_commit_acknowledgement() {
     assert_eq!(sink.events, events_after_first_ack);
 }
 
-fn assert_populated_material_rows(material: &MaterialStateRowsV1) {
+fn assert_populated_material_rows(material: &MaterialStateRows) {
     assert_eq!(material.source_count(), 45_575);
     assert_eq!(material.rows().len(), 45_575);
     assert_eq!(
@@ -797,13 +792,13 @@ fn assert_populated_material_rows(material: &MaterialStateRowsV1) {
     let mut material_rows = material.rows();
     assert!(matches!(
         material_rows.next(),
-        Some(MaterialStateRowRefV1::WorldRegister(world))
-            if world == &WorldRegisterRowV1::try_new(
+        Some(MaterialStateRowRef::WorldRegister(world))
+            if world == &WorldRegisterRow::try_new(
                 "world/completed-tick".to_owned(),
-                StableBslValueV1::Int(1),
+                StableBslValue::Int(1),
             ).unwrap()
     ));
-    let Some(MaterialStateRowRefV1::Territory(territory)) = material_rows.next() else {
+    let Some(MaterialStateRowRef::Territory(territory)) = material_rows.next() else {
         panic!("material rows lost the derived territory family")
     };
     assert_eq!(
@@ -812,13 +807,13 @@ fn assert_populated_material_rows(material: &MaterialStateRowsV1) {
     );
     assert!(territory.ordered_fields().is_empty());
     for foundation_row in michigan_foundation().rows() {
-        let Some(MaterialStateRowRefV1::DynamicHex(dynamic_hex)) = material_rows.next() else {
+        let Some(MaterialStateRowRef::DynamicHex(dynamic_hex)) = material_rows.next() else {
             panic!("material rows lost the exact dynamic-H3 family")
         };
         assert_eq!(dynamic_hex.cell_id(), foundation_row.cell_id());
         assert_eq!(dynamic_hex.value_bits(), foundation_row.value_bits());
     }
-    let Some(MaterialStateRowRefV1::Organization(organization)) = material_rows.next() else {
+    let Some(MaterialStateRowRef::Organization(organization)) = material_rows.next() else {
         panic!("material rows lost the derived organization family")
     };
     assert!(material_rows.next().is_none());
@@ -828,7 +823,7 @@ fn assert_populated_material_rows(material: &MaterialStateRowsV1) {
     );
     assert_eq!(
         organization.organization_kind(),
-        &StableBslValueV1::Enum {
+        &StableBslValue::Enum {
             enum_type: "OrgKind".to_owned(),
             member: "POLITICAL_FACTION".to_owned(),
         }
@@ -840,16 +835,16 @@ fn assert_populated_material_rows(material: &MaterialStateRowsV1) {
     assert_eq!(
         organization.ordered_fields(),
         &[
-            ("members".to_owned(), StableBslValueV1::Int(31)),
+            ("members".to_owned(), StableBslValue::Int(31)),
             (
                 "ratio".to_owned(),
-                StableBslValueV1::RealBits(0.0_f64.to_bits()),
+                StableBslValue::RealBits(0.0_f64.to_bits()),
             ),
         ]
     );
 }
 
-fn assert_empty_material_rows(empty: &MaterialStateRowsV1) {
+fn assert_empty_material_rows(empty: &MaterialStateRows) {
     assert_eq!(empty.source_count(), 45_573);
     assert_eq!(empty.rows().len(), 45_573);
     assert_eq!(empty.world_registers().source_count(), 1);
@@ -871,16 +866,16 @@ fn assert_empty_material_rows(empty: &MaterialStateRowsV1) {
     let mut empty_rows = empty.rows();
     assert!(matches!(
         empty_rows.next(),
-        Some(MaterialStateRowRefV1::WorldRegister(world))
-            if world == &WorldRegisterRowV1::try_new(
+        Some(MaterialStateRowRef::WorldRegister(world))
+            if world == &WorldRegisterRow::try_new(
                 "world/completed-tick".to_owned(),
-                StableBslValueV1::Int(1),
+                StableBslValue::Int(1),
             ).unwrap()
     ));
     for foundation_row in michigan_foundation().rows() {
         assert!(matches!(
             empty_rows.next(),
-            Some(MaterialStateRowRefV1::DynamicHex(dynamic))
+            Some(MaterialStateRowRef::DynamicHex(dynamic))
                 if dynamic.cell_id() == foundation_row.cell_id()
                     && dynamic.value_bits() == foundation_row.value_bits()
         ));
@@ -891,11 +886,11 @@ fn assert_empty_material_rows(empty: &MaterialStateRowsV1) {
 #[test]
 fn completed_replay_retains_every_source_owned_material_family() {
     assert_eq!(
-        WorldRegisterRowV1::try_new("world/completed-tick".to_owned(), StableBslValueV1::Int(-1),)
+        WorldRegisterRow::try_new("world/completed-tick".to_owned(), StableBslValue::Int(-1),)
             .unwrap_err(),
-        MaterialStateErrorV1::WorldRegister
+        MaterialStateError::WorldRegister
     );
-    let replay_id = ReplaySessionIdV1::try_from("per281/material-complete").unwrap();
+    let replay_id = ReplaySessionId::try_from("per281/material-complete").unwrap();
     let material_state = foundation_material_state();
     let mut session = ReplayTickSession::new(
         MATERIAL_SCENARIO,
@@ -909,14 +904,14 @@ fn completed_replay_retains_every_source_owned_material_family() {
         material_state,
     )
     .unwrap();
-    let actions = OrderedPracticeActionBatchV1::empty(replay_id, 1).unwrap();
+    let actions = OrderedPracticeActionBatch::empty(replay_id, 1).unwrap();
     let mut sink = babylon_bsl::structural_verbs::CollectingSink::default();
 
     let identified = session.advance(&mut sink, &actions).unwrap();
     let material = identified.material_state_rows();
     assert_populated_material_rows(material);
 
-    let empty_replay_id = ReplaySessionIdV1::try_from("per281/material-empty").unwrap();
+    let empty_replay_id = ReplaySessionId::try_from("per281/material-empty").unwrap();
     let mut empty_session = ReplayTickSession::new(
         REPLAY_SCENARIO,
         None,
@@ -929,7 +924,7 @@ fn completed_replay_retains_every_source_owned_material_family() {
         foundation_material_state(),
     )
     .unwrap();
-    let empty_actions = OrderedPracticeActionBatchV1::empty(empty_replay_id, 1).unwrap();
+    let empty_actions = OrderedPracticeActionBatch::empty(empty_replay_id, 1).unwrap();
     let mut empty_sink = babylon_bsl::structural_verbs::CollectingSink::default();
     let empty_identified = empty_session
         .advance(&mut empty_sink, &empty_actions)
@@ -940,11 +935,11 @@ fn completed_replay_retains_every_source_owned_material_family() {
 
 #[test]
 fn territory_rows_are_derived_from_the_post_tick_graph() {
-    let short_id = StableElementKeyV1::Node {
+    let short_id = StableElementKey::Node {
         scenario: "demo/territory-derived".to_owned(),
         local_name: "z".to_owned(),
     };
-    let long_id = StableElementKeyV1::Node {
+    let long_id = StableElementKey::Node {
         scenario: "demo/territory-derived".to_owned(),
         local_name: "aa".to_owned(),
     };
@@ -956,7 +951,7 @@ fn territory_rows_are_derived_from_the_post_tick_graph() {
         short_id.canonical_bytes().unwrap() < long_id.canonical_bytes().unwrap(),
         "length-framed material primary-key order must put z before aa"
     );
-    let replay_id = ReplaySessionIdV1::try_from("per281/territory-derived").unwrap();
+    let replay_id = ReplaySessionId::try_from("per281/territory-derived").unwrap();
     let mut session = ReplayTickSession::new(
         DERIVED_TERRITORY_SCENARIO,
         None,
@@ -969,7 +964,7 @@ fn territory_rows_are_derived_from_the_post_tick_graph() {
         foundation_material_state(),
     )
     .unwrap();
-    let actions = OrderedPracticeActionBatchV1::empty(replay_id, 1).unwrap();
+    let actions = OrderedPracticeActionBatch::empty(replay_id, 1).unwrap();
     let mut sink = babylon_bsl::structural_verbs::CollectingSink::default();
     let identified = session.advance(&mut sink, &actions).unwrap();
     let territory_rows = identified.material_state_rows().territories();
@@ -985,23 +980,23 @@ fn territory_rows_are_derived_from_the_post_tick_graph() {
         &[
             (
                 "heat".to_owned(),
-                StableBslValueV1::RealBits(0.625_f64.to_bits()),
+                StableBslValue::RealBits(0.625_f64.to_bits()),
             ),
-            ("population".to_owned(), StableBslValueV1::Int(23)),
+            ("population".to_owned(), StableBslValue::Int(23)),
             (
                 "production-total".to_owned(),
-                StableBslValueV1::RealBits(2.5_f64.to_bits()),
+                StableBslValue::RealBits(2.5_f64.to_bits()),
             ),
             (
                 "territory-type".to_owned(),
-                StableBslValueV1::Enum {
+                StableBslValue::Enum {
                     enum_type: "TerritoryType".to_owned(),
                     member: "PERIPHERY".to_owned(),
                 },
             ),
             (
                 "treasury".to_owned(),
-                StableBslValueV1::CurrencyMicroUnits(11_000_000),
+                StableBslValue::CurrencyMicroUnits(11_000_000),
             ),
         ]
     );
@@ -1010,23 +1005,23 @@ fn territory_rows_are_derived_from_the_post_tick_graph() {
         &[
             (
                 "heat".to_owned(),
-                StableBslValueV1::RealBits(0.375_f64.to_bits()),
+                StableBslValue::RealBits(0.375_f64.to_bits()),
             ),
-            ("population".to_owned(), StableBslValueV1::Int(13)),
+            ("population".to_owned(), StableBslValue::Int(13)),
             (
                 "production-total".to_owned(),
-                StableBslValueV1::RealBits(1.25_f64.to_bits()),
+                StableBslValue::RealBits(1.25_f64.to_bits()),
             ),
             (
                 "territory-type".to_owned(),
-                StableBslValueV1::Enum {
+                StableBslValue::Enum {
                     enum_type: "TerritoryType".to_owned(),
                     member: "CORE".to_owned(),
                 },
             ),
             (
                 "treasury".to_owned(),
-                StableBslValueV1::CurrencyMicroUnits(7_000_000),
+                StableBslValue::CurrencyMicroUnits(7_000_000),
             ),
         ]
     );
@@ -1050,11 +1045,11 @@ fn territory_rows_are_derived_from_the_post_tick_graph() {
 
 #[test]
 fn organization_rows_are_derived_from_the_post_tick_graph_and_presence_topology() {
-    let organization_id = |local_name: &str| StableElementKeyV1::Node {
+    let organization_id = |local_name: &str| StableElementKey::Node {
         scenario: "demo/organization-derived".to_owned(),
         local_name: local_name.to_owned(),
     };
-    let territory_id = |local_name: &str| StableElementKeyV1::Node {
+    let territory_id = |local_name: &str| StableElementKey::Node {
         scenario: "demo/organization-derived".to_owned(),
         local_name: local_name.to_owned(),
     };
@@ -1077,7 +1072,7 @@ fn organization_rows_are_derived_from_the_post_tick_graph_and_presence_topology(
         "length-framed territory primary-key order must put z before aa"
     );
 
-    let replay_id = ReplaySessionIdV1::try_from("per281/organization-derived").unwrap();
+    let replay_id = ReplaySessionId::try_from("per281/organization-derived").unwrap();
     let mut session = ReplayTickSession::new(
         DERIVED_ORGANIZATION_SCENARIO,
         None,
@@ -1090,7 +1085,7 @@ fn organization_rows_are_derived_from_the_post_tick_graph_and_presence_topology(
         foundation_material_state(),
     )
     .unwrap();
-    let actions = OrderedPracticeActionBatchV1::empty(replay_id, 1).unwrap();
+    let actions = OrderedPracticeActionBatch::empty(replay_id, 1).unwrap();
     let mut sink = babylon_bsl::structural_verbs::CollectingSink::default();
     let identified = session.advance(&mut sink, &actions).unwrap();
     let organizations = identified.material_state_rows().organizations();
@@ -1102,7 +1097,7 @@ fn organization_rows_are_derived_from_the_post_tick_graph_and_presence_topology(
     assert_eq!(derived_political.organization_id(), &organization_id("f"));
     assert_eq!(
         derived_political.organization_kind(),
-        &StableBslValueV1::Enum {
+        &StableBslValue::Enum {
             enum_type: "OrgKind".to_owned(),
             member: "POLITICAL_FACTION".to_owned(),
         }
@@ -1114,21 +1109,21 @@ fn organization_rows_are_derived_from_the_post_tick_graph_and_presence_topology(
     assert_eq!(
         derived_political.ordered_fields(),
         &[
-            ("members".to_owned(), StableBslValueV1::Int(15)),
+            ("members".to_owned(), StableBslValue::Int(15)),
             (
                 "productivity".to_owned(),
-                StableBslValueV1::RealBits(1.25_f64.to_bits()),
+                StableBslValue::RealBits(1.25_f64.to_bits()),
             ),
             (
                 "status".to_owned(),
-                StableBslValueV1::Enum {
+                StableBslValue::Enum {
                     enum_type: "OrgStatus".to_owned(),
                     member: "ACTIVE".to_owned(),
                 },
             ),
             (
                 "treasury".to_owned(),
-                StableBslValueV1::CurrencyMicroUnits(7_000_000),
+                StableBslValue::CurrencyMicroUnits(7_000_000),
             ),
         ]
     );
@@ -1155,7 +1150,7 @@ fn organization_rows_are_derived_from_the_post_tick_graph_and_presence_topology(
     );
     assert_eq!(
         derived_business.organization_kind(),
-        &StableBslValueV1::Enum {
+        &StableBslValue::Enum {
             enum_type: "OrgKind".to_owned(),
             member: "BUSINESS".to_owned(),
         }
@@ -1164,21 +1159,21 @@ fn organization_rows_are_derived_from_the_post_tick_graph_and_presence_topology(
     assert_eq!(
         derived_business.ordered_fields(),
         &[
-            ("members".to_owned(), StableBslValueV1::Int(25)),
+            ("members".to_owned(), StableBslValue::Int(25)),
             (
                 "productivity".to_owned(),
-                StableBslValueV1::RealBits(2.5_f64.to_bits()),
+                StableBslValue::RealBits(2.5_f64.to_bits()),
             ),
             (
                 "status".to_owned(),
-                StableBslValueV1::Enum {
+                StableBslValue::Enum {
                     enum_type: "OrgStatus".to_owned(),
                     member: "DORMANT".to_owned(),
                 },
             ),
             (
                 "treasury".to_owned(),
-                StableBslValueV1::CurrencyMicroUnits(11_000_000),
+                StableBslValue::CurrencyMicroUnits(11_000_000),
             ),
         ]
     );
@@ -1186,7 +1181,7 @@ fn organization_rows_are_derived_from_the_post_tick_graph_and_presence_topology(
 
 #[test]
 fn duplicate_retained_event_field_refuses_without_publication() {
-    let replay_id = ReplaySessionIdV1::try_from("per281/duplicate-retained-field").unwrap();
+    let replay_id = ReplaySessionId::try_from("per281/duplicate-retained-field").unwrap();
     let mut session = ReplayTickSession::new(
         REPLAY_SCENARIO,
         None,
@@ -1202,7 +1197,7 @@ fn duplicate_retained_event_field_refuses_without_publication() {
     let before = session.graph().encode_state().unwrap().as_bytes().to_vec();
     let before_cursors = session.graph().allocator_cursors();
     let before_completed_tick = session.completed_tick();
-    let actions = OrderedPracticeActionBatchV1::empty(replay_id, 1).unwrap();
+    let actions = OrderedPracticeActionBatch::empty(replay_id, 1).unwrap();
     let mut sink = babylon_bsl::structural_verbs::CollectingSink {
         events: vec![("EventType/PRIOR".to_owned(), Vec::new())],
     };
@@ -1285,7 +1280,7 @@ fn replay_identity_is_exact_across_fresh_processes() {
 
 #[test]
 fn replay_action_guards_and_rules_hash_refuse_without_publication() {
-    let replay_id = ReplaySessionIdV1::try_from("per60/guarded").unwrap();
+    let replay_id = ReplaySessionId::try_from("per60/guarded").unwrap();
     let mut bad_content = content_for(REPLAY_RULE);
     bad_content.rules_hash = [0xff; 32];
     assert!(matches!(
@@ -1326,13 +1321,13 @@ fn replay_action_guards_and_rules_hash_refuse_without_publication() {
         Err(ReplayTickError::NonEmptyActionBatch { count: 1 })
     ));
 
-    let other_session = ReplaySessionIdV1::try_from("per60/other").unwrap();
-    let wrong_session = OrderedPracticeActionBatchV1::empty(other_session, 1).unwrap();
+    let other_session = ReplaySessionId::try_from("per60/other").unwrap();
+    let wrong_session = OrderedPracticeActionBatch::empty(other_session, 1).unwrap();
     assert!(matches!(
         session.advance(&mut sink, &wrong_session),
         Err(ReplayTickError::ActionSessionMismatch)
     ));
-    let wrong_tick = OrderedPracticeActionBatchV1::empty(replay_id, 2).unwrap();
+    let wrong_tick = OrderedPracticeActionBatch::empty(replay_id, 2).unwrap();
     assert!(matches!(
         session.advance(&mut sink, &wrong_tick),
         Err(ReplayTickError::ActionTickMismatch {
@@ -1347,7 +1342,7 @@ fn replay_action_guards_and_rules_hash_refuse_without_publication() {
 
 #[test]
 fn replay_rule_failure_discards_detached_writes_events_and_identity() {
-    let replay_id = ReplaySessionIdV1::try_from("per60/rule-failure").unwrap();
+    let replay_id = ReplaySessionId::try_from("per60/rule-failure").unwrap();
     let mut session = ReplayTickSession::new(
         FAILURE_SCENARIO,
         None,
@@ -1361,7 +1356,7 @@ fn replay_rule_failure_discards_detached_writes_events_and_identity() {
     )
     .unwrap();
     let before = session.graph().encode_state().unwrap().as_bytes().to_vec();
-    let actions = OrderedPracticeActionBatchV1::empty(replay_id, 1).unwrap();
+    let actions = OrderedPracticeActionBatch::empty(replay_id, 1).unwrap();
     let mut sink = babylon_bsl::structural_verbs::CollectingSink::default();
 
     assert!(matches!(
@@ -1375,26 +1370,26 @@ fn replay_rule_failure_discards_detached_writes_events_and_identity() {
 
 #[test]
 fn register_manifest_set_and_stable_world_bytes_are_exact() {
-    let manifest = world_register_manifest_v1().unwrap();
+    let manifest = world_register_manifest().unwrap();
     assert_eq!(
         manifest.canonical_bytes(),
         [
             b"babylon.world-register-manifest\0".as_slice(),
-            &WORLD_REGISTER_MANIFEST_LAYOUT_VERSION_V1.to_be_bytes(),
+            &WORLD_REGISTER_MANIFEST_LAYOUT_VERSION.to_be_bytes(),
             &1_u32.to_be_bytes(),
             &str32("world/completed-tick"),
             &1_u32.to_be_bytes(),
         ]
         .concat()
     );
-    let registers = encode_world_register_set_v1(&manifest, 0).unwrap();
+    let registers = encode_world_register_set(&manifest, 0).unwrap();
     assert_eq!(
         registers.canonical_bytes(),
         [
             b"babylon.world-register-set\0".as_slice(),
-            &WORLD_REGISTER_SET_LAYOUT_VERSION_V1.to_be_bytes(),
+            &WORLD_REGISTER_SET_LAYOUT_VERSION.to_be_bytes(),
             &[0x01],
-            &WORLD_REGISTER_MANIFEST_LAYOUT_VERSION_V1.to_be_bytes(),
+            &WORLD_REGISTER_MANIFEST_LAYOUT_VERSION.to_be_bytes(),
             manifest.digest().as_slice(),
             &[0x02],
             &1_u32.to_be_bytes(),
@@ -1408,25 +1403,25 @@ fn register_manifest_set_and_stable_world_bytes_are_exact() {
 
     let mut graph = MemoryGraph::new();
     let node = graph.add_node("class").unwrap();
-    let resolver = StableElementResolverV1::seal(
+    let resolver = StableElementResolver::seal(
         &graph,
         "demo/world",
         &HashMap::from([(node, "workers".to_owned())]),
         &HashMap::new(),
     )
     .unwrap();
-    let stable_graph = encode_stable_graph_state_v1(&graph, &resolver).unwrap();
-    let world = encode_stable_world_v1(&stable_graph, &registers).unwrap();
+    let stable_graph = encode_stable_graph_state(&graph, &resolver).unwrap();
+    let world = encode_stable_world(&stable_graph, &registers).unwrap();
     assert_eq!(
         world.canonical_bytes(),
         [
             b"babylon.stable-world\0".as_slice(),
-            &STABLE_WORLD_LAYOUT_VERSION_V1.to_be_bytes(),
+            &STABLE_WORLD_LAYOUT_VERSION.to_be_bytes(),
             &[0x01],
             &1_u32.to_be_bytes(),
             stable_graph.digest().as_bytes(),
             &[0x02],
-            &WORLD_REGISTER_SET_LAYOUT_VERSION_V1.to_be_bytes(),
+            &WORLD_REGISTER_SET_LAYOUT_VERSION.to_be_bytes(),
             registers.digest().as_slice(),
         ]
         .concat()
@@ -1435,19 +1430,19 @@ fn register_manifest_set_and_stable_world_bytes_are_exact() {
 
 #[test]
 fn register_tick_domain_is_checked() {
-    let manifest = world_register_manifest_v1().unwrap();
-    assert!(encode_world_register_set_v1(&manifest, i64::MAX).is_ok());
+    let manifest = world_register_manifest().unwrap();
+    assert!(encode_world_register_set(&manifest, i64::MAX).is_ok());
     assert_eq!(
-        encode_world_register_set_v1(&manifest, -1),
+        encode_world_register_set(&manifest, -1),
         Err(ReplayTickIdentityError::NegativeCompletedTick { value: -1 })
     );
 }
 
 #[test]
-fn tick_payload_v2_is_exact_and_order_sensitive_without_reencoding_fired() {
+fn tick_payload_is_exact_and_order_sensitive_without_reencoding_fired() {
     let mut graph = MemoryGraph::new();
     let node = graph.add_node("class").unwrap();
-    let resolver = StableElementResolverV1::seal(
+    let resolver = StableElementResolver::seal(
         &graph,
         "demo/world",
         &HashMap::from([(node, "workers".to_owned())]),
@@ -1457,7 +1452,7 @@ fn tick_payload_v2_is_exact_and_order_sensitive_without_reencoding_fired() {
     let order = vec!["demo/a".to_owned(), "demo/b".to_owned()];
     let outcomes = vec![("demo/a".to_owned(), 1), ("demo/b".to_owned(), 2)];
     let events = vec![
-        CommittedEventV2::new(
+        CommittedEvent::new(
             "demo/a".to_owned(),
             None,
             "FIRST".to_owned(),
@@ -1466,7 +1461,7 @@ fn tick_payload_v2_is_exact_and_order_sensitive_without_reencoding_fired() {
                 ("value".to_owned(), Value::Int(2)),
             ],
         ),
-        CommittedEventV2::new(
+        CommittedEvent::new(
             "demo/b".to_owned(),
             None,
             "SECOND".to_owned(),
@@ -1490,17 +1485,17 @@ fn tick_payload_v2_is_exact_and_order_sensitive_without_reencoding_fired() {
         },
     ];
     let payload =
-        encode_tick_payload_v2(&order, &outcomes, 3, &events, &[], &receipts, &resolver).unwrap();
+        encode_tick_payload(&order, &outcomes, 3, &events, &[], &receipts, &resolver).unwrap();
     assert!(payload.canonical_bytes().starts_with(
         &[
             b"babylon.tick-payload.v2\0".as_slice(),
-            &TICK_PAYLOAD_LAYOUT_VERSION_V2.to_be_bytes(),
+            &TICK_PAYLOAD_LAYOUT_VERSION.to_be_bytes(),
             &[0x01],
         ]
         .concat()
     ));
     assert_eq!(payload.canonical_bytes().last(), Some(&0));
-    let reversed = encode_tick_payload_v2(
+    let reversed = encode_tick_payload(
         &order,
         &outcomes,
         3,
@@ -1516,7 +1511,7 @@ fn tick_payload_v2_is_exact_and_order_sensitive_without_reencoding_fired() {
         ("value".to_owned(), Value::Int(1)),
     ];
     let pair_reordered_events = vec![
-        CommittedEventV2::new(
+        CommittedEvent::new(
             "demo/a".to_owned(),
             None,
             "FIRST".to_owned(),
@@ -1524,7 +1519,7 @@ fn tick_payload_v2_is_exact_and_order_sensitive_without_reencoding_fired() {
         ),
         events[1].clone(),
     ];
-    let pair_reordered = encode_tick_payload_v2(
+    let pair_reordered = encode_tick_payload(
         &order,
         &outcomes,
         3,
@@ -1536,7 +1531,7 @@ fn tick_payload_v2_is_exact_and_order_sensitive_without_reencoding_fired() {
     .unwrap();
     assert_ne!(payload.digest(), pair_reordered.digest());
     let provenance_changed_events = vec![
-        CommittedEventV2::new(
+        CommittedEvent::new(
             "demo/b".to_owned(),
             None,
             "FIRST".to_owned(),
@@ -1547,7 +1542,7 @@ fn tick_payload_v2_is_exact_and_order_sensitive_without_reencoding_fired() {
         ),
         events[1].clone(),
     ];
-    let provenance_changed = encode_tick_payload_v2(
+    let provenance_changed = encode_tick_payload(
         &order,
         &outcomes,
         3,
@@ -1558,7 +1553,7 @@ fn tick_payload_v2_is_exact_and_order_sensitive_without_reencoding_fired() {
     )
     .unwrap();
     assert_ne!(payload.digest(), provenance_changed.digest());
-    let receipt_reordered = encode_tick_payload_v2(
+    let receipt_reordered = encode_tick_payload(
         &order,
         &outcomes,
         3,
@@ -1570,11 +1565,11 @@ fn tick_payload_v2_is_exact_and_order_sensitive_without_reencoding_fired() {
     .unwrap();
     assert_ne!(payload.digest(), receipt_reordered.digest());
     assert!(matches!(
-        encode_tick_payload_v2(&order, &outcomes, 4, &events, &[], &receipts, &resolver),
+        encode_tick_payload(&order, &outcomes, 4, &events, &[], &receipts, &resolver),
         Err(ReplayTickIdentityError::FiredTotalMismatch { .. })
     ));
     assert!(matches!(
-        encode_tick_payload_v2(
+        encode_tick_payload(
             &["demo/b".to_owned(), "demo/a".to_owned()],
             &outcomes,
             3,

@@ -1,17 +1,17 @@
 //! Read receipt facts and next-opening ceilings; never evaluate mechanics here.
 use std::collections::BTreeMap;
 
-use babylon_bsl::identity_codec::StableBslValueV1;
-use babylon_graph::{hypergraph_store::HypergraphStore, stable_element::StableElementKeyV1};
-use babylon_material_circuit::{MaterialCircuitStateV3, SiteIdV1};
+use babylon_bsl::identity_codec::StableBslValue;
+use babylon_graph::{hypergraph_store::HypergraphStore, stable_element::StableElementKey};
+use babylon_material_circuit::{MaterialCircuitState, SiteId};
 use babylon_persistence::michigan_material::{
-    MichiganMaterialCatalogV1, MichiganMaterialInputV2, MichiganMaterialProcessV1,
+    MichiganMaterialCatalog, MichiganMaterialInput, MichiganMaterialProcess,
 };
 use babylon_tick::{
-    material_replay::PreparedMaterialTickV3,
-    material_staffing::STAFFING_COMPOSITION_ID_V1,
-    material_world::{decode_material_receipts_v4, MaterialTickReceiptsV4},
-    replay_session::SuccessfulEventV2,
+    material_replay::PreparedMaterialTick,
+    material_staffing::STAFFING_COMPOSITION_ID,
+    material_world::{decode_material_receipts, MaterialTickReceipts},
+    replay_session::SuccessfulEvent,
 };
 use serde::Serialize;
 use serde_json::Value;
@@ -156,9 +156,9 @@ fn total(mut values: impl Iterator<Item = u64>) -> Result<u64> {
 }
 
 pub fn stock(
-    catalog: &MichiganMaterialCatalogV1,
-    state: &MaterialCircuitStateV3,
-    site: SiteIdV1,
+    catalog: &MichiganMaterialCatalog,
+    state: &MaterialCircuitState,
+    site: SiteId,
     good: &str,
 ) -> Result<u64> {
     let good = catalog
@@ -173,8 +173,8 @@ pub fn stock(
     )
 }
 
-fn workforce(event: &SuccessfulEventV2, period: u64) -> Result<(String, Staffing)> {
-    if event.emitting_rule() != STAFFING_COMPOSITION_ID_V1
+fn workforce(event: &SuccessfulEvent, period: u64) -> Result<(String, Staffing)> {
+    if event.emitting_rule() != STAFFING_COMPOSITION_ID
         || event.choice_receipt().is_some()
         || event.fields().len() != 13
     {
@@ -186,7 +186,7 @@ fn workforce(event: &SuccessfulEventV2, period: u64) -> Result<(String, Staffing
         .map(|(key, value)| (key.as_str(), value))
         .collect();
     let number = |key: &str| match fields.get(key) {
-        Some(StableBslValueV1::Int(value)) => {
+        Some(StableBslValue::Int(value)) => {
             u64::try_from(*value).map_err(|_| contract(format!("negative staffing field {key}")))
         }
         _ => Err(contract(format!(
@@ -196,7 +196,7 @@ fn workforce(event: &SuccessfulEventV2, period: u64) -> Result<(String, Staffing
     if number("period")? != period {
         return Err(contract("staffing period mismatch"));
     }
-    let Some(StableBslValueV1::Node(StableElementKeyV1::Node { local_name, .. })) =
+    let Some(StableBslValue::Node(StableElementKey::Node { local_name, .. })) =
         fields.get("subject")
     else {
         return Err(contract("missing stable staffing subject"));
@@ -220,12 +220,12 @@ fn workforce(event: &SuccessfulEventV2, period: u64) -> Result<(String, Staffing
 }
 
 fn staffing(
-    candidate: &PreparedMaterialTickV3<HypergraphStore>,
+    candidate: &PreparedMaterialTick<HypergraphStore>,
 ) -> Result<BTreeMap<String, Staffing>> {
     let mut rows = BTreeMap::new();
     for event in candidate.graph_report().successful_event_batch().events() {
         if event.event_type() == "WORKFORCE_STAFFING"
-            || event.emitting_rule() == STAFFING_COMPOSITION_ID_V1
+            || event.emitting_rule() == STAFFING_COMPOSITION_ID
         {
             let (key, row) = workforce(event, candidate.identity().resolve_tick())?;
             if rows.insert(key, row).is_some() {
@@ -239,7 +239,7 @@ fn staffing(
     Ok(rows)
 }
 
-fn capacity(state: &MaterialCircuitStateV3, process: &MichiganMaterialProcessV1) -> Result<u64> {
+fn capacity(state: &MaterialCircuitState, process: &MichiganMaterialProcess) -> Result<u64> {
     state
         .capacities
         .iter()
@@ -252,7 +252,7 @@ fn capacity(state: &MaterialCircuitStateV3, process: &MichiganMaterialProcessV1)
         .ok_or_else(|| contract("missing period capacity"))
 }
 
-fn labor(state: &MaterialCircuitStateV3, process: &MichiganMaterialProcessV1) -> Result<u64> {
+fn labor(state: &MaterialCircuitState, process: &MichiganMaterialProcess) -> Result<u64> {
     state
         .labor
         .iter()
@@ -261,7 +261,7 @@ fn labor(state: &MaterialCircuitStateV3, process: &MichiganMaterialProcessV1) ->
         .ok_or_else(|| contract("missing period labor"))
 }
 
-fn plan(state: &MaterialCircuitStateV3, process: &MichiganMaterialProcessV1) -> u64 {
+fn plan(state: &MaterialCircuitState, process: &MichiganMaterialProcess) -> u64 {
     state
         .production_commitments
         .iter()
@@ -278,10 +278,10 @@ fn minima(values: &[(&'static str, u64)]) -> Vec<&'static str> {
 }
 
 fn next_opening(
-    state: &MaterialCircuitStateV3,
-    process: &MichiganMaterialProcessV1,
+    state: &MaterialCircuitState,
+    process: &MichiganMaterialProcess,
     input: u64,
-    input_recipe: &MichiganMaterialInputV2,
+    input_recipe: &MichiganMaterialInput,
     staffing: &Staffing,
 ) -> Result<Option<NextOpening>> {
     if state.period > PERIODS {
@@ -320,10 +320,10 @@ fn next_opening(
 }
 
 fn production(
-    receipts: &MaterialTickReceiptsV4,
-    opening: &MaterialCircuitStateV3,
-    process: &MichiganMaterialProcessV1,
-    input_recipe: &MichiganMaterialInputV2,
+    receipts: &MaterialTickReceipts,
+    opening: &MaterialCircuitState,
+    process: &MichiganMaterialProcess,
+    input_recipe: &MichiganMaterialInput,
 ) -> Result<Option<Production>> {
     let receipt = receipts
         .production
@@ -353,9 +353,9 @@ fn production(
 
 fn processes(
     case: &Case,
-    opening: &MaterialCircuitStateV3,
-    closing: &MaterialCircuitStateV3,
-    receipts: &MaterialTickReceiptsV4,
+    opening: &MaterialCircuitState,
+    closing: &MaterialCircuitState,
+    receipts: &MaterialTickReceipts,
     mut staffing: BTreeMap<String, Staffing>,
 ) -> Result<Vec<ProcessRow>> {
     let catalog = &case.catalog;
@@ -423,10 +423,7 @@ fn processes(
         .collect()
 }
 
-fn transit(
-    state: &MaterialCircuitStateV3,
-    route: babylon_material_circuit::RouteIdV2,
-) -> Vec<Transit> {
+fn transit(state: &MaterialCircuitState, route: babylon_material_circuit::RouteId) -> Vec<Transit> {
     state
         .freight
         .iter()
@@ -441,8 +438,8 @@ fn transit(
 }
 
 fn regional_route_capacity(
-    opening: &MaterialCircuitStateV3,
-    route: babylon_material_circuit::RouteIdV2,
+    opening: &MaterialCircuitState,
+    route: babylon_material_circuit::RouteId,
     grams_per_unit: u64,
 ) -> Result<(u16, u64)> {
     let stages: Vec<_> = opening
@@ -477,9 +474,9 @@ fn regional_route_capacity(
 
 fn routes(
     case: &Case,
-    opening: &MaterialCircuitStateV3,
-    closing: &MaterialCircuitStateV3,
-    receipts: &MaterialTickReceiptsV4,
+    opening: &MaterialCircuitState,
+    closing: &MaterialCircuitState,
+    receipts: &MaterialTickReceipts,
     processes: &[ProcessRow],
 ) -> Result<Vec<RouteRow>> {
     case.catalog
@@ -574,7 +571,7 @@ fn routes(
         .collect()
 }
 
-fn conserved(case: &Case, state: &MaterialCircuitStateV3) -> Result<(u64, u64)> {
+fn conserved(case: &Case, state: &MaterialCircuitState) -> Result<(u64, u64)> {
     let mut metal = 0;
     let mut food = 0;
     for (key, weight, is_metal) in [
@@ -619,11 +616,11 @@ fn conserved(case: &Case, state: &MaterialCircuitStateV3) -> Result<(u64, u64)> 
 
 pub fn period(
     case: &Case,
-    opening: &MaterialCircuitStateV3,
-    candidate: &PreparedMaterialTickV3<HypergraphStore>,
+    opening: &MaterialCircuitState,
+    candidate: &PreparedMaterialTick<HypergraphStore>,
 ) -> Result<PeriodRow> {
     let closing = candidate.material().register().state();
-    let receipts = decode_material_receipts_v4(candidate.material().receipt_bytes())
+    let receipts = decode_material_receipts(candidate.material().receipt_bytes())
         .map_err(|error| contract(format!("material receipt decode: {error:?}")))?;
     let identity = candidate.identity();
     if receipts.resolve_tick != opening.period || closing.period != opening.period + 1 {

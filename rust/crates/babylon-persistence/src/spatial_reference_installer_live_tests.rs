@@ -7,8 +7,9 @@ use super::{
     SpatialReferenceInstallError, SpatialReferenceRelation,
 };
 use crate::{
-    install_michigan_h3_reference_bundle_v1, michigan_dynamic_hex_foundation_v1,
-    representative_h3_reference_cohort_v1, H3ReferenceCohort, H3ReferenceInstallDisposition,
+    h3_reference_cohort::representative_h3_reference_cohort,
+    h3_reference_cohort::H3ReferenceCohort, install_michigan_h3_reference_bundle,
+    michigan_dynamic_hex_foundation, H3ReferenceInstallDisposition,
 };
 
 const BACKEND_TERMINATION_TIMEOUT_MILLIS: i64 = 5_000;
@@ -17,9 +18,9 @@ const EXPECTED_COUNTS: [i64; 8] = [8, 3_285, 745, 45_572, 22_509, 11_833, 31_881
 
 pub(crate) fn verify_commit_protocol(config: &Config, admin: &Config) {
     let cohort = representative_cohort();
-    let foundation = michigan_dynamic_hex_foundation_v1()
+    let foundation = michigan_dynamic_hex_foundation()
         .expect("the sole checked Michigan foundation fixture must validate");
-    let h3_report = install_michigan_h3_reference_bundle_v1(config, &cohort, foundation)
+    let h3_report = install_michigan_h3_reference_bundle(config, &cohort, foundation)
         .expect("the exact H3 cohort must install before its reference products");
     assert_eq!(
         h3_report.disposition(),
@@ -180,7 +181,7 @@ fn reference_counts(config: &Config) -> [i64; 8] {
 }
 
 fn representative_cohort() -> H3ReferenceCohort {
-    representative_h3_reference_cohort_v1()
+    representative_h3_reference_cohort()
         .expect("the sole checked-in source fixture must validate")
         .clone()
 }

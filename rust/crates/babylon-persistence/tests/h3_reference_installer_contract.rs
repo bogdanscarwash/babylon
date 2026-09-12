@@ -1,12 +1,13 @@
 //! Public contract for the bounded Michigan H3 reference-bundle installer.
 
-use babylon_kernel::tick_content_hash::RefDigestV1;
+use babylon_kernel::tick_content_hash::RefDigest;
 use babylon_persistence::{
-    install_michigan_h3_reference_bundle_v1, H3ReferenceCohort, H3ReferenceInstallDisposition,
-    H3ReferenceInstallError, H3ReferenceInstallOperation, H3ReferenceInstallReport,
-    H3ReferenceMembershipReadContext, PostgresDiagnosticV1, PostgresFailureClassV1,
+    h3_reference_cohort::H3ReferenceCohort, install_michigan_h3_reference_bundle,
+    H3ReferenceInstallDisposition, H3ReferenceInstallError, H3ReferenceInstallOperation,
+    H3ReferenceInstallReport, H3ReferenceMembershipReadContext, PostgresDiagnostic,
+    PostgresFailureClass,
 };
-use babylon_tick::h3_runtime::MichiganDynamicHexFoundationV1;
+use babylon_tick::h3_runtime::MichiganDynamicHexFoundation;
 use postgres::Config;
 
 #[test]
@@ -14,9 +15,9 @@ fn installer_signature_cannot_accept_unvalidated_rows_or_caller_provenance() {
     let install: fn(
         &Config,
         &H3ReferenceCohort,
-        &MichiganDynamicHexFoundationV1,
+        &MichiganDynamicHexFoundation,
     ) -> Result<H3ReferenceInstallReport, H3ReferenceInstallError> =
-        install_michigan_h3_reference_bundle_v1;
+        install_michigan_h3_reference_bundle;
 
     let _ = install;
 }
@@ -25,8 +26,8 @@ fn installer_signature_cannot_accept_unvalidated_rows_or_caller_provenance() {
 fn report_accessors_preserve_exact_provenance_and_bounded_count_types() {
     let _: fn(&H3ReferenceInstallReport) -> H3ReferenceInstallDisposition =
         H3ReferenceInstallReport::disposition;
-    let _: fn(&H3ReferenceInstallReport) -> RefDigestV1 = H3ReferenceInstallReport::ref_digest;
-    let _: fn(&H3ReferenceInstallReport) -> RefDigestV1 = H3ReferenceInstallReport::artifact_digest;
+    let _: fn(&H3ReferenceInstallReport) -> RefDigest = H3ReferenceInstallReport::ref_digest;
+    let _: fn(&H3ReferenceInstallReport) -> RefDigest = H3ReferenceInstallReport::artifact_digest;
     let _: fn(&H3ReferenceInstallReport) -> i16 = H3ReferenceInstallReport::format_version;
     let _: for<'report> fn(&'report H3ReferenceInstallReport) -> &'report str =
         H3ReferenceInstallReport::artifact_name;
@@ -37,9 +38,9 @@ fn report_accessors_preserve_exact_provenance_and_bounded_count_types() {
         H3ReferenceInstallReport::derived_ancestor_count;
     let _: fn(&H3ReferenceInstallReport) -> usize = H3ReferenceInstallReport::closure_cell_count;
     let _: fn(&H3ReferenceInstallReport) -> usize = H3ReferenceInstallReport::r8_child_count;
-    let _: fn(&H3ReferenceInstallReport) -> RefDigestV1 =
+    let _: fn(&H3ReferenceInstallReport) -> RefDigest =
         H3ReferenceInstallReport::r8_child_parent_digest;
-    let _: fn(&H3ReferenceInstallReport) -> RefDigestV1 =
+    let _: fn(&H3ReferenceInstallReport) -> RefDigest =
         H3ReferenceInstallReport::reference_bundle_digest;
     let _: fn(&H3ReferenceInstallReport) -> usize = H3ReferenceInstallReport::commit_attempts;
 }
@@ -84,12 +85,11 @@ fn reference_read_operations_distinguish_query_and_lifecycle_context() {
 
 #[test]
 fn database_diagnostic_exposes_only_secret_safe_fields() {
-    let _: fn(&PostgresDiagnosticV1) -> PostgresFailureClassV1 =
-        PostgresDiagnosticV1::classification;
-    let _: for<'diagnostic> fn(&'diagnostic PostgresDiagnosticV1) -> Option<&'diagnostic str> =
-        PostgresDiagnosticV1::sqlstate;
-    let _: for<'diagnostic> fn(&'diagnostic PostgresDiagnosticV1) -> Option<&'diagnostic str> =
-        PostgresDiagnosticV1::message;
+    let _: fn(&PostgresDiagnostic) -> PostgresFailureClass = PostgresDiagnostic::classification;
+    let _: for<'diagnostic> fn(&'diagnostic PostgresDiagnostic) -> Option<&'diagnostic str> =
+        PostgresDiagnostic::sqlstate;
+    let _: for<'diagnostic> fn(&'diagnostic PostgresDiagnostic) -> Option<&'diagnostic str> =
+        PostgresDiagnostic::message;
 }
 
 #[test]

@@ -197,7 +197,7 @@ implementation_status:
         - versioned_tagged_big_endian_layout
       limitation: >-
         This covers every auxiliary register that currently exists in the Rust
-        tick. It is not TickContentHashV1 and does not include content,
+        tick. It is not TickContentHash and does not include content,
         reference, seed, action, or durable campaign-envelope identity; the
         replay and persistence layers add those distinct identities.
       evidence:
@@ -213,7 +213,7 @@ implementation_status:
         - administrative_material_truth_view
       limitation: no_player_decision_loop
       evidence:
-        - rust/crates/babylon-client/src/ui/admin.rs
+        - rust/crates/babylon-client/src/observer_ui.rs
 
     rust_postgresql_persistence:
       status: implemented_current
@@ -221,22 +221,20 @@ implementation_status:
       database:
         product: PostgreSQL
         major: 17
-        reader_writer: v2_only
-        historical_v1_decoder: prohibited
+        reader_writer: current_material_only
+        historical_decoder: prohibited
       scope:
-        - locked_epoch_9_predecessor_activation
-        - epoch_10_v2_preparation
-        - one_way_epoch_11_v2_activation
+        - atomic_current_schema_initialization
+        - exact_schema_identity_ownership_and_acl_verification
+        - incompatible_database_refusal_before_mutation
         - typed_semantic_tick_rows
         - choice_receipts_and_projected_event_provenance
         - committed_tick_marker_last
         - exact_restart_and_commit_ambiguity_reconciliation
       evidence:
         - rust/crates/babylon-persistence/src/runtime.rs
-        - rust/crates/babylon-persistence/migrations/0009_rust_persistence_activation.sql
-        - rust/crates/babylon-persistence/migrations/0010_committed_tick_v2_preparation.sql
-        - rust/crates/babylon-persistence/migrations/0011_committed_tick_v2_activation.sql
-        - contracts/rust_persistence_cutover_v2.yaml
+        - rust/crates/babylon-persistence/src/current_schema.rs
+        - contracts/current_schema.yaml
 
     python_reference_tools:
       status: implemented_current
@@ -286,8 +284,8 @@ implementation_status:
         - src/babylon/persistence/migrations/0027_hex_spatial_map.sql
         - src/babylon/persistence/migrations/0028_hex_spatial_map_session_scope.sql
         - rust/crates/babylon-persistence/migrations/0007_h3_canonical_readers.sql
-        - rust/crates/babylon-persistence/migrations/0009_rust_persistence_activation.sql
-        - contracts/h3_reader_cutover_v1.yaml
+        - rust/crates/babylon-persistence/src/current_schema.rs
+        - contracts/current_schema.yaml
       realized_disposition:
         owner: PER-280/PER-281
         target: positive BIGINT H3CellId(u64)
@@ -351,12 +349,12 @@ implementation_status:
         estate: rust
         database: PostgreSQL
         major: 17
-        reader_writer: v2_only
-        historical_v1_decoder: prohibited
+        reader_writer: current_material_only
+        historical_decoder: prohibited
       includes:
-        - TickPayloadV2
-        - CommittedTickEnvelopeV2
-        - six_family_choice_receipt_envelope
+        - TickPayload
+        - CommittedMaterialTickEnvelope
+        - eight_family_material_envelope
         - transactional_archive_outbox
         - marker_last_tick_commit
         - exact_retry_restart_reconstruction
@@ -370,10 +368,8 @@ implementation_status:
       evidence:
         - rust/crates/babylon-persistence/src/runtime.rs
         - rust/crates/babylon-persistence/src/committed_tick_envelope.rs
-        - rust/crates/babylon-persistence/migrations/0009_rust_persistence_activation.sql
-        - rust/crates/babylon-persistence/migrations/0010_committed_tick_v2_preparation.sql
-        - rust/crates/babylon-persistence/migrations/0011_committed_tick_v2_activation.sql
-        - contracts/rust_persistence_cutover_v2.yaml
+        - rust/crates/babylon-persistence/src/current_schema.rs
+        - contracts/current_schema.yaml
 
   planned_gate_3:
     PER-21:
@@ -422,7 +418,7 @@ persistence_writer:
   decision:
     issue: PER-48
     adr: ADR220_rust_owned_postgresql_persistence_boundary
-    implementation_contract: contracts/rust_persistence_cutover_v2.yaml
+    implementation_contract: contracts/current_schema.yaml
   before_cutover:
     authoritative_writer: Python
     authority: sole_live_writer
@@ -436,7 +432,7 @@ persistence_writer:
     authoritative_writer: Rust
     owns:
       - game_managed_postgresql_connections
-      - migrations
+      - current_schema_construction
       - typed_tick_transaction
       - checkpoint_hydration
       - runtime_writes
@@ -459,7 +455,7 @@ engine_boundary:
     status: implemented_current
     gate: G3
     rule: durable_effects_begin_only_after_successful_adjudication
-    composition_root: babylon_persistence::runtime::DurableReplayRuntimeV2
+    composition_root: babylon_persistence::material_runtime::DurableMaterialRuntime
   determinism_meaning: computational_identity_not_scientific_truth
 
 reference_data:

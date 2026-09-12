@@ -6,7 +6,10 @@
 //! streams into the hash with an explicit byte ceiling. This replaces the V5
 //! field-by-field encoder; historical digest bytes keep their historical meaning.
 
-use crate::{ObserverEconomySnapshotV1, ObserverVisibilityV1, ProductionSnapshotV2};
+use crate::{
+    observer_reader::ObserverEconomySnapshot, observer_reader::ObserverVisibility,
+    production_observation::ProductionSnapshot,
+};
 use serde::Serialize;
 use sha2::{Digest as _, Sha256};
 use std::{
@@ -20,8 +23,8 @@ const MAX_PHYSICAL_ROWS: usize = 1_114_112;
 const MAX_EVIDENCE_BYTES: usize = 128 * 1024 * 1024;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub struct ProductionEvidenceDigestV6([u8; 32]);
-impl ProductionEvidenceDigestV6 {
+pub struct ProductionEvidenceDigest([u8; 32]);
+impl ProductionEvidenceDigest {
     #[must_use]
     pub const fn as_bytes(&self) -> &[u8; 32] {
         &self.0
@@ -34,22 +37,22 @@ impl ProductionEvidenceDigestV6 {
 
 /// A malformed disclosure cannot acquire a production evidence identity.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum ProductionEvidenceErrorV6 {
+pub enum ProductionEvidenceError {
     InvalidIdentity,
     Bound,
     Serialization,
 }
-impl std::fmt::Display for ProductionEvidenceErrorV6 {
+impl std::fmt::Display for ProductionEvidenceError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "production evidence refused: {self:?}")
     }
 }
-impl std::error::Error for ProductionEvidenceErrorV6 {}
+impl std::error::Error for ProductionEvidenceError {}
 
-type Result<T> = std::result::Result<T, ProductionEvidenceErrorV6>;
+type Result<T> = std::result::Result<T, ProductionEvidenceError>;
 
 #[derive(Serialize)]
-struct EvidenceScopeV6<'a> {
+struct EvidenceScope<'a> {
     campaign_id: &'a str,
     resolve_tick: u64,
     foundation_digest: &'a str,
@@ -57,26 +60,26 @@ struct EvidenceScopeV6<'a> {
     envelope_digest: Option<&'a str>,
     nominal_world_hash: Option<&'a str>,
     visibility: &'static str,
-    production: &'a ProductionSnapshotV2,
+    production: &'a ProductionSnapshot,
 }
 
-impl ObserverEconomySnapshotV1 {
+impl ObserverEconomySnapshot {
     /// Hash the complete role-scoped disclosure after observation authentication.
     /// `None` means no production was disclosed, including a restricted preview.
     ///
     /// # Errors
     /// Refuses duplicate identities, malformed preview disclosure, row/byte bounds
     /// and serialization errors; failure is never reported as absent production.
-    pub fn production_evidence_digest(&self) -> Result<Option<ProductionEvidenceDigestV6>> {
+    pub fn production_evidence_digest(&self) -> Result<Option<ProductionEvidenceDigest>> {
         let Some(source) = &self.production else {
             return Ok(None);
         };
-        if self.visibility != ObserverVisibilityV1::FullObserver {
-            return Err(ProductionEvidenceErrorV6::InvalidIdentity);
+        if self.visibility != ObserverVisibility::FullObserver {
+            return Err(ProductionEvidenceError::InvalidIdentity);
         }
         validate_identities(source)?;
         let production = canonical_production(source);
-        let scope = EvidenceScopeV6 {
+        let scope = EvidenceScope {
             campaign_id: &self.campaign_id,
             resolve_tick: self.resolve_tick,
             foundation_digest: &self.foundation_digest,
@@ -95,12 +98,12 @@ impl ObserverEconomySnapshotV1 {
         output.hash.update(6_u32.to_be_bytes());
         if serde_json::to_writer(&mut output, &scope).is_err() {
             return Err(if output.bound {
-                ProductionEvidenceErrorV6::Bound
+                ProductionEvidenceError::Bound
             } else {
-                ProductionEvidenceErrorV6::Serialization
+                ProductionEvidenceError::Serialization
             });
         }
-        Ok(Some(ProductionEvidenceDigestV6(
+        Ok(Some(ProductionEvidenceDigest(
             output.hash.finalize().into(),
         )))
     }
@@ -133,13 +136,13 @@ fn unique<T: Ord>(rows: impl IntoIterator<Item = T>) -> Result<()> {
     let mut ids = BTreeSet::new();
     for id in rows {
         if !ids.insert(id) {
-            return Err(ProductionEvidenceErrorV6::InvalidIdentity);
+            return Err(ProductionEvidenceError::InvalidIdentity);
         }
     }
     Ok(())
 }
 
-fn validate_identities(rows: &ProductionSnapshotV2) -> Result<()> {
+fn validate_identities(rows: &ProductionSnapshot) -> Result<()> {
     for count in [
         rows.sites.len(),
         rows.routes.len(),
@@ -153,11 +156,11 @@ fn validate_identities(rows: &ProductionSnapshotV2) -> Result<()> {
         rows.process_attributions.len(),
     ] {
         if count > MAX_ROWS {
-            return Err(ProductionEvidenceErrorV6::Bound);
+            return Err(ProductionEvidenceError::Bound);
         }
     }
     if rows.physical_edges.len() > MAX_PHYSICAL_ROWS || rows.events.len() > MAX_PHYSICAL_ROWS {
-        return Err(ProductionEvidenceErrorV6::Bound);
+        return Err(ProductionEvidenceError::Bound);
     }
     unique(rows.sites.iter().map(|row| &row.id))?;
     unique(
@@ -197,7 +200,7 @@ fn validate_identities(rows: &ProductionSnapshotV2) -> Result<()> {
     )?;
     for site in &rows.sites {
         if site.processes.len() > MAX_ROWS || site.inventory.len() > MAX_ROWS {
-            return Err(ProductionEvidenceErrorV6::Bound);
+            return Err(ProductionEvidenceError::Bound);
         }
         unique(
             site.inventory
@@ -215,7 +218,7 @@ fn validate_identities(rows: &ProductionSnapshotV2) -> Result<()> {
     }
     for route in &rows.routes {
         if route.physical_edge_ids.len() > MAX_PHYSICAL_ROWS || route.stages.len() > 16 {
-            return Err(ProductionEvidenceErrorV6::Bound);
+            return Err(ProductionEvidenceError::Bound);
         }
         unique(route.stages.iter().map(|row| row.stage_index))?;
         for stage in &route.stages {
@@ -225,7 +228,7 @@ fn validate_identities(rows: &ProductionSnapshotV2) -> Result<()> {
     validate_account_rows(rows)
 }
 
-fn validate_account_rows(rows: &ProductionSnapshotV2) -> Result<()> {
+fn validate_account_rows(rows: &ProductionSnapshot) -> Result<()> {
     for account in &rows.freight_capacity_accounts {
         unique(&account.route_ids)?;
         unique(&account.merchant_site_ids)?;
@@ -267,7 +270,7 @@ fn validate_account_rows(rows: &ProductionSnapshotV2) -> Result<()> {
     Ok(())
 }
 
-fn canonical_production(source: &ProductionSnapshotV2) -> ProductionSnapshotV2 {
+fn canonical_production(source: &ProductionSnapshot) -> ProductionSnapshot {
     let mut rows = source.clone();
     for site in &mut rows.sites {
         site.inventory.sort_unstable();

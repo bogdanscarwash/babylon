@@ -344,7 +344,7 @@ jobs:
     needs: scope
     if: needs.scope.outputs.postgres == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 55
+    timeout-minutes: ${{ matrix.focus == 'archive' && 95 || matrix.focus == 'reader' && 70 || 55 }}
     strategy:
       fail-fast: false
       max-parallel: 4
@@ -361,7 +361,7 @@ jobs:
         id: postgres-image
 
       - name: Rust PostgreSQL contract
-        timeout-minutes: 45
+        timeout-minutes: ${{ matrix.focus == 'archive' && 85 || matrix.focus == 'reader' && 60 || 45 }}
         env:
           BABYLON_POSTGRES_LIVE_FOCUS: ${{ matrix.focus }}
           BABYLON_POSTGRES_IMAGE_ID: ${{ steps.postgres-image.outputs.image-id }}

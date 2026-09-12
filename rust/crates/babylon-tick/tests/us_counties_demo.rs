@@ -1,12 +1,12 @@
 //! Loading proof for the Program 28 B2 demo world (Phase B, Task 7):
 //! twelve real-FIPS counties (`lifecycle/dpd-circuit`) plus six social
 //! classes (`vitality/subsistence-and-death`), loaded and ticked together
-//! through the persistent `TickSession` seam Phase A built.
+//! through the persistent `RuleDiagnosticSession` seam Phase A built.
 
 use babylon_bsl::structural_verbs::CollectingSink;
 use babylon_graph::hypergraph_store::HypergraphStore;
-use babylon_kernel::SessionId;
-use babylon_tick::TickSession;
+use babylon_kernel::replay::ReplaySessionId;
+use babylon_tick::diagnostic::RuleDiagnosticSession;
 
 const SCENARIO: &str = include_str!("../content/scenarios/us-counties-lifecycle-demo.bscn");
 const VITALITY: &str = include_str!("../content/rules/vitality.bsl");
@@ -15,9 +15,17 @@ const LIFECYCLE: &str = include_str!("../content/rules/lifecycle.bsl");
 #[test]
 fn the_demo_scenario_loads_and_ticks_both_packs() {
     let rule_src = format!("{VITALITY}\n{LIFECYCLE}");
-    let session_id = SessionId::new("us-counties-demo-test").expect("literal is non-empty");
-    let mut session =
-        TickSession::new(SCENARIO, &rule_src, HypergraphStore::new(), session_id).expect("load");
+    let session_id =
+        ReplaySessionId::try_from("us-counties-demo-test").expect("literal is non-empty");
+    let mut session = RuleDiagnosticSession::new(
+        SCENARIO,
+        None,
+        &rule_src,
+        HypergraphStore::new(),
+        session_id,
+        babylon_kernel::replay::ReplaySeed::new(0),
+    )
+    .expect("load");
     let mut sink = CollectingSink::default();
     let report = session.advance(&mut sink).expect("tick 1");
     assert_ne!(report.before, report.after);

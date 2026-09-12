@@ -336,13 +336,13 @@ def test_dev_selection_keeps_light_contracts_and_current_heavy_seams() -> None:
     assert {
         "canonical_vectors",
         "new_contract",
-        "material_runtime_v3",
+        "material_runtime",
         "michigan_material",
         "statewide_material",
         "staffed_material_replay",
         "decision_surface_contract",
         "dynamic_linking_fence",
-        "schema_epoch_v7_shape_contract",
+        "postgres_catalog_contract",
         "spatial_reference_installer_contract",
     } <= set(names)
     assert {"heavy_matrix", "external_test", "babylon_rtd"}.isdisjoint(names)

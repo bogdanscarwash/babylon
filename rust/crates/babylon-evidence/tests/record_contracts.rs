@@ -2,12 +2,12 @@
 
 use babylon_evidence::{
     canonical_envelope, decode_envelope, practice_attempt_row_id, record_digest, Digest32,
-    PracticeAttemptLedgerV1, PracticeAttemptRowV1, PracticeCandidateRowV1,
-    PracticeCandidateScheduleV1, PracticeDispositionV1, RunIdentityField, RunIdentityV1,
-    SfsPreregistrationV1, SfsRecordError, SfsSampleV1, SfsTraceV1, SfsWireError, T3Record,
+    PracticeAttemptLedger, PracticeAttemptRow, PracticeCandidateRow, PracticeCandidateSchedule,
+    PracticeDisposition, RunIdentity, RunIdentityField, SfsPreregistration, SfsRecordError,
+    SfsSample, SfsTrace, SfsWireError, T3Record,
 };
-use babylon_kernel::{sha256_of, SessionId};
-use babylon_practice_contract::PracticeIdV1;
+use babylon_kernel::{clock::SessionId, content_digest::sha256_of};
+use babylon_practice_contract::PracticeId;
 
 fn digest(tag: u8) -> Digest32 {
     let mut bytes = [0_u8; 32];
@@ -53,7 +53,7 @@ fn changed_digest(
     }
 }
 
-fn run_identity(mutation: Option<RunIdentityField>) -> RunIdentityV1 {
+fn run_identity(mutation: Option<RunIdentityField>) -> RunIdentity {
     let session = if mutation == Some(RunIdentityField::Session) {
         SessionId::new("mutated-session").unwrap()
     } else {
@@ -69,7 +69,7 @@ fn run_identity(mutation: Option<RunIdentityField>) -> RunIdentityV1 {
     } else {
         "y"
     };
-    RunIdentityV1::new(
+    RunIdentity::new(
         session,
         changed_digest(mutation, RunIdentityField::Scenario, 1),
         changed_digest(mutation, RunIdentityField::PreludeDeclarations, 2),
@@ -96,8 +96,8 @@ fn run_with_strings(
     session: SessionId,
     rng: &str,
     graph: &str,
-) -> Result<RunIdentityV1, SfsRecordError> {
-    RunIdentityV1::new(
+) -> Result<RunIdentity, SfsRecordError> {
+    RunIdentity::new(
         session,
         digest(1),
         digest(2),
@@ -140,7 +140,7 @@ fn literal_sample_envelope(tick: u64, aggregate: f64) -> Vec<u8> {
     payload.extend_from_slice(digest(21).as_bytes());
     payload.extend_from_slice(digest(22).as_bytes());
     payload.extend_from_slice(&aggregate.to_bits().to_be_bytes());
-    literal_envelope(SfsSampleV1::DOMAIN, &payload)
+    literal_envelope(SfsSample::DOMAIN, &payload)
 }
 
 fn literal_trace_envelope() -> Vec<u8> {
@@ -160,14 +160,14 @@ fn literal_trace_envelope() -> Vec<u8> {
     payload.extend_from_slice(&literal_sample_envelope(15, 10.0));
     payload.extend_from_slice(&literal_sample_envelope(16, 11.0));
     payload.push(2);
-    literal_envelope(SfsTraceV1::DOMAIN, &payload)
+    literal_envelope(SfsTrace::DOMAIN, &payload)
 }
 
-fn sample(tick: u64, aggregate: f64) -> SfsSampleV1 {
-    SfsSampleV1::new(tick, digest(20), digest(21), digest(22), aggregate).unwrap()
+fn sample(tick: u64, aggregate: f64) -> SfsSample {
+    SfsSample::new(tick, digest(20), digest(21), digest(22), aggregate).unwrap()
 }
 
-fn continuing_samples(start_tick: u64) -> Vec<SfsSampleV1> {
+fn continuing_samples(start_tick: u64) -> Vec<SfsSample> {
     let masses = [0.0, 1.0, 2.0, 5.0, 8.0, 10.0, 11.0];
     let mut samples = Vec::with_capacity(7);
     #[allow(clippy::needless_range_loop)] // The literal ceiling is statically auditable.
@@ -178,16 +178,16 @@ fn continuing_samples(start_tick: u64) -> Vec<SfsSampleV1> {
     samples
 }
 
-fn candidate(tick: u64, authority_tag: u8, intent_tag: u8) -> PracticeCandidateRowV1 {
-    PracticeCandidateRowV1::new(tick, digest(authority_tag), digest(intent_tag))
+fn candidate(tick: u64, authority_tag: u8, intent_tag: u8) -> PracticeCandidateRow {
+    PracticeCandidateRow::new(tick, digest(authority_tag), digest(intent_tag))
 }
 
 fn preregistration(
     preregistered_at_tick: u64,
     stride: u16,
-    practice: PracticeIdV1,
-) -> Result<SfsPreregistrationV1, SfsRecordError> {
-    SfsPreregistrationV1::new(
+    practice: PracticeId,
+) -> Result<SfsPreregistration, SfsRecordError> {
+    SfsPreregistration::new(
         preregistered_at_tick,
         digest(30),
         digest(31),
@@ -200,42 +200,42 @@ fn preregistration(
         3,
         practice,
         digest(36),
-        40,
+        digest(40),
         digest(37),
     )
 }
 
 #[test]
 fn record_domains_and_payload_maxima_are_exact() {
-    assert_eq!(RunIdentityV1::DOMAIN, b"babylon.run-identity.v1");
-    assert_eq!(RunIdentityV1::MAX_PAYLOAD_BYTES, 870);
-    assert_eq!(SfsSampleV1::DOMAIN, b"babylon.sfs-sample.v1");
-    assert_eq!(SfsSampleV1::MAX_PAYLOAD_BYTES, 112);
-    assert_eq!(SfsTraceV1::DOMAIN, b"babylon.sfs-trace.v1");
-    assert_eq!(SfsTraceV1::MAX_PAYLOAD_BYTES, 22_067);
+    assert_eq!(RunIdentity::DOMAIN, b"babylon.run-identity.v1");
+    assert_eq!(RunIdentity::MAX_PAYLOAD_BYTES, 870);
+    assert_eq!(SfsSample::DOMAIN, b"babylon.sfs-sample.v1");
+    assert_eq!(SfsSample::MAX_PAYLOAD_BYTES, 112);
+    assert_eq!(SfsTrace::DOMAIN, b"babylon.sfs-trace.v1");
+    assert_eq!(SfsTrace::MAX_PAYLOAD_BYTES, 22_067);
     assert_eq!(
-        SfsPreregistrationV1::DOMAIN,
-        b"babylon.sfs-preregistration.v1"
+        SfsPreregistration::DOMAIN,
+        b"babylon.sfs-preregistration.v2"
     );
-    assert_eq!(SfsPreregistrationV1::MAX_PAYLOAD_BYTES, 291);
+    assert_eq!(SfsPreregistration::MAX_PAYLOAD_BYTES, 319);
     assert_eq!(
-        PracticeCandidateScheduleV1::DOMAIN,
+        PracticeCandidateSchedule::DOMAIN,
         b"babylon.practice-candidate-schedule.v1"
     );
-    assert_eq!(PracticeCandidateScheduleV1::MAX_PAYLOAD_BYTES, 6_815_644);
+    assert_eq!(PracticeCandidateSchedule::MAX_PAYLOAD_BYTES, 6_815_644);
     assert_eq!(
-        PracticeAttemptLedgerV1::DOMAIN,
+        PracticeAttemptLedger::DOMAIN,
         b"babylon.practice-attempt-ledger.v1"
     );
-    assert_eq!(PracticeAttemptLedgerV1::MAX_PAYLOAD_BYTES, 8_978_331);
+    assert_eq!(PracticeAttemptLedger::MAX_PAYLOAD_BYTES, 8_978_331);
 }
 
 #[test]
 fn run_identity_encodes_all_eighteen_fields_in_exact_order() {
     let run = run_identity(None);
-    let expected = literal_envelope(RunIdentityV1::DOMAIN, &expected_run_payload());
+    let expected = literal_envelope(RunIdentity::DOMAIN, &expected_run_payload());
     assert_eq!(canonical_envelope(&run).unwrap(), expected);
-    assert_eq!(decode_envelope::<RunIdentityV1>(&expected).unwrap(), run);
+    assert_eq!(decode_envelope::<RunIdentity>(&expected).unwrap(), run);
     assert_eq!(run.host_component_manifest_digest(), digest(5));
     assert_eq!(run.governed_footprint_manifest_digest(), digest(9));
     assert_eq!(run.sfs_proof_profile_digest(), digest(10));
@@ -271,7 +271,7 @@ fn run_identity_encodes_all_eighteen_fields_in_exact_order() {
         assert_ne!(canonical_envelope(&mutated).unwrap(), baseline_bytes);
         assert_ne!(record_digest(&mutated).unwrap(), baseline_digest);
     }
-    let all_different = RunIdentityV1::new(
+    let all_different = RunIdentity::new(
         SessionId::new("all-mutated").unwrap(),
         digest(65),
         digest(66),
@@ -299,7 +299,7 @@ fn run_identity_encodes_all_eighteen_fields_in_exact_order() {
 fn run_identity_session_and_ascii_id_bounds_are_closed() {
     let one = run_with_strings(SessionId::new("s").unwrap(), "r", "g").unwrap();
     assert_eq!(
-        decode_envelope::<RunIdentityV1>(&canonical_envelope(&one).unwrap()).unwrap(),
+        decode_envelope::<RunIdentity>(&canonical_envelope(&one).unwrap()).unwrap(),
         one
     );
     let maximum = run_with_strings(
@@ -309,9 +309,9 @@ fn run_identity_session_and_ascii_id_bounds_are_closed() {
     )
     .unwrap();
     let maximum_bytes = canonical_envelope(&maximum).unwrap();
-    assert_eq!(payload_length::<RunIdentityV1>(&maximum_bytes), 870);
+    assert_eq!(payload_length::<RunIdentity>(&maximum_bytes), 870);
     assert_eq!(
-        decode_envelope::<RunIdentityV1>(&maximum_bytes).unwrap(),
+        decode_envelope::<RunIdentity>(&maximum_bytes).unwrap(),
         maximum
     );
     assert_eq!(
@@ -355,18 +355,18 @@ fn sample_wire_is_fixed_and_aggregate_validation_is_exact() {
     payload.extend_from_slice(digest(21).as_bytes());
     payload.extend_from_slice(digest(22).as_bytes());
     payload.extend_from_slice(&0_u64.to_be_bytes());
-    let expected = literal_envelope(SfsSampleV1::DOMAIN, &payload);
+    let expected = literal_envelope(SfsSample::DOMAIN, &payload);
     assert_eq!(canonical_envelope(&value).unwrap(), expected);
-    assert_eq!(decode_envelope::<SfsSampleV1>(&expected).unwrap(), value);
+    assert_eq!(decode_envelope::<SfsSample>(&expected).unwrap(), value);
     assert_eq!(
-        SfsSampleV1::new(0, digest(1), digest(2), digest(3), -1.0),
+        SfsSample::new(0, digest(1), digest(2), digest(3), -1.0),
         Err(SfsRecordError::Wire(SfsWireError::Negative {
             field: "aggregate"
         }))
     );
     for value in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
         assert_eq!(
-            SfsSampleV1::new(0, digest(1), digest(2), digest(3), value),
+            SfsSample::new(0, digest(1), digest(2), digest(3), value),
             Err(SfsRecordError::Wire(SfsWireError::NonFinite {
                 field: "aggregate"
             }))
@@ -376,17 +376,17 @@ fn sample_wire_is_fixed_and_aggregate_validation_is_exact() {
 
 #[test]
 fn trace_requires_exact_window_count_start_and_consecutive_ticks() {
-    let valid = SfsTraceV1::new(digest(40), digest(41), 42, 10, 2, continuing_samples(10)).unwrap();
+    let valid = SfsTrace::new(digest(40), digest(41), 42, 10, 2, continuing_samples(10)).unwrap();
     let encoded = canonical_envelope(&valid).unwrap();
     assert_eq!(encoded.last(), Some(&(2_u8)));
-    assert_eq!(decode_envelope::<SfsTraceV1>(&encoded).unwrap(), valid);
+    assert_eq!(decode_envelope::<SfsTrace>(&encoded).unwrap(), valid);
     assert_eq!(valid.run_identity_digest(), digest(40));
     assert_eq!(
-        SfsTraceV1::new(digest(1), digest(2), 3, 10, 1, continuing_samples(10)),
+        SfsTrace::new(digest(1), digest(2), 3, 10, 1, continuing_samples(10)),
         Err(SfsRecordError::InvalidWindowWidth { found: 1 })
     );
     assert_eq!(
-        SfsTraceV1::new(
+        SfsTrace::new(
             digest(1),
             digest(2),
             3,
@@ -401,7 +401,7 @@ fn trace_requires_exact_window_count_start_and_consecutive_ticks() {
     );
     let mut wrong_start = continuing_samples(11);
     assert_eq!(
-        SfsTraceV1::new(digest(1), digest(2), 3, 10, 2, wrong_start.clone()),
+        SfsTrace::new(digest(1), digest(2), 3, 10, 2, wrong_start.clone()),
         Err(SfsRecordError::TickDiscontinuity {
             expected: 10,
             actual: 11,
@@ -409,7 +409,7 @@ fn trace_requires_exact_window_count_start_and_consecutive_ticks() {
     );
     wrong_start[3] = sample(99, 5.0);
     assert_eq!(
-        SfsTraceV1::new(digest(1), digest(2), 3, 11, 2, wrong_start),
+        SfsTrace::new(digest(1), digest(2), 3, 11, 2, wrong_start),
         Err(SfsRecordError::TickDiscontinuity {
             expected: 14,
             actual: 99,
@@ -418,7 +418,7 @@ fn trace_requires_exact_window_count_start_and_consecutive_ticks() {
     let mut overflow = continuing_samples(0);
     overflow[0] = sample(u64::MAX, 0.0);
     assert_eq!(
-        SfsTraceV1::new(digest(1), digest(2), 3, u64::MAX, 2, overflow),
+        SfsTrace::new(digest(1), digest(2), 3, u64::MAX, 2, overflow),
         Err(SfsRecordError::ArithmeticOverflow {
             field: "sample_tick"
         })
@@ -427,20 +427,20 @@ fn trace_requires_exact_window_count_start_and_consecutive_ticks() {
 
 #[test]
 fn trace_wire_is_one_complete_literal_envelope_with_nested_sample_envelopes() {
-    let trace = SfsTraceV1::new(digest(40), digest(41), 42, 10, 2, continuing_samples(10)).unwrap();
+    let trace = SfsTrace::new(digest(40), digest(41), 42, 10, 2, continuing_samples(10)).unwrap();
     let expected = literal_trace_envelope();
     assert_eq!(canonical_envelope(&trace).unwrap(), expected);
-    assert_eq!(decode_envelope::<SfsTraceV1>(&expected).unwrap(), trace);
+    assert_eq!(decode_envelope::<SfsTrace>(&expected).unwrap(), trace);
 }
 
 #[test]
 fn trace_decode_refusal_precedence_pins_interval_and_classification() {
-    let trace = SfsTraceV1::new(digest(40), digest(41), 42, 10, 2, continuing_samples(10)).unwrap();
+    let trace = SfsTrace::new(digest(40), digest(41), 42, 10, 2, continuing_samples(10)).unwrap();
     let encoded = canonical_envelope(&trace).unwrap();
     let mut invalid_code = encoded.clone();
     *invalid_code.last_mut().unwrap() = 6;
     assert_eq!(
-        decode_envelope::<SfsTraceV1>(&invalid_code),
+        decode_envelope::<SfsTrace>(&invalid_code),
         Err(SfsRecordError::Wire(SfsWireError::InvalidCode {
             field: "classification",
             value: 6,
@@ -449,17 +449,17 @@ fn trace_decode_refusal_precedence_pins_interval_and_classification() {
     let mut wrong_valid_class = encoded.clone();
     *wrong_valid_class.last_mut().unwrap() = 0;
     assert_eq!(
-        decode_envelope::<SfsTraceV1>(&wrong_valid_class),
+        decode_envelope::<SfsTrace>(&wrong_valid_class),
         Err(SfsRecordError::ClassificationMismatch {
             stored: 0,
             computed: 2,
         })
     );
     let mut wrong_interval = encoded;
-    let interval = payload_start::<SfsTraceV1>() + 80;
+    let interval = payload_start::<SfsTrace>() + 80;
     wrong_interval[interval..interval + 2].copy_from_slice(&2_u16.to_be_bytes());
     assert_eq!(
-        decode_envelope::<SfsTraceV1>(&wrong_interval),
+        decode_envelope::<SfsTrace>(&wrong_interval),
         Err(SfsRecordError::InvalidSampleInterval { found: 2 })
     );
 }
@@ -470,10 +470,10 @@ fn trace_maximum_of_157_complete_sample_envelopes_round_trips() {
     for tick in 0..157 {
         samples.push(sample(tick, 0.0));
     }
-    let trace = SfsTraceV1::new(digest(1), digest(2), 3, 0, 52, samples).unwrap();
+    let trace = SfsTrace::new(digest(1), digest(2), 3, 0, 52, samples).unwrap();
     let envelope = canonical_envelope(&trace).unwrap();
-    assert_eq!(payload_length::<SfsTraceV1>(&envelope), 22_067);
-    assert_eq!(decode_envelope::<SfsTraceV1>(&envelope).unwrap(), trace);
+    assert_eq!(payload_length::<SfsTrace>(&envelope), 22_067);
+    assert_eq!(decode_envelope::<SfsTrace>(&envelope).unwrap(), trace);
 }
 
 #[test]
@@ -505,7 +505,7 @@ fn candidate_schedule_sorts_exact_rows_and_rejects_duplicates_or_bad_ids() {
     } else {
         digest(5)
     };
-    let schedule = PracticeCandidateScheduleV1::new(vec![later, same_tick_b, same_tick_a]).unwrap();
+    let schedule = PracticeCandidateSchedule::new(vec![later, same_tick_b, same_tick_a]).unwrap();
     assert_eq!(schedule.rows()[0].attempt_tick(), 1);
     assert_eq!(
         schedule.rows()[0].practice_intent_digest(),
@@ -514,43 +514,40 @@ fn candidate_schedule_sorts_exact_rows_and_rejects_duplicates_or_bad_ids() {
     assert_eq!(schedule.rows()[2].attempt_tick(), 2);
     let round_trip = canonical_envelope(&schedule).unwrap();
     assert_eq!(
-        decode_envelope::<PracticeCandidateScheduleV1>(&round_trip).unwrap(),
+        decode_envelope::<PracticeCandidateSchedule>(&round_trip).unwrap(),
         schedule
     );
     let duplicate = candidate(1, 3, 4);
     assert_eq!(
-        PracticeCandidateScheduleV1::new(vec![duplicate.clone(), duplicate]),
+        PracticeCandidateSchedule::new(vec![duplicate.clone(), duplicate]),
         Err(SfsRecordError::Wire(SfsWireError::DuplicateEntry {
             field: "candidate_rows"
         }))
     );
 
     let one = candidate(7, 8, 9);
-    let one_schedule = PracticeCandidateScheduleV1::new(vec![one.clone()]).unwrap();
+    let one_schedule = PracticeCandidateSchedule::new(vec![one.clone()]).unwrap();
     let mut expected_payload = Vec::new();
     expected_payload.extend_from_slice(&1_u32.to_be_bytes());
     expected_payload.extend_from_slice(practice_attempt_row_id(7, digest(8), digest(9)).as_bytes());
     expected_payload.extend_from_slice(&7_u64.to_be_bytes());
     expected_payload.extend_from_slice(digest(8).as_bytes());
     expected_payload.extend_from_slice(digest(9).as_bytes());
-    let expected = literal_envelope(PracticeCandidateScheduleV1::DOMAIN, &expected_payload);
+    let expected = literal_envelope(PracticeCandidateSchedule::DOMAIN, &expected_payload);
     assert_eq!(canonical_envelope(&one_schedule).unwrap(), expected);
     let mut bad_id = expected;
-    bad_id[payload_start::<PracticeCandidateScheduleV1>() + 4] ^= 0xff;
+    bad_id[payload_start::<PracticeCandidateSchedule>() + 4] ^= 0xff;
     assert_eq!(
-        decode_envelope::<PracticeCandidateScheduleV1>(&bad_id),
+        decode_envelope::<PracticeCandidateSchedule>(&bad_id),
         Err(SfsRecordError::StableRowDigestMismatch)
     );
 }
 
 #[test]
 fn candidate_schedule_literal_malformed_payloads_refuse_before_rows_or_trailing_bytes() {
-    let too_many = literal_envelope(
-        PracticeCandidateScheduleV1::DOMAIN,
-        &65_536_u32.to_be_bytes(),
-    );
+    let too_many = literal_envelope(PracticeCandidateSchedule::DOMAIN, &65_536_u32.to_be_bytes());
     assert_eq!(
-        decode_envelope::<PracticeCandidateScheduleV1>(&too_many),
+        decode_envelope::<PracticeCandidateSchedule>(&too_many),
         Err(SfsRecordError::Wire(SfsWireError::CountTooLarge {
             field: "candidate_rows",
             limit: 65_535,
@@ -558,17 +555,17 @@ fn candidate_schedule_literal_malformed_payloads_refuse_before_rows_or_trailing_
         }))
     );
 
-    let truncated = literal_envelope(PracticeCandidateScheduleV1::DOMAIN, &1_u32.to_be_bytes());
+    let truncated = literal_envelope(PracticeCandidateSchedule::DOMAIN, &1_u32.to_be_bytes());
     assert_eq!(
-        decode_envelope::<PracticeCandidateScheduleV1>(&truncated),
+        decode_envelope::<PracticeCandidateSchedule>(&truncated),
         Err(SfsRecordError::Wire(SfsWireError::TruncatedEnvelope))
     );
 
     let mut trailing_payload = 0_u32.to_be_bytes().to_vec();
     trailing_payload.push(0xaa);
-    let trailing = literal_envelope(PracticeCandidateScheduleV1::DOMAIN, &trailing_payload);
+    let trailing = literal_envelope(PracticeCandidateSchedule::DOMAIN, &trailing_payload);
     assert_eq!(
-        decode_envelope::<PracticeCandidateScheduleV1>(&trailing),
+        decode_envelope::<PracticeCandidateSchedule>(&trailing),
         Err(SfsRecordError::Wire(SfsWireError::TrailingBytes {
             count: 1,
         }))
@@ -578,14 +575,19 @@ fn candidate_schedule_literal_malformed_payloads_refuse_before_rows_or_trailing_
 #[test]
 fn preregistration_derives_start_and_closes_codes_and_accessors() {
     for practice in [
-        PracticeIdV1::Organize,
-        PracticeIdV1::Agitate,
-        PracticeIdV1::MutualAid,
+        PracticeId::Organize,
+        PracticeId::Agitate,
+        PracticeId::MutualAid,
+        PracticeId::Strike,
+        PracticeId::Blockade,
+        PracticeId::Occupation,
+        PracticeId::Damage,
+        PracticeId::CapitalStrike,
     ] {
         let value = preregistration(10, 2, practice).unwrap();
         let bytes = canonical_envelope(&value).unwrap();
         assert_eq!(
-            decode_envelope::<SfsPreregistrationV1>(&bytes).unwrap(),
+            decode_envelope::<SfsPreregistration>(&bytes).unwrap(),
             value
         );
         assert_eq!(value.practice_candidate_schedule_digest(), digest(31));
@@ -598,10 +600,10 @@ fn preregistration_derives_start_and_closes_codes_and_accessors() {
         assert_eq!(value.attempt_count(), 3);
         assert_eq!(value.practice_code(), practice);
         assert_eq!(value.target_selection_policy_digest(), digest(36));
-        assert_eq!(value.governed_cost(), 40);
+        assert_eq!(value.resource_contract_digest(), digest(40));
         assert_eq!(value.parameter_bytes_digest(), digest(37));
     }
-    let exact = preregistration(10, 2, PracticeIdV1::Organize).unwrap();
+    let exact = preregistration(10, 2, PracticeId::Organize).unwrap();
     let mut payload = Vec::new();
     payload.extend_from_slice(&10_u64.to_be_bytes());
     payload.extend_from_slice(&11_u64.to_be_bytes());
@@ -612,20 +614,20 @@ fn preregistration_derives_start_and_closes_codes_and_accessors() {
     payload.extend_from_slice(&20_u64.to_be_bytes());
     payload.extend_from_slice(&2_u16.to_be_bytes());
     payload.extend_from_slice(&3_u16.to_be_bytes());
-    payload.push(PracticeIdV1::Organize as u8);
+    payload.push(PracticeId::Organize as u8);
     payload.extend_from_slice(digest(36).as_bytes());
-    payload.extend_from_slice(&40_u32.to_be_bytes());
+    payload.extend_from_slice(digest(40).as_bytes());
     payload.extend_from_slice(digest(37).as_bytes());
     assert_eq!(
         canonical_envelope(&exact).unwrap(),
-        literal_envelope(SfsPreregistrationV1::DOMAIN, &payload)
+        literal_envelope(SfsPreregistration::DOMAIN, &payload)
     );
     assert_eq!(
-        preregistration(10, 0, PracticeIdV1::Organize),
+        preregistration(10, 0, PracticeId::Organize),
         Err(SfsRecordError::InvalidCadence)
     );
     assert_eq!(
-        preregistration(u64::MAX, 1, PracticeIdV1::Organize),
+        preregistration(u64::MAX, 1, PracticeId::Organize),
         Err(SfsRecordError::ArithmeticOverflow {
             field: "start_tick"
         })
@@ -634,13 +636,13 @@ fn preregistration_derives_start_and_closes_codes_and_accessors() {
 
 #[test]
 fn preregistration_decode_rejects_stored_start_policy_cadence_and_practice_code() {
-    let value = preregistration(10, 2, PracticeIdV1::Organize).unwrap();
+    let value = preregistration(10, 2, PracticeId::Organize).unwrap();
     let encoded = canonical_envelope(&value).unwrap();
-    let payload = payload_start::<SfsPreregistrationV1>();
+    let payload = payload_start::<SfsPreregistration>();
     let mut wrong_start = encoded.clone();
     wrong_start[payload + 8..payload + 16].copy_from_slice(&99_u64.to_be_bytes());
     assert_eq!(
-        decode_envelope::<SfsPreregistrationV1>(&wrong_start),
+        decode_envelope::<SfsPreregistration>(&wrong_start),
         Err(SfsRecordError::TickDiscontinuity {
             expected: 11,
             actual: 99,
@@ -649,25 +651,25 @@ fn preregistration_decode_rejects_stored_start_policy_cadence_and_practice_code(
     let mut policy = encoded.clone();
     policy[payload + 208] = 1;
     assert_eq!(
-        decode_envelope::<SfsPreregistrationV1>(&policy),
+        decode_envelope::<SfsPreregistration>(&policy),
         Err(SfsRecordError::InvalidExogenousPolicy)
     );
     let mut cadence = encoded.clone();
     cadence[payload + 209] = 1;
     assert_eq!(
-        decode_envelope::<SfsPreregistrationV1>(&cadence),
+        decode_envelope::<SfsPreregistration>(&cadence),
         Err(SfsRecordError::InvalidCadence)
     );
     let mut stride = encoded.clone();
     stride[payload + 218..payload + 220].copy_from_slice(&0_u16.to_be_bytes());
     assert_eq!(
-        decode_envelope::<SfsPreregistrationV1>(&stride),
+        decode_envelope::<SfsPreregistration>(&stride),
         Err(SfsRecordError::InvalidCadence)
     );
     let mut practice = encoded;
     practice[payload + 222] = 0;
     assert_eq!(
-        decode_envelope::<SfsPreregistrationV1>(&practice),
+        decode_envelope::<SfsPreregistration>(&practice),
         Err(SfsRecordError::InvalidPracticeCode { value: 0 })
     );
 }
@@ -676,22 +678,22 @@ fn preregistration_decode_rejects_stored_start_policy_cadence_and_practice_code(
 fn attempt_ledger_sorts_keeps_rejections_and_projects_exact_candidates() {
     let accepted_candidate = candidate(2, 60, 61);
     let rejected_candidate = candidate(1, 62, 63);
-    let accepted = PracticeAttemptRowV1::new(
+    let accepted = PracticeAttemptRow::new(
         accepted_candidate.clone(),
-        PracticeDispositionV1::Accepted,
+        PracticeDisposition::Accepted,
         digest(64),
     )
     .unwrap();
-    let rejected = PracticeAttemptRowV1::new(
+    let rejected = PracticeAttemptRow::new(
         rejected_candidate.clone(),
-        PracticeDispositionV1::Rejected,
+        PracticeDisposition::Rejected,
         digest(65),
     )
     .unwrap();
-    let ledger = PracticeAttemptLedgerV1::new(digest(66), vec![accepted, rejected]).unwrap();
+    let ledger = PracticeAttemptLedger::new(digest(66), vec![accepted, rejected]).unwrap();
     let projected = ledger.project_candidates().unwrap();
     let expected =
-        PracticeCandidateScheduleV1::new(vec![accepted_candidate, rejected_candidate]).unwrap();
+        PracticeCandidateSchedule::new(vec![accepted_candidate, rejected_candidate]).unwrap();
     assert_eq!(
         canonical_envelope(&projected).unwrap(),
         canonical_envelope(&expected).unwrap()
@@ -699,41 +701,37 @@ fn attempt_ledger_sorts_keeps_rejections_and_projects_exact_candidates() {
     assert_eq!(projected.rows().len(), 2);
     let bytes = canonical_envelope(&ledger).unwrap();
     assert_eq!(
-        decode_envelope::<PracticeAttemptLedgerV1>(&bytes).unwrap(),
+        decode_envelope::<PracticeAttemptLedger>(&bytes).unwrap(),
         ledger
     );
-    assert_eq!(PracticeDispositionV1::Accepted.code(), 0);
-    assert_eq!(PracticeDispositionV1::Rejected.code(), 1);
-    assert_eq!(PracticeDispositionV1::from_code(2), None);
+    assert_eq!(PracticeDisposition::Accepted.code(), 0);
+    assert_eq!(PracticeDisposition::Rejected.code(), 1);
+    assert_eq!(PracticeDisposition::from_code(2), None);
 }
 
 #[test]
 fn attempt_rows_reject_zero_duplicate_unknown_and_mismatched_identity() {
     let candidate_row = candidate(1, 2, 3);
     assert_eq!(
-        PracticeAttemptRowV1::new(
+        PracticeAttemptRow::new(
             candidate_row.clone(),
-            PracticeDispositionV1::Accepted,
+            PracticeDisposition::Accepted,
             Digest32::from_bytes([0; 32]),
         ),
         Err(SfsRecordError::ZeroDispositionDigest)
     );
-    let row = PracticeAttemptRowV1::new(candidate_row, PracticeDispositionV1::Accepted, digest(4))
-        .unwrap();
+    let row =
+        PracticeAttemptRow::new(candidate_row, PracticeDisposition::Accepted, digest(4)).unwrap();
     assert_eq!(
-        PracticeAttemptLedgerV1::new(digest(5), vec![row.clone(), row]),
+        PracticeAttemptLedger::new(digest(5), vec![row.clone(), row]),
         Err(SfsRecordError::Wire(SfsWireError::DuplicateEntry {
             field: "attempt_rows"
         }))
     );
 
-    let row = PracticeAttemptRowV1::new(
-        candidate(1, 2, 3),
-        PracticeDispositionV1::Accepted,
-        digest(4),
-    )
-    .unwrap();
-    let ledger = PracticeAttemptLedgerV1::new(digest(5), vec![row]).unwrap();
+    let row = PracticeAttemptRow::new(candidate(1, 2, 3), PracticeDisposition::Accepted, digest(4))
+        .unwrap();
+    let ledger = PracticeAttemptLedger::new(digest(5), vec![row]).unwrap();
     let encoded = canonical_envelope(&ledger).unwrap();
     let mut expected_payload = Vec::new();
     expected_payload.extend_from_slice(digest(5).as_bytes());
@@ -746,19 +744,19 @@ fn attempt_rows_reject_zero_duplicate_unknown_and_mismatched_identity() {
     expected_payload.extend_from_slice(digest(4).as_bytes());
     assert_eq!(
         encoded,
-        literal_envelope(PracticeAttemptLedgerV1::DOMAIN, &expected_payload)
+        literal_envelope(PracticeAttemptLedger::DOMAIN, &expected_payload)
     );
-    let payload = payload_start::<PracticeAttemptLedgerV1>();
+    let payload = payload_start::<PracticeAttemptLedger>();
     let mut unknown = encoded.clone();
     unknown[payload + 36 + 104] = 2;
     assert_eq!(
-        decode_envelope::<PracticeAttemptLedgerV1>(&unknown),
+        decode_envelope::<PracticeAttemptLedger>(&unknown),
         Err(SfsRecordError::InvalidDisposition { value: 2 })
     );
     let mut bad_id = encoded;
     bad_id[payload + 36] ^= 0xff;
     assert_eq!(
-        decode_envelope::<PracticeAttemptLedgerV1>(&bad_id),
+        decode_envelope::<PracticeAttemptLedger>(&bad_id),
         Err(SfsRecordError::StableRowDigestMismatch)
     );
 }
@@ -768,9 +766,9 @@ fn attempt_ledger_literal_malformed_payloads_refuse_before_rows_or_trailing_byte
     let mut too_many_payload = Vec::new();
     too_many_payload.extend_from_slice(digest(1).as_bytes());
     too_many_payload.extend_from_slice(&65_536_u32.to_be_bytes());
-    let too_many = literal_envelope(PracticeAttemptLedgerV1::DOMAIN, &too_many_payload);
+    let too_many = literal_envelope(PracticeAttemptLedger::DOMAIN, &too_many_payload);
     assert_eq!(
-        decode_envelope::<PracticeAttemptLedgerV1>(&too_many),
+        decode_envelope::<PracticeAttemptLedger>(&too_many),
         Err(SfsRecordError::Wire(SfsWireError::CountTooLarge {
             field: "attempt_rows",
             limit: 65_535,
@@ -781,9 +779,9 @@ fn attempt_ledger_literal_malformed_payloads_refuse_before_rows_or_trailing_byte
     let mut truncated_payload = Vec::new();
     truncated_payload.extend_from_slice(digest(1).as_bytes());
     truncated_payload.extend_from_slice(&1_u32.to_be_bytes());
-    let truncated = literal_envelope(PracticeAttemptLedgerV1::DOMAIN, &truncated_payload);
+    let truncated = literal_envelope(PracticeAttemptLedger::DOMAIN, &truncated_payload);
     assert_eq!(
-        decode_envelope::<PracticeAttemptLedgerV1>(&truncated),
+        decode_envelope::<PracticeAttemptLedger>(&truncated),
         Err(SfsRecordError::Wire(SfsWireError::TruncatedEnvelope))
     );
 
@@ -791,9 +789,9 @@ fn attempt_ledger_literal_malformed_payloads_refuse_before_rows_or_trailing_byte
     trailing_payload.extend_from_slice(digest(1).as_bytes());
     trailing_payload.extend_from_slice(&0_u32.to_be_bytes());
     trailing_payload.push(0xaa);
-    let trailing = literal_envelope(PracticeAttemptLedgerV1::DOMAIN, &trailing_payload);
+    let trailing = literal_envelope(PracticeAttemptLedger::DOMAIN, &trailing_payload);
     assert_eq!(
-        decode_envelope::<PracticeAttemptLedgerV1>(&trailing),
+        decode_envelope::<PracticeAttemptLedger>(&trailing),
         Err(SfsRecordError::Wire(SfsWireError::TrailingBytes {
             count: 1,
         }))
@@ -807,13 +805,13 @@ fn row_count_maximum_succeeds_and_plus_one_refuses_before_sorting() {
     for index in 0..65_536 {
         let row = candidate(index, 70, 71);
         attempts.push(
-            PracticeAttemptRowV1::new(row.clone(), PracticeDispositionV1::Accepted, digest(72))
+            PracticeAttemptRow::new(row.clone(), PracticeDisposition::Accepted, digest(72))
                 .unwrap(),
         );
         candidates.push(row);
     }
     assert_eq!(
-        PracticeCandidateScheduleV1::new(candidates.clone()),
+        PracticeCandidateSchedule::new(candidates.clone()),
         Err(SfsRecordError::Wire(SfsWireError::CountTooLarge {
             field: "candidate_rows",
             limit: 65_535,
@@ -821,7 +819,7 @@ fn row_count_maximum_succeeds_and_plus_one_refuses_before_sorting() {
         }))
     );
     assert_eq!(
-        PracticeAttemptLedgerV1::new(digest(73), attempts.clone()),
+        PracticeAttemptLedger::new(digest(73), attempts.clone()),
         Err(SfsRecordError::Wire(SfsWireError::CountTooLarge {
             field: "attempt_rows",
             limit: 65_535,
@@ -830,16 +828,30 @@ fn row_count_maximum_succeeds_and_plus_one_refuses_before_sorting() {
     );
     candidates.pop();
     attempts.pop();
-    let schedule = PracticeCandidateScheduleV1::new(candidates).unwrap();
+    let schedule = PracticeCandidateSchedule::new(candidates).unwrap();
     let schedule_bytes = canonical_envelope(&schedule).unwrap();
     assert_eq!(
-        payload_length::<PracticeCandidateScheduleV1>(&schedule_bytes),
+        payload_length::<PracticeCandidateSchedule>(&schedule_bytes),
         6_815_644
     );
-    let ledger = PracticeAttemptLedgerV1::new(digest(73), attempts).unwrap();
+    let ledger = PracticeAttemptLedger::new(digest(73), attempts).unwrap();
     let ledger_bytes = canonical_envelope(&ledger).unwrap();
     assert_eq!(
-        payload_length::<PracticeAttemptLedgerV1>(&ledger_bytes),
+        payload_length::<PracticeAttemptLedger>(&ledger_bytes),
         8_978_331
+    );
+}
+
+#[test]
+fn current_preregistration_schema_bytes_are_exact() {
+    assert_eq!(
+        babylon_kernel::content_digest::sha256_of(include_bytes!(
+            "../../../../contracts/sfs_preregistration.yaml"
+        )),
+        [
+            0x6e, 0x45, 0x69, 0x2e, 0x0c, 0x9a, 0x35, 0xeb, 0x7a, 0x57, 0x81, 0x09, 0x87, 0x1a,
+            0x13, 0xb1, 0x05, 0x4a, 0xf7, 0x85, 0x76, 0x53, 0x6a, 0xce, 0x7a, 0xb3, 0x5a, 0xdb,
+            0x80, 0x1b, 0xa9, 0x69
+        ]
     );
 }

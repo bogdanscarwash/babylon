@@ -7,7 +7,7 @@
 //! Keyboard and pointer controls share admission and are checked again on apply.
 
 use babylon_persistence::{
-    ArchivePageRefV1, ArchiveSubjectKindV1, CampaignId, SemanticArchiveReaderV1,
+    identity::CampaignId, ArchivePageRef, ArchiveSubjectKind, SemanticArchiveReader,
 };
 use bevy::ecs::system::SystemParam;
 use bevy::input_focus::tab_navigation::TabGroup;
@@ -27,8 +27,8 @@ use crate::ui::dossier_compose::{
     DossierTone, DOSSIER_DECISION_QUESTION, INVESTIGATE_SEALED_CHIP,
 };
 use babylon_persistence::archive_revision::{
-    ArchiveChangeCursorV2, ArchiveDossierBoundsV2, ArchiveDossierLinkV2, ArchiveDossierReadV2,
-    ArchiveLinkedPageStateV2, ArchiveReadScopeV2,
+    ArchiveChangeCursor, ArchiveDossierBounds, ArchiveDossierLink, ArchiveDossierRead,
+    ArchiveLinkedPageState, ArchiveReadScope,
 };
 
 /// `babylon-runtime`'s default campaign identity (`babylon-runtime.rs`), the
@@ -66,8 +66,8 @@ pub struct DossierRequestScope {
     pub county_geoid: String,
     pub refresh_generation: u64,
     pub observer: Option<ObservationContext>,
-    pub read_scope: ArchiveReadScopeV2,
-    pub subject: ArchivePageRefV1,
+    pub read_scope: ArchiveReadScope,
+    pub subject: ArchivePageRef,
 }
 
 /// A retained, disclosed link, captured at the page that offered it.
@@ -91,7 +91,7 @@ pub enum DossierPageView {
 #[derive(Clone, Debug, PartialEq)]
 pub struct InstalledDossier {
     pub scope: DossierRequestScope,
-    pub read: ArchiveDossierReadV2,
+    pub read: ArchiveDossierRead,
 }
 
 /// The installed observation. Consumers must admit its captured scope before reading.
@@ -107,7 +107,7 @@ impl ActiveCountyDossier {
         frame: &ObserverFrame,
         refresh_generation: u64,
         selected_county_geoid: &str,
-    ) -> Option<&ArchiveDossierReadV2> {
+    ) -> Option<&ArchiveDossierRead> {
         self.0
             .as_ref()?
             .for_observer(session, frame, refresh_generation, selected_county_geoid)
@@ -121,7 +121,7 @@ impl InstalledDossier {
         frame: &ObserverFrame,
         refresh_generation: u64,
         selected_county_geoid: &str,
-    ) -> Option<&ArchiveDossierReadV2> {
+    ) -> Option<&ArchiveDossierRead> {
         let installed = self;
         let snapshot = frame.for_session(session)?;
         let read_scope = observation_scope(
@@ -193,25 +193,20 @@ pub enum DossierFetchState {
 
 #[derive(Resource, Default, Debug, PartialEq, Eq)]
 struct DossierPresentation {
-    cursor: Option<ArchiveChangeCursorV2>,
+    cursor: Option<ArchiveChangeCursor>,
     details_open: bool,
 }
 
 fn fetch_dossier(
-    mut scope: DossierRequestScope,
-    cursor: Option<ArchiveChangeCursorV2>,
+    scope: DossierRequestScope,
+    cursor: Option<ArchiveChangeCursor>,
 ) -> Result<InstalledDossier, DossierFetchError> {
-    let read_error = |error: babylon_persistence::SemanticArchiveReaderErrorV1| {
+    let read_error = |error: babylon_persistence::SemanticArchiveReaderError| {
         DossierFetchError::ReadFailed(error.to_string())
     };
-    let reader = SemanticArchiveReaderV1::from_env()
+    let reader = SemanticArchiveReader::from_env()
         .map_err(|error| DossierFetchError::ReaderAbsent(error.to_string()))?;
-    if scope.observer.is_none() {
-        // The standalone conformance card pins one marker before its canonical read.
-        scope.read_scope = crate::dossier::pinned_scope(&reader, scope.campaign)
-            .map_err(DossierFetchError::ReadFailed)?;
-    }
-    let bounds = ArchiveDossierBoundsV2::try_new(32, cursor)
+    let bounds = ArchiveDossierBounds::try_new(32, cursor)
         .map_err(|error| DossierFetchError::ReadFailed(error.to_string()))?;
     let read = reader
         .dossier_as_of(&scope.read_scope, &scope.subject, &bounds)
@@ -229,7 +224,7 @@ fn fetch_dossier(
 /// Which zone of the card one entity renders. One marker per zone so the
 /// repaint finds its targets and headless tests can assert the whole zone
 /// tree exists and renders the expected text (the same pub-marker pattern
-/// `ui::countdown::CountdownPaneText` and friends use).
+/// the observer text surfaces use).
 #[derive(Component, Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DossierZone {
     /// The county title line.
@@ -435,24 +430,21 @@ impl DossierReadIdentity<'_> {
 
     fn scope(&self, view: &DossierPageView) -> Option<DossierRequestScope> {
         let county = self.county()?;
-        let observer = self.observer.as_ref().map(|session| session.context());
-        let read_scope = if let Some(session) = &self.observer {
-            let snapshot = self.frame.as_ref()?.for_session(session)?;
-            if session.campaign != self.campaign.0 {
-                return None;
-            }
-            observation_scope(
-                session.campaign,
-                snapshot.resolve_tick,
-                snapshot.tick_content_hash.as_deref(),
-            )
-            .ok()?
-        } else {
-            ArchiveReadScopeV2::foundation(self.campaign.0)
-        };
+        let session = self.observer.as_ref()?;
+        let snapshot = self.frame.as_ref()?.for_session(session)?;
+        if session.campaign != self.campaign.0 {
+            return None;
+        }
+        let observer = Some(session.context());
+        let read_scope = observation_scope(
+            session.campaign,
+            snapshot.resolve_tick,
+            snapshot.tick_content_hash.as_deref(),
+        )
+        .ok()?;
         let subject = match view {
             DossierPageView::Card => {
-                ArchivePageRefV1::try_new(ArchiveSubjectKindV1::County, county.into()).ok()?
+                ArchivePageRef::try_new(ArchiveSubjectKind::County, county.into()).ok()?
             }
             DossierPageView::Subject(request) => request.target()?,
         };
@@ -484,27 +476,26 @@ impl DossierReadIdentity<'_> {
             (Some(session), Some(frame)) => installed
                 .for_observer(session, frame, self.refresh.0, &expected.county_geoid)
                 .is_some(),
-            (None, _) => true,
             _ => false,
         }
     }
 }
 
 impl SubjectPageRequest {
-    fn target(&self) -> Option<ArchivePageRefV1> {
+    fn target(&self) -> Option<ArchivePageRef> {
         let kind = match self.kind.as_str() {
-            "county" => ArchiveSubjectKindV1::County,
-            "place" => ArchiveSubjectKindV1::Place,
+            "county" => ArchiveSubjectKind::County,
+            "place" => ArchiveSubjectKind::Place,
             _ => return None,
         };
-        ArchivePageRefV1::try_new(kind, self.id.clone()).ok()
+        ArchivePageRef::try_new(kind, self.id.clone()).ok()
     }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct FetchKey {
     scope: DossierRequestScope,
-    cursor: Option<ArchiveChangeCursorV2>,
+    cursor: Option<ArchiveChangeCursor>,
 }
 
 fn same_navigation_scope(left: &DossierRequestScope, right: &DossierRequestScope) -> bool {
@@ -626,10 +617,7 @@ fn collect_dossier_fetch(
         return;
     };
     *state = match result {
-        Ok(installed)
-            if identity.admits(&installed, &view)
-                && (expected.observer.is_none() || installed.scope == expected) =>
-        {
+        Ok(installed) if identity.admits(&installed, &view) && installed.scope == expected => {
             projection.0 = Some(installed);
             DossierFetchState::Idle
         }
@@ -743,7 +731,7 @@ fn set_segment_rows(commands: &mut Commands, zone: Entity, rows: &[Vec<DossierSe
 enum DossierControl {
     Link(SubjectPageRequest),
     Back(DossierRequestScope),
-    More(DossierRequestScope, ArchiveChangeCursorV2),
+    More(DossierRequestScope, ArchiveChangeCursor),
     First(DossierRequestScope),
     Details(DossierRequestScope),
 }
@@ -759,7 +747,7 @@ impl DossierControl {
     }
 }
 
-fn chip_request(link: &ArchiveDossierLinkV2, scope: &DossierRequestScope) -> SubjectPageRequest {
+fn chip_request(link: &ArchiveDossierLink, scope: &DossierRequestScope) -> SubjectPageRequest {
     SubjectPageRequest {
         scope: scope.clone(),
         kind: link.target.kind().as_str().into(),
@@ -768,30 +756,30 @@ fn chip_request(link: &ArchiveDossierLinkV2, scope: &DossierRequestScope) -> Sub
     }
 }
 
-fn navigable_link(link: &ArchiveDossierLinkV2) -> bool {
+fn navigable_link(link: &ArchiveDossierLink) -> bool {
     matches!(
         link.target_state,
-        ArchiveLinkedPageStateV2::KnownReady | ArchiveLinkedPageStateV2::KnownPending
+        ArchiveLinkedPageState::KnownReady | ArchiveLinkedPageState::KnownPending
     )
 }
 
 fn set_chips(
     commands: &mut Commands,
     zone: Entity,
-    links: &[ArchiveDossierLinkV2],
+    links: &[ArchiveDossierLink],
     scope: &DossierRequestScope,
 ) {
     commands.entity(zone).despawn_related::<Children>();
     for link in links {
-        let label = if link.target_state == ArchiveLinkedPageStateV2::Unknown {
-            babylon_persistence::fog_chip_v1(link.target.kind().as_str(), link.target.id())
+        let label = if link.target_state == ArchiveLinkedPageState::Unknown {
+            babylon_persistence::fog_chip(link.target.kind().as_str(), link.target.id())
         } else {
             link.retained_label.clone().unwrap_or_else(|| {
                 format!("{} · {}", link.target.kind().as_str(), link.target.id())
             })
         };
         let text = match link.target_state {
-            ArchiveLinkedPageStateV2::KnownReady | ArchiveLinkedPageStateV2::Unknown => label,
+            ArchiveLinkedPageState::KnownReady | ArchiveLinkedPageState::Unknown => label,
             state => format!("{label} · {}", crate::dossier::link_state_label(state)),
         };
         spawn_control(
@@ -1270,7 +1258,7 @@ fn paint_zones(
     }
 }
 
-fn evidence_rows(read: &ArchiveDossierReadV2) -> Vec<Vec<DossierSegment>> {
+fn evidence_rows(read: &ArchiveDossierRead) -> Vec<Vec<DossierSegment>> {
     let mut rows = vec![vec![chronicle_header(&read.state)]];
     let Some(page) = retained_page(read) else {
         return rows;
@@ -1301,7 +1289,7 @@ fn evidence_rows(read: &ArchiveDossierReadV2) -> Vec<Vec<DossierSegment>> {
 
 fn status_segments(
     state: &DossierFetchState,
-    read: Option<&ArchiveDossierReadV2>,
+    read: Option<&ArchiveDossierRead>,
 ) -> Vec<DossierSegment> {
     let Some(read) = read else {
         let (text, tone) = match state {
@@ -1510,13 +1498,7 @@ impl Plugin for DossierCardPlugin {
             .add_systems(
                 Update,
                 (
-                    // `.after(restart_on_n_key)`: the N-key restart clears
-                    // the card THROUGH this system — its `SelectedCounty =
-                    // None` write is the change this system reacts to, and
-                    // the ordering makes the clear land in the same frame
-                    // instead of one frame late. Vacuous when TickLoopPlugin
-                    // is absent (headless unit compositions).
-                    drive_dossier_fetch.after(crate::ui::story_card::restart_on_n_key),
+                    drive_dossier_fetch,
                     collect_dossier_fetch,
                     apply_page_requests,
                     repaint_dossier_card,
@@ -1534,25 +1516,25 @@ impl Plugin for DossierCardPlugin {
 mod tests {
     use super::*;
     use babylon_persistence::archive_revision::{
-        ArchiveChangePageV2, ArchiveDossierPageV2, ArchiveDossierPendingV2, ArchiveDossierStateV2,
-        ArchivePublicationOriginV2,
+        ArchiveChangePage, ArchiveDossierPage, ArchiveDossierPending, ArchiveDossierState,
     };
     use babylon_persistence::{
-        ArchiveCitationV1, ArchiveSignalV1, ObserverEconomySnapshotV1, ObserverVisibilityV1,
+        observer_reader::ObserverEconomySnapshot, observer_reader::ObserverVisibility,
+        ArchiveCitation, ArchiveSignal,
     };
 
-    fn subject(kind: ArchiveSubjectKindV1, id: &str) -> ArchivePageRefV1 {
-        ArchivePageRefV1::try_new(kind, id.into()).unwrap()
+    fn subject(kind: ArchiveSubjectKind, id: &str) -> ArchivePageRef {
+        ArchivePageRef::try_new(kind, id.into()).unwrap()
     }
     fn frame(session: &ObserverSession, hash: &str) -> ObserverFrame {
-        ObserverFrame(Some(ObserverEconomySnapshotV1 {
+        ObserverFrame(Some(ObserverEconomySnapshot {
             campaign_id: session.campaign.as_uuid().to_string(),
             resolve_tick: session.viewed_tick,
             foundation_digest: "foundation".into(),
             nominal_world_hash: None,
             tick_content_hash: Some(hash.into()),
             envelope_digest: None,
-            visibility: ObserverVisibilityV1::FullObserver,
+            visibility: ObserverVisibility::FullObserver,
             counties: vec![],
             production: None,
         }))
@@ -1560,11 +1542,10 @@ mod tests {
     fn installed(session: &ObserverSession, hash: &str) -> InstalledDossier {
         let read_scope =
             observation_scope(session.campaign, session.viewed_tick, Some(hash)).unwrap();
-        let subject = subject(ArchiveSubjectKindV1::County, "26163");
-        let page = ArchiveDossierPageV2 {
+        let subject = subject(ArchiveSubjectKind::County, "26163");
+        let page = ArchiveDossierPage {
             revision_id: [1; 32],
             effective_tick: 1,
-            origin: ArchivePublicationOriginV2::Materialized,
             content_source: read_scope.clone(),
             title: "Wayne County".into(),
             question: "Retained question?".into(),
@@ -1573,12 +1554,12 @@ mod tests {
             content_sha256: [2; 32],
             citations: vec![],
             atoms: vec![],
-            links: vec![ArchiveDossierLinkV2 {
-                target: self::subject(ArchiveSubjectKindV1::Place, "2622000"),
+            links: vec![ArchiveDossierLink {
+                target: self::subject(ArchiveSubjectKind::Place, "2622000"),
                 retained_label: Some("Retained Detroit".into()),
-                target_state: ArchiveLinkedPageStateV2::KnownReady,
+                target_state: ArchiveLinkedPageState::KnownReady,
             }],
-            changes: ArchiveChangePageV2 {
+            changes: ArchiveChangePage {
                 coverage_from_tick: 1,
                 changes: vec![],
                 next_cursor: None,
@@ -1593,31 +1574,30 @@ mod tests {
                 read_scope: read_scope.clone(),
                 subject: subject.clone(),
             },
-            read: ArchiveDossierReadV2 {
+            read: ArchiveDossierRead {
                 scope: read_scope,
                 subject,
                 durable_tick: session.durable_tick,
                 processed_tick: session.durable_tick,
-                history_floor_tick: 1,
-                state: ArchiveDossierStateV2::Ready {
+                state: ArchiveDossierState::Ready {
                     page,
                     verified_through_tick: session.viewed_tick,
                 },
             },
         }
     }
-    fn signal() -> ArchiveSignalV1 {
-        ArchiveSignalV1::try_new(
+    fn signal() -> ArchiveSignal {
+        ArchiveSignal::try_new(
             "jobs".into(),
             "Original jobs label".into(),
             "1469 annual average jobs".into(),
-            ArchiveCitationV1::try_new("observed-source".into(), "exact/locator".into()).unwrap(),
+            ArchiveCitation::try_new("observed-source".into(), "exact/locator".into()).unwrap(),
         )
         .unwrap()
     }
-    fn page_mut(installed: &mut InstalledDossier) -> &mut ArchiveDossierPageV2 {
+    fn page_mut(installed: &mut InstalledDossier) -> &mut ArchiveDossierPage {
         match &mut installed.read.state {
-            ArchiveDossierStateV2::Ready { page, .. } => page,
+            ArchiveDossierState::Ready { page, .. } => page,
             _ => panic!("ready fixture"),
         }
     }
@@ -1729,7 +1709,7 @@ mod tests {
                             .unwrap(),
                     )
                     .links[0]
-                        .target_state = ArchiveLinkedPageStateV2::Unknown;
+                        .target_state = ArchiveLinkedPageState::Unknown;
                 }
                 5 => {
                     app.world_mut()
@@ -1849,9 +1829,9 @@ mod tests {
         let page = retained_page(&active.0.as_ref().unwrap().read)
             .unwrap()
             .clone();
-        active.0.as_mut().unwrap().read.state = ArchiveDossierStateV2::Pending {
+        active.0.as_mut().unwrap().read.state = ArchiveDossierState::Pending {
             page: Some(page),
-            reason: ArchiveDossierPendingV2::KnowledgeRefresh,
+            reason: ArchiveDossierPending::KnowledgeRefresh,
         };
         let read = active.for_observer(&session, &frame, 0, "26163").unwrap();
         assert_eq!(read.scope.tick_content_hash(), Some([0xaa; 32]));
@@ -1866,15 +1846,15 @@ mod tests {
                 .is_none());
         }
         active.0.as_mut().unwrap().read.scope =
-            ArchiveReadScopeV2::committed(session.campaign, 1, [0xbb; 32]).unwrap();
+            ArchiveReadScope::committed(session.campaign, 1, [0xbb; 32]).unwrap();
         assert!(active.for_observer(&session, &frame, 0, "26163").is_none());
     }
 
     #[test]
     fn unknown_and_unavailable_links_never_dispatch_a_guessed_subject() {
         for state in [
-            ArchiveLinkedPageStateV2::Unknown,
-            ArchiveLinkedPageStateV2::KnownUnavailable,
+            ArchiveLinkedPageState::Unknown,
+            ArchiveLinkedPageState::KnownUnavailable,
         ] {
             let (mut app, entity, request) = chip_app();
             page_mut(
@@ -1973,9 +1953,9 @@ mod tests {
         let mut installed = installed(&session, &"a".repeat(64));
         let page = retained_page(&installed.read).unwrap().clone();
         installed.read.processed_tick = 99;
-        installed.read.state = ArchiveDossierStateV2::Pending {
+        installed.read.state = ArchiveDossierState::Pending {
             page: Some(page),
-            reason: ArchiveDossierPendingV2::ReceiptProcessing,
+            reason: ArchiveDossierPending::ReceiptProcessing,
         };
         let rows = evidence_rows(&installed.read);
         assert_eq!(rows[0][0].text, "Changes await Archive completion.");

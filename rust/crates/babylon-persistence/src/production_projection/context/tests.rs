@@ -1,16 +1,15 @@
 use super::*;
-use crate::michigan_content::MichiganContentPresetV1;
+use crate::michigan_content::MichiganContentPreset;
 use crate::{
-    michigan_material::MichiganDeliveryPresetV1,
-    production_projection::project_material_observation_v1,
+    michigan_material::MichiganDeliveryPreset, production_projection::project_material_observation,
 };
 
-fn opening() -> ProductionSnapshotV2 {
-    let preset = MichiganDeliveryPresetV1::Standard;
-    let foundation = MichiganContentPresetV1::new_campaign(preset)
+fn opening() -> ProductionSnapshot {
+    let preset = MichiganDeliveryPreset::Standard;
+    let foundation = MichiganContentPreset::new_campaign(preset)
         .create_foundation(&crate::test_support::catalog())
         .unwrap();
-    project_material_observation_v1(
+    project_material_observation(
         &crate::test_support::catalog(),
         preset,
         foundation.initial_register(),
@@ -24,11 +23,11 @@ fn opening() -> ProductionSnapshotV2 {
 fn five_designed_processes_share_four_cited_observed_contexts_without_allocating_labor() {
     let mut snapshot = opening();
     let before = snapshot.clone();
-    attach_observed_context_v1(
-        &MichiganContentPresetV1::FourWeekStandardV7
+    attach_observed_context(
+        &MichiganContentPreset::FourWeekStandard
             .admitted(&crate::test_support::catalog())
             .unwrap(),
-        ObserverVisibilityV1::FullObserver,
+        ObserverVisibility::FullObserver,
         &mut snapshot,
     )
     .unwrap();
@@ -42,7 +41,7 @@ fn five_designed_processes_share_four_cited_observed_contexts_without_allocating
     assert_eq!(wayne.subject.local_name, "business-26163-31-33");
     assert_eq!(
         wayne.subject.scenario,
-        crate::michigan_cohorts::MICHIGAN_COHORT_SCENARIO_V2
+        crate::michigan_cohorts::MICHIGAN_COHORT_SCENARIO
     );
     assert_eq!(wayne.annual_avg_emplvl, Some(89_659));
     assert_eq!(wayne.annual_avg_estabs_count, 1_710);
@@ -55,7 +54,7 @@ fn five_designed_processes_share_four_cited_observed_contexts_without_allocating
     assert_ne!(links[0].process_id, links[1].process_id);
     assert_ne!(links[0].site_id, links[1].site_id);
     for context in &snapshot.observed_contexts {
-        assert_eq!(context.evidence_class, ArchiveEvidenceClassV1::Observed);
+        assert_eq!(context.evidence_class, ArchiveEvidenceClass::Observed);
         assert_eq!(context.vintage, 2024);
         assert_eq!(context.sector_code, "31-33");
         assert_eq!(
@@ -72,7 +71,7 @@ fn five_designed_processes_share_four_cited_observed_contexts_without_allocating
         assert!(context.source_url.starts_with("https://data.bls.gov/"));
     }
     for link in &snapshot.process_attributions {
-        assert_eq!(link.evidence_class, ArchiveEvidenceClassV1::Designed);
+        assert_eq!(link.evidence_class, ArchiveEvidenceClass::Designed);
         assert!(snapshot
             .observed_contexts
             .iter()
@@ -87,26 +86,26 @@ fn five_designed_processes_share_four_cited_observed_contexts_without_allocating
 #[test]
 fn missing_or_misidentified_visible_owner_refuses_without_partial_publication() {
     let catalog = crate::test_support::catalog();
-    let admitted = MichiganContentPresetV1::FourWeekStandardV7
+    let admitted = MichiganContentPreset::FourWeekStandard
         .admitted(&catalog)
         .unwrap();
     for mutate in [
-        |snapshot: &mut ProductionSnapshotV2| {
+        |snapshot: &mut ProductionSnapshot| {
             snapshot.sites.pop();
         },
-        |snapshot: &mut ProductionSnapshotV2| {
+        |snapshot: &mut ProductionSnapshot| {
             snapshot.sites[0].sector_code = "11".to_owned();
         },
-        |snapshot: &mut ProductionSnapshotV2| {
+        |snapshot: &mut ProductionSnapshot| {
             snapshot.sites[0].processes.clear();
         },
     ] {
         let mut snapshot = opening();
         mutate(&mut snapshot);
         let unchanged = snapshot.clone();
-        assert!(attach_observed_context_v1(
+        assert!(attach_observed_context(
             &admitted,
-            ObserverVisibilityV1::FullObserver,
+            ObserverVisibility::FullObserver,
             &mut snapshot
         )
         .is_err());
@@ -132,31 +131,26 @@ fn captured_disclosure_retains_absent_source_cells_instead_of_inventing_zero() {
 #[test]
 fn preview_clears_context_for_both_current_staffed_presets() {
     let mut disclosed = opening();
-    let admitted = MichiganContentPresetV1::FourWeekStandardV7
+    let admitted = MichiganContentPreset::FourWeekStandard
         .admitted(&crate::test_support::catalog())
         .unwrap();
-    attach_observed_context_v1(
-        &admitted,
-        ObserverVisibilityV1::FullObserver,
-        &mut disclosed,
-    )
-    .unwrap();
-    for preset in crate::michigan_content::MICHIGAN_CONTENT_PRESETS_V1
+    attach_observed_context(&admitted, ObserverVisibility::FullObserver, &mut disclosed).unwrap();
+    for preset in crate::michigan_content::MICHIGAN_CONTENT_PRESETS
         .into_iter()
         .filter(|preset| !preset.delivery().is_statewide())
     {
         for visibility in [
-            ObserverVisibilityV1::FullObserver,
-            ObserverVisibilityV1::KnownPreview,
+            ObserverVisibility::FullObserver,
+            ObserverVisibility::KnownPreview,
         ] {
             let mut candidate = disclosed.clone();
-            attach_observed_context_v1(
+            attach_observed_context(
                 &preset.admitted(&crate::test_support::catalog()).unwrap(),
                 visibility,
                 &mut candidate,
             )
             .unwrap();
-            let allowed = visibility == ObserverVisibilityV1::FullObserver;
+            let allowed = visibility == ObserverVisibility::FullObserver;
             assert_eq!(
                 candidate.observed_contexts.len(),
                 if allowed { 4 } else { 0 }
@@ -174,12 +168,12 @@ fn delivery_presets_share_observed_context_without_assigning_jobs() {
     let mut standard = opening();
     let mut delayed = standard.clone();
     for (preset, snapshot) in [
-        (MichiganContentPresetV1::FourWeekStandardV7, &mut standard),
-        (MichiganContentPresetV1::FourWeekDelayedV7, &mut delayed),
+        (MichiganContentPreset::FourWeekStandard, &mut standard),
+        (MichiganContentPreset::FourWeekDelayed, &mut delayed),
     ] {
-        attach_observed_context_v1(
+        attach_observed_context(
             &preset.admitted(&crate::test_support::catalog()).unwrap(),
-            ObserverVisibilityV1::FullObserver,
+            ObserverVisibility::FullObserver,
             snapshot,
         )
         .unwrap();

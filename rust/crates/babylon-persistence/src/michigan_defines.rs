@@ -18,16 +18,16 @@ pub(crate) use statewide::{
 const MAX_EXACT_INTEGER: u64 = 1 << 53;
 
 #[derive(Debug)]
-pub enum MichiganDefinesErrorV1 {
+pub enum MichiganDefinesError {
     Read(std::io::Error),
     TooLarge,
     Utf8(std::string::FromUtf8Error),
     Toml(toml::de::Error),
     Canonical,
     Value(&'static str),
-    Material(super::michigan_material::MichiganMaterialErrorV1),
+    Material(super::michigan_material::MichiganMaterialError),
 }
-impl std::fmt::Display for MichiganDefinesErrorV1 {
+impl std::fmt::Display for MichiganDefinesError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Read(error) => write!(f, "defines file read failed: {error}"),
@@ -40,7 +40,7 @@ impl std::fmt::Display for MichiganDefinesErrorV1 {
         }
     }
 }
-impl std::error::Error for MichiganDefinesErrorV1 {}
+impl std::error::Error for MichiganDefinesError {}
 
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields, rename_all = "SCREAMING_SNAKE_CASE")]
@@ -91,7 +91,7 @@ pub(crate) struct RegionalMassDefines {
 
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields, rename_all = "SCREAMING_SNAKE_CASE")]
-pub(crate) struct MichiganDefinesV3 {
+pub(crate) struct MichiganDefines {
     #[serde(rename = "regional_mass")]
     pub regional_mass: RegionalMassDefines,
     pub schema_version: u16,
@@ -118,47 +118,47 @@ pub(crate) struct MichiganDefinesV3 {
     #[serde(rename = "template")]
     pub template: BTreeMap<String, TemplateDefines>,
 }
-impl MichiganDefinesV3 {
-    pub fn load(path: &Path) -> Result<Self, MichiganDefinesErrorV1> {
-        let file = std::fs::File::open(path).map_err(MichiganDefinesErrorV1::Read)?;
+impl MichiganDefines {
+    pub fn load(path: &Path) -> Result<Self, MichiganDefinesError> {
+        let file = std::fs::File::open(path).map_err(MichiganDefinesError::Read)?;
         let mut bytes = Vec::new();
         file.take((MAX_MICHIGAN_DEFINES_BYTES + 1) as u64)
             .read_to_end(&mut bytes)
-            .map_err(MichiganDefinesErrorV1::Read)?;
+            .map_err(MichiganDefinesError::Read)?;
         if bytes.len() > MAX_MICHIGAN_DEFINES_BYTES {
-            return Err(MichiganDefinesErrorV1::TooLarge);
+            return Err(MichiganDefinesError::TooLarge);
         }
-        Self::parse(&String::from_utf8(bytes).map_err(MichiganDefinesErrorV1::Utf8)?)
+        Self::parse(&String::from_utf8(bytes).map_err(MichiganDefinesError::Utf8)?)
     }
-    pub fn parse(text: &str) -> Result<Self, MichiganDefinesErrorV1> {
+    pub fn parse(text: &str) -> Result<Self, MichiganDefinesError> {
         if text.len() > MAX_MICHIGAN_DEFINES_BYTES {
-            return Err(MichiganDefinesErrorV1::TooLarge);
+            return Err(MichiganDefinesError::TooLarge);
         }
-        let value: Self = toml::from_str(text).map_err(MichiganDefinesErrorV1::Toml)?;
+        let value: Self = toml::from_str(text).map_err(MichiganDefinesError::Toml)?;
         value.validate()?;
         Ok(value)
     }
-    pub fn decode(bytes: &[u8]) -> Result<Self, MichiganDefinesErrorV1> {
+    pub fn decode(bytes: &[u8]) -> Result<Self, MichiganDefinesError> {
         if bytes.len() > MAX_MICHIGAN_DEFINES_BYTES {
-            return Err(MichiganDefinesErrorV1::TooLarge);
+            return Err(MichiganDefinesError::TooLarge);
         }
         let value: Self =
-            serde_json::from_slice(bytes).map_err(|_| MichiganDefinesErrorV1::Canonical)?;
+            serde_json::from_slice(bytes).map_err(|_| MichiganDefinesError::Canonical)?;
         value.validate()?;
         if value.encode()? != bytes {
-            return Err(MichiganDefinesErrorV1::Canonical);
+            return Err(MichiganDefinesError::Canonical);
         }
         Ok(value)
     }
-    pub fn encode(&self) -> Result<Vec<u8>, MichiganDefinesErrorV1> {
-        serde_json::to_vec(self).map_err(|_| MichiganDefinesErrorV1::Canonical)
+    pub fn encode(&self) -> Result<Vec<u8>, MichiganDefinesError> {
+        serde_json::to_vec(self).map_err(|_| MichiganDefinesError::Canonical)
     }
     pub fn hours_per_period(&self) -> u64 {
         // validate proves the multiplication and physical weekly bound.
         self.staffing.work_hours_per_person_week * WEEKS_PER_TICK
     }
-    fn validate(&self) -> Result<(), MichiganDefinesErrorV1> {
-        use MichiganDefinesErrorV1::Value;
+    fn validate(&self) -> Result<(), MichiganDefinesError> {
+        use MichiganDefinesError::Value;
         if self.schema_version != 3 {
             return Err(Value("SCHEMA_VERSION must equal 3"));
         }
@@ -167,7 +167,7 @@ impl MichiganDefinesV3 {
                 "TICK_DURATION_DAYS must equal the supported 28-day period",
             ));
         }
-        if !(1..=super::michigan_material::MICHIGAN_MAX_HORIZON_PERIODS_V1)
+        if !(1..=super::michigan_material::MICHIGAN_MAX_HORIZON_PERIODS)
             .contains(&self.horizon_periods)
         {
             return Err(Value("HORIZON_PERIODS must be 1..=16"));
@@ -242,8 +242,8 @@ impl MichiganDefinesV3 {
 fn validate_process(
     value: &ProcessDefines,
     hours_per_period: u64,
-) -> Result<(), MichiganDefinesErrorV1> {
-    use MichiganDefinesErrorV1::Value;
+) -> Result<(), MichiganDefinesError> {
+    use MichiganDefinesError::Value;
     if value.batches_per_week == 0
         || value.labor_hours_per_batch == 0
         || value.input_units_per_batch == 0
@@ -312,19 +312,18 @@ mod tests {
     ));
     #[test]
     fn equivalent_toml_has_one_canonical_identity_and_stored_values_round_trip() {
-        let original = MichiganDefinesV3::parse(SOURCE).unwrap();
-        let reformatted =
-            MichiganDefinesV3::parse(&format!("# author note\n\n{SOURCE}\n")).unwrap();
+        let original = MichiganDefines::parse(SOURCE).unwrap();
+        let reformatted = MichiganDefines::parse(&format!("# author note\n\n{SOURCE}\n")).unwrap();
         assert_eq!(original.encode().unwrap(), reformatted.encode().unwrap());
         assert_eq!(
-            MichiganDefinesV3::decode(&original.encode().unwrap()).unwrap(),
+            MichiganDefines::decode(&original.encode().unwrap()).unwrap(),
             original
         );
         let mut padded = original.encode().unwrap();
         padded.push(b' ');
         assert!(matches!(
-            MichiganDefinesV3::decode(&padded),
-            Err(MichiganDefinesErrorV1::Canonical)
+            MichiganDefines::decode(&padded),
+            Err(MichiganDefinesError::Canonical)
         ));
     }
     #[test]
@@ -364,13 +363,13 @@ mod tests {
             format!("{SOURCE}\nUNKNOWN = 1\n"),
         ] {
             assert!(
-                MichiganDefinesV3::parse(&changed).is_err(),
+                MichiganDefines::parse(&changed).is_err(),
                 "unexpectedly admitted {changed}"
             );
         }
         assert!(matches!(
-            MichiganDefinesV3::parse(&" ".repeat(MAX_MICHIGAN_DEFINES_BYTES + 1)),
-            Err(MichiganDefinesErrorV1::TooLarge)
+            MichiganDefines::parse(&" ".repeat(MAX_MICHIGAN_DEFINES_BYTES + 1)),
+            Err(MichiganDefinesError::TooLarge)
         ));
     }
     #[test]
@@ -386,8 +385,8 @@ mod tests {
                     &format!("LABOR_HOURS_PER_BATCH = {coefficient}"),
                 );
             assert!(matches!(
-                MichiganDefinesV3::parse(&changed),
-                Err(MichiganDefinesErrorV1::Value(
+                MichiganDefines::parse(&changed),
+                Err(MichiganDefinesError::Value(
                     "maximal period staffing request exceeds the exact integer bound"
                 ))
             ));
@@ -396,7 +395,7 @@ mod tests {
 
     #[test]
     fn statewide_physical_coefficients_and_source_classification_are_validated() {
-        let baseline = MichiganDefinesV3::parse(SOURCE).unwrap();
+        let baseline = MichiganDefines::parse(SOURCE).unwrap();
         assert_eq!(baseline.template.len(), 16);
         assert_eq!(baseline.commodity.len(), 23);
         assert_eq!(baseline.transport.road_travel_periods, 1);
@@ -418,12 +417,12 @@ mod tests {
             ),
         ] {
             assert!(
-                MichiganDefinesV3::parse(&changed).is_err(),
+                MichiganDefines::parse(&changed).is_err(),
                 "accepted invalid statewide input"
             );
         }
         let no_workers = SOURCE.replace("EMPLOYED_PEOPLE = 8", "EMPLOYED_PEOPLE = 0");
         // A reserve-only producer remains physically admitted so staffing can recover.
-        assert!(MichiganDefinesV3::parse(&no_workers).is_ok());
+        assert!(MichiganDefines::parse(&no_workers).is_ok());
     }
 }

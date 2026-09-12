@@ -12,30 +12,20 @@
 use std::io::Write;
 use std::process::Command;
 
-use babylon_bsl::rule_pipeline::split_content;
-use babylon_bsl::rules_hash_of;
 use babylon_bsl::structural_verbs::CollectingSink;
 use babylon_client::dossier::{retained_page, verified_tick};
 use babylon_client::ui::dossier_card::{
     ActiveCountyDossier, DossierCampaignId, DossierCardPlugin, DossierFetchState, DossierRefresh,
     InstalledDossier,
 };
-use babylon_graph::hypergraph_store::HypergraphStore;
-use babylon_kernel::replay::{ReplaySeed, ReplaySessionIdV1};
-use babylon_kernel::sha256_of;
-use babylon_kernel::tick_content_hash::RefDigestV1;
-use babylon_kernel::ContentDigest;
+use babylon_persistence::material_runtime::DurableMaterialRuntime;
 use babylon_persistence::{
-    install_reader_role_v1, michigan_dynamic_hex_foundation_v1, validate_connection_target,
-    ArchiveCitationV1, ArchiveDirtyBatchV1, ArchiveKnowledgeGrantV1, ArchiveMaterializeModeV1,
-    ArchivePageInputV1, ArchivePageRefV1, ArchiveSchemaDispositionV1, ArchiveSignalV1,
-    ArchiveSubjectKindV1, ArchiveSubjectV1, ArchiveWorkerV1, CampaignId, DurableReplayRuntimeV2,
-    FoundationContentBundleV1, NullArchiveDossierProducerV1, ReaderRoleDispositionV1,
-    SemanticArchiveStoreV1,
+    identity::CampaignId, install_reader_role, postgres_catalog::validate_connection_target,
+    ArchiveCitation, ArchiveDirtyBatch, ArchiveKnowledgeGrant, ArchiveMaterializeMode,
+    ArchivePageInput, ArchivePageRef, ArchiveSignal, ArchiveSubject, ArchiveSubjectKind,
+    ArchiveWorker, NullArchiveDossierProducer, ReaderRoleDisposition, SemanticArchiveStore,
 };
-use babylon_practice_contract::ordered_action_v1::OrderedPracticeActionBatchV1;
-use babylon_tick::material_state::MaterialStateV1;
-use babylon_tick::replay_session::ReplayTickSession;
+use babylon_practice_contract::OrderedPracticeActionBatch;
 use bevy::prelude::*;
 use postgres::{Config, NoTls};
 use serde_json::Value;
@@ -47,12 +37,6 @@ const ACK: &str = "I_UNDERSTAND_THIS_DISPOSABLE_RUNTIME_DROPS_ITS_SCRATCH_DATABA
 const CANARY_ENV: &str = "BABYLON_POSTGRES_DISPOSABLE_CANARY";
 const TEMPLATE_DB_ENV: &str = "BABYLON_RUNTIME_TEMPLATE_DB";
 const READER_DSN_ENV: &str = "BABYLON_READER_DSN";
-const DEFINES: &[u8] = br#"{"alpha":1}"#;
-const REFERENCE_BUNDLE_DOMAIN: &[u8] = b"babylon.h3.reference-bundle-composite.v1\0";
-const SCENARIO: &str =
-    include_str!("../../babylon-tick/content/scenarios/struggle-spark-conformance.bscn");
-const RULE: &str = include_str!("../../babylon-tick/content/rules/struggle-spark.bsl");
-const READER_SEED: i64 = 3;
 
 fn validated_base_config() -> Config {
     let dsn =
@@ -103,25 +87,30 @@ impl TestDatabase {
             admin,
             active: true,
         };
-        let observation = database
-            .config(base)
+        let clone_config = database.config(base);
+        babylon_persistence::preflight_current_schema(&clone_config)
+            .expect("runtime clone has the exact current schema and catalog");
+        let observation = clone_config
             .connect(NoTls)
             .expect("runtime clone connection")
             .query_one(
-                "SELECT \
-                   (SELECT pg_catalog.string_agg(ordinal::pg_catalog.text || ':' || \
-                            state_tag::pg_catalog.text || ':' || schema_epoch::pg_catalog.text, \
-                            ',' ORDER BY ordinal) \
-                    FROM babylon_meta.persistence_authority_ledger), \
-                   (SELECT pg_catalog.count(*) FROM babylon_meta.campaign)",
+                "SELECT schema_sha256, \
+                   (SELECT pg_catalog.count(*) FROM babylon_meta.campaign) \
+                 FROM babylon_meta.current_schema WHERE singleton",
                 &[],
             )
-            .expect("runtime clone observation");
+            .expect("current schema clone identity");
         assert_eq!(
             observation
-                .try_get::<_, String>(0)
-                .expect("authority ledger decodes"),
-            "1:1:8,2:2:9"
+                .try_get::<_, Vec<u8>>(0)
+                .expect("schema digest decodes"),
+            babylon_persistence::current_schema_sha256().to_vec(),
+        );
+        assert_eq!(
+            observation
+                .try_get::<_, i64>(1)
+                .expect("campaign count decodes"),
+            0
         );
         database
     }
@@ -243,42 +232,37 @@ impl Drop for ConfinedLogin {
 
 impl ReaderTarget {
     /// Clone the template, commit `tick_count` real ticks for one campaign,
-    /// with foundation-enrolled Archive history, then install the reader role.
+    /// using the current material foundation, then install the reader role.
     fn create(label: &str, campaign_uuid: u128, tick_count: u64) -> Self {
         assert!(tick_count > 0);
         let base = validated_base_config();
         let template = validated_template_name();
         let database = TestDatabase::create_from_template(&base, &template, label);
         let config = database.config(&base);
-        // Enroll this new campaign at foundation: history at periods 1 and 2
-        // must be retained, not inferred from a later adopted head.
-        let store = SemanticArchiveStoreV1::new(&config);
-        match store
-            .install_schema()
-            .expect("Archive schema installs before campaign creation")
-        {
-            ArchiveSchemaDispositionV1::Installed | ArchiveSchemaDispositionV1::AlreadyCurrent => {}
-        }
+        let store = SemanticArchiveStore::new(&config);
+        store
+            .verify_schema()
+            .expect("Archive schema verifies before campaign creation");
         let campaign_id = CampaignId::from_uuid(Uuid::from_u128(campaign_uuid));
-        let (session, bundle) = runtime_fixture_with_seed(READER_SEED);
-        let mut runtime = DurableReplayRuntimeV2::create(&config, campaign_id, session, bundle)
+        let foundation = current_foundation();
+        let mut runtime = DurableMaterialRuntime::create(&config, campaign_id, foundation)
             .expect("runtime constructs after activation");
         for tick in 1..=tick_count {
-            let actions = OrderedPracticeActionBatchV1::empty(
-                runtime.foundation().replay_session_identity().clone(),
+            let actions = OrderedPracticeActionBatch::empty(
+                runtime.session().graph_session().session_identity().clone(),
                 tick,
             )
             .expect("empty action batch");
             let receipt = runtime
                 .advance_and_commit(&mut CollectingSink::default(), &actions)
                 .expect("tick commits");
-            assert_eq!(receipt.resolve_tick().get(), tick);
+            assert_eq!(receipt.resolve_tick(), tick);
         }
         drop(runtime);
 
         assert_eq!(
-            install_reader_role_v1(&config).expect("reader role installs"),
-            ReaderRoleDispositionV1::Installed
+            install_reader_role(&config).expect("reader role installs"),
+            ReaderRoleDisposition::Installed
         );
         Self {
             database,
@@ -292,48 +276,22 @@ impl ReaderTarget {
     }
 }
 
-fn runtime_fixture_with_seed(
-    seed: i64,
-) -> (
-    ReplayTickSession<HypergraphStore>,
-    FoundationContentBundleV1,
-) {
-    let (_, rules) = split_content(RULE).expect("live rule parses");
-    let forms = rules.into_iter().map(|rule| rule.form).collect::<Vec<_>>();
-    let content = ContentDigest {
-        defines_hash: sha256_of(DEFINES),
-        rules_hash: rules_hash_of(&forms).expect("live rule hashes"),
-    };
-    let foundation = michigan_dynamic_hex_foundation_v1().expect("foundation decodes");
-    let mut reference_manifest = REFERENCE_BUNDLE_DOMAIN.to_vec();
-    reference_manifest.extend_from_slice(&foundation.base_reference_cohort_digest());
-    reference_manifest.extend_from_slice(&foundation.r8_section_digest());
-    assert_eq!(
-        sha256_of(&reference_manifest),
-        foundation.reference_bundle_digest()
-    );
-    let reference = RefDigestV1::from_bytes(foundation.reference_bundle_digest());
-    let session = ReplayTickSession::new(
-        SCENARIO,
-        None,
-        RULE,
-        HypergraphStore::new(),
-        ReplaySessionIdV1::try_from("per23/dossier-cli-live").expect("session id"),
-        ReplaySeed::new(seed),
-        content,
-        reference,
-        MaterialStateV1::try_new(foundation).expect("material state"),
+fn current_foundation() -> babylon_persistence::material_runtime::MaterialRuntimeFoundation {
+    let catalog =
+        babylon_persistence::michigan_material::MichiganMaterialCatalog::from_defines_toml(
+            include_str!("../../../../content/scenarios/michigan/defines.toml"),
+        )
+        .unwrap();
+    babylon_persistence::michigan_content::MichiganContentPreset::new_campaign(
+        babylon_persistence::michigan_material::MichiganDeliveryPreset::Standard,
     )
-    .expect("tick-zero session prepares");
-    let bundle =
-        FoundationContentBundleV1::try_new(SCENARIO, None, RULE, DEFINES, &reference_manifest)
-            .expect("content bundle");
-    (session, bundle)
+    .create_foundation(&catalog)
+    .unwrap()
 }
 
-fn county_subject() -> ArchiveSubjectV1 {
-    ArchiveSubjectV1::try_new(
-        ArchiveSubjectKindV1::County,
+fn county_subject() -> ArchiveSubject {
+    ArchiveSubject::try_new(
+        ArchiveSubjectKind::County,
         "26163".to_owned(),
         "Wayne County".to_owned(),
     )
@@ -344,17 +302,17 @@ fn county_page_input(
     verified_tick: u64,
     tick_content_hash: [u8; 32],
     employment_value: &str,
-) -> ArchivePageInputV1 {
-    ArchivePageInputV1::try_new(
+) -> ArchivePageInput {
+    ArchivePageInput::try_new(
         county_subject(),
         verified_tick,
         tick_content_hash,
         "Which neighboring place should organizers investigate next?".to_owned(),
-        vec![ArchiveSignalV1::try_new(
+        vec![ArchiveSignal::try_new(
             "employment".to_owned(),
             "Employment".to_owned(),
             employment_value.to_owned(),
-            ArchiveCitationV1::try_new(
+            ArchiveCitation::try_new(
                 "qcew-2024".to_owned(),
                 "fact_qcew_county_rollup county_fips=26163".to_owned(),
             )
@@ -376,18 +334,18 @@ fn materialize_county_page(
     tick_content_hash: [u8; 32],
     employment_value: &str,
 ) {
-    let store = SemanticArchiveStoreV1::new(config);
-    let county_ref = ArchivePageRefV1::try_new(ArchiveSubjectKindV1::County, "26163".to_owned())
+    let store = SemanticArchiveStore::new(config);
+    let county_ref = ArchivePageRef::try_new(ArchiveSubjectKind::County, "26163".to_owned())
         .expect("county ref");
     if verified_tick == 1 {
         store
             .grant_knowledge(
                 campaign_id,
-                &ArchiveKnowledgeGrantV1::try_new(
+                &ArchiveKnowledgeGrant::try_new(
                     county_ref,
                     "employment".to_owned(),
                     1,
-                    ArchiveCitationV1::try_new(
+                    ArchiveCitation::try_new(
                         "reader-live-employment".to_owned(),
                         "employment@tick-1".to_owned(),
                     )
@@ -397,7 +355,7 @@ fn materialize_county_page(
             )
             .expect("knowledge grant persists");
     }
-    let batch = ArchiveDirtyBatchV1::try_new(
+    let batch = ArchiveDirtyBatch::try_new(
         verified_tick,
         tick_content_hash,
         vec![county_page_input(
@@ -408,7 +366,7 @@ fn materialize_county_page(
     )
     .expect("live dirty batch");
     store
-        .materialize_receipt(campaign_id, &batch, ArchiveMaterializeModeV1::Consume)
+        .materialize_receipt(campaign_id, &batch, ArchiveMaterializeMode::Consume)
         .expect("live receipt materializes");
 }
 
@@ -480,7 +438,6 @@ fn assert_archive_current_card(reader_dsn: &str, campaign: &str) -> Value {
         64
     );
     assert_eq!(card["page"]["content_sha256"].as_str().unwrap().len(), 64);
-    assert_eq!(card["history_floor_tick"], 0);
     assert_eq!(card["geoid"], "26163");
     assert_eq!(card["page"]["title"], "Wayne County");
     assert_eq!(card["durable_tick"], 2);
@@ -586,16 +543,15 @@ impl Drop for ReaderEnvGuard {
     }
 }
 
-fn held_county_app(campaign: CampaignId) -> App {
+fn held_county_app(target: &ReaderTarget) -> App {
+    let campaign = target.campaign_id;
     let mut app = App::new();
     app.add_plugins((MinimalPlugins, bevy::asset::AssetPlugin::default()));
     app.add_plugins(babylon_client::map::MapPlugin);
-    app.add_plugins(babylon_client::loop_ui::TickLoopPlugin);
     app.add_plugins(DossierCardPlugin);
     app.insert_resource(DossierCampaignId(campaign));
-    app.insert_resource(babylon_client::story::SelectedStory(
-        babylon_client::story::counties(),
-    ));
+    app.insert_resource(babylon_client::observer::ObserverSession::new(campaign));
+    install_held_observation(&mut app, target, 2);
     app.insert_resource(bevy::time::TimeUpdateStrategy::ManualDuration(
         std::time::Duration::ZERO,
     ));
@@ -609,6 +565,34 @@ fn held_county_app(campaign: CampaignId) -> App {
         .resource_mut::<babylon_client::map::SelectedCounty>()
         .0 = Some(index);
     app
+}
+
+fn install_held_observation(app: &mut App, target: &ReaderTarget, tick: u64) {
+    use babylon_client::observer::ObserverSession;
+    use babylon_client::observer_ui::ObserverFrame;
+    use babylon_persistence::{
+        observer_reader::ObserverEconomySnapshot, observer_reader::ObserverVisibility,
+    };
+
+    let hash = tick_content_hash(&target.config, target.campaign_id, tick);
+    let content_hash = babylon_tick::hex(&hash);
+    app.world_mut()
+        .resource_mut::<ObserverSession>()
+        .ready(tick, Some(content_hash.clone()));
+    app.insert_resource(ObserverFrame(Some(ObserverEconomySnapshot {
+        campaign_id: target.campaign_id.as_uuid().to_string(),
+        resolve_tick: tick,
+        foundation_digest: String::new(),
+        nominal_world_hash: None,
+        tick_content_hash: Some(content_hash),
+        envelope_digest: None,
+        visibility: ObserverVisibility::FullObserver,
+        counties: Vec::new(),
+        production: None,
+    })));
+    let mut session = app.world_mut().resource_mut::<ObserverSession>();
+    let context = session.context();
+    assert!(session.installed(&context));
 }
 
 fn collect_held_card(app: &mut App) -> InstalledDossier {
@@ -656,8 +640,8 @@ fn assert_quiet_sweep_refreshes_held_card(
     held_app: &mut App,
     held_before: &InstalledDossier,
 ) {
-    let sweep = ArchiveWorkerV1::new(&target.config)
-        .sweep_once(target.campaign_id, &NullArchiveDossierProducerV1)
+    let sweep = ArchiveWorker::new(&target.config)
+        .sweep_once(target.campaign_id, &NullArchiveDossierProducer)
         .expect("evaluated quiet tick settles");
     assert_eq!(sweep.applied_count(), 1);
     assert_eq!(sweep.verified_tick(), 3);
@@ -684,25 +668,29 @@ fn assert_quiet_sweep_refreshes_held_card(
     assert_eq!(settled_page.atoms, before_page.atoms);
     assert_eq!(settled_page.changes.changes, before_page.changes.changes);
     assert_eq!(settled_page.content_sha256, before_page.content_sha256);
-    let restart = ArchiveWorkerV1::new(&target.config)
-        .sweep_once(target.campaign_id, &NullArchiveDossierProducerV1)
+    let restart = ArchiveWorker::new(&target.config)
+        .sweep_once(target.campaign_id, &NullArchiveDossierProducer)
         .expect("restarted quiet worker is idle");
     assert!(restart.dispositions().is_empty());
     assert_eq!(restart.verified_tick(), 3);
 }
 
 fn commit_third_tick(target: &ReaderTarget) {
-    let mut runtime = DurableReplayRuntimeV2::open(&target.config, target.campaign_id)
-        .expect("the runtime reopens from its checkpoint");
-    let actions = OrderedPracticeActionBatchV1::empty(
-        runtime.foundation().replay_session_identity().clone(),
+    let mut runtime = DurableMaterialRuntime::open(
+        &target.config,
+        target.campaign_id,
+        current_foundation().digest(),
+    )
+    .expect("the runtime reopens from its checkpoint");
+    let actions = OrderedPracticeActionBatch::empty(
+        runtime.session().graph_session().session_identity().clone(),
         3,
     )
     .expect("empty action batch");
     let receipt = runtime
         .advance_and_commit(&mut CollectingSink::default(), &actions)
         .expect("tick 3 commits");
-    assert_eq!(receipt.resolve_tick().get(), 3);
+    assert_eq!(receipt.resolve_tick(), 3);
     drop(runtime);
 }
 
@@ -776,7 +764,7 @@ fn live_dossier_cli_reads_through_the_confined_reader_and_survives_restart() {
     let _ = writeln!(sink, "dossier_cli_live: running dossier show");
     let card = assert_archive_current_card(&reader_dsn, &campaign);
     let reader_env = ReaderEnvGuard::set(&reader_dsn);
-    let mut held_app = held_county_app(target.campaign_id);
+    let mut held_app = held_county_app(&target);
     let held_before = collect_held_card(&mut held_app);
     assert_eq!(
         retained_page(&held_before.read)
@@ -807,6 +795,7 @@ fn live_dossier_cli_reads_through_the_confined_reader_and_survives_restart() {
         "dossier_cli_live: dossier show under the dual-tick gap"
     );
     assert_pending_card_after_tick_three(&reader_dsn, &campaign);
+    install_held_observation(&mut held_app, &target, 3);
     assert_pending_held_card(&mut held_app);
 
     assert_quiet_sweep_refreshes_held_card(

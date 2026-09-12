@@ -1,8 +1,8 @@
 //! The decay-arc conformance suite (Community port train, Task 10 — plan
 //! `docs/superpowers/plans/2026-08-18-community-port.md`): the three-tick
 //! arc over world 5 (`content/scenarios/community-decay-arc-conformance.bscn`)
-//! via `TickSession` (the `control_ratio_conformance.rs:1172-1181` idiom,
-//! with `SessionId::new`'s deterministic-identity law, D179).
+//! via `RuleDiagnosticSession` (the `control_ratio_conformance.rs:1172-1181` idiom,
+//! with `ReplaySessionIdV1::new`'s deterministic-identity law, D179).
 //!
 //! # The arc mirror's verbatim stdout (2026-08-22, python3 3.13)
 //!
@@ -23,8 +23,8 @@ use babylon_bsl::scenario::{compose_declaration_preludes, load_scenario_with_pre
 use babylon_bsl::structural_verbs::CollectingSink;
 use babylon_graph::hypergraph_store::HypergraphStore;
 use babylon_graph::substrate::{GraphSubstrate, HyperedgeId, NodeId};
-use babylon_kernel::SessionId;
-use babylon_tick::TickSession;
+use babylon_kernel::replay::ReplaySessionId;
+use babylon_tick::diagnostic::RuleDiagnosticSession;
 
 const SCENARIO: &str = include_str!("../content/scenarios/community-decay-arc-conformance.bscn");
 const PACK: &str = include_str!("../content/rules/community.bsl");
@@ -36,19 +36,20 @@ fn practice_prelude() -> String {
         .expect("the organization practice prelude composes")
 }
 
-/// The session id — `SessionId::new`'s deterministic-identity law (D179).
-fn arc_session() -> SessionId {
-    SessionId::new("community-decay-arc").expect("literal is non-empty")
+/// The session id — `ReplaySessionIdV1::new`'s deterministic-identity law (D179).
+fn arc_session() -> ReplaySessionId {
+    ReplaySessionId::try_from("community-decay-arc").expect("literal is non-empty")
 }
 
 /// Drive three ticks, returning the session (the graph lives in it).
-fn run_arc() -> TickSession<HypergraphStore> {
-    let mut session = TickSession::new_with_prelude(
+fn run_arc() -> RuleDiagnosticSession<HypergraphStore> {
+    let mut session = RuleDiagnosticSession::new(
         SCENARIO,
-        &practice_prelude(),
+        Some(&practice_prelude()),
         PACK,
         HypergraphStore::new(),
         arc_session(),
+        babylon_kernel::replay::ReplaySeed::new(0),
     )
     .expect("world 5 + the pack loads into a session");
     let mut sink = CollectingSink::default();
@@ -58,14 +59,14 @@ fn run_arc() -> TickSession<HypergraphStore> {
     session
 }
 
-fn heat(session: &TickSession<HypergraphStore>) -> f64 {
+fn heat(session: &RuleDiagnosticSession<HypergraphStore>) -> f64 {
     session
         .graph()
         .hyperedge_attribute(HyperedgeId(0), "community/heat")
         .expect("heat written")
 }
 
-fn at(session: &TickSession<HypergraphStore>, field: &str) -> f64 {
+fn at(session: &RuleDiagnosticSession<HypergraphStore>, field: &str) -> f64 {
     session
         .graph()
         .hyperedge_attribute(HyperedgeId(0), field)
@@ -97,12 +98,13 @@ fn heat_cohesion_education_decay_independently() {
 /// non-increasing across the arc.
 #[test]
 fn decay_is_monotone_non_increasing() {
-    let mut session = TickSession::new_with_prelude(
+    let mut session = RuleDiagnosticSession::new(
         SCENARIO,
-        &practice_prelude(),
+        Some(&practice_prelude()),
         PACK,
         HypergraphStore::new(),
         arc_session(),
+        babylon_kernel::replay::ReplaySeed::new(0),
     )
     .expect("session loads");
     let mut sink = CollectingSink::default();

@@ -2,13 +2,13 @@
 
 use std::collections::BTreeSet;
 
-use babylon_bsl::{canonical_bytes, SExpr, SfsRuleAuditResult};
-use babylon_kernel::sha256_of;
+use babylon_bsl::{canonical_ast::canonical_bytes, reader::SExpr, sfs_profile::SfsRuleAuditResult};
+use babylon_kernel::content_digest::sha256_of;
 use unicode_normalization::is_nfc;
 
 use crate::{
-    record_digest, CanonicalProfileSet, CausalConeV1, ComponentKindV1, Digest32, RunIdentityV1,
-    SfsClassError, SfsComponentProofProfileV1, SfsProfileRecordError, SfsProofProfileV1,
+    record_digest, CanonicalProfileSet, CausalCone, ComponentKind, Digest32, RunIdentity,
+    SfsClassError, SfsComponentProofProfile, SfsProfileRecordError, SfsProofProfile,
     SfsRecordError, SfsWireError, SyntheticDriverContractError, SyntheticDriverError,
 };
 
@@ -37,18 +37,18 @@ const EXPECTED_MUTATION_DIGEST: Digest32 = Digest32::from_bytes([
 
 /// One sealed producer-consumer channel row.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ProducerConsumerEdgeV1 {
+pub struct ProducerConsumerEdge {
     producer_id: String,
     consumer_id: String,
-    channel_kind: SyntheticChannelKindV1,
+    channel_kind: SyntheticChannelKind,
     channel_id: String,
 }
 
 /// One governed synthetic component and its exact source binding.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SyntheticGovernedComponentV1 {
+pub struct SyntheticGovernedComponent {
     component_id: String,
-    component_kind: ComponentKindV1,
+    component_kind: ComponentKind,
     component_source_digest: Digest32,
     source_mode: SourceMode,
     source_payload: Vec<u8>,
@@ -56,14 +56,14 @@ pub struct SyntheticGovernedComponentV1 {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct SyntheticProfileRowV1 {
+struct SyntheticProfileRow {
     component_id: String,
     set_name: String,
     entry: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct SyntheticBoundRowV1 {
+struct SyntheticBoundRow {
     component_id: String,
     declared_fuel: u64,
     computed_bound: u64,
@@ -73,15 +73,15 @@ struct SyntheticBoundRowV1 {
 
 /// Sealed manifest whose identities and admitted rows derive only from raw bytes.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SyntheticGovernedManifestV1 {
+pub struct SyntheticGovernedManifest {
     canonical_bytes: Vec<u8>,
     manifest_digest: Digest32,
     host_component_manifest_digest: Digest32,
-    components: Vec<SyntheticGovernedComponentV1>,
-    edges: Vec<ProducerConsumerEdgeV1>,
-    profile_rows: Vec<SyntheticProfileRowV1>,
-    bound_rows: Vec<SyntheticBoundRowV1>,
-    source_profiles: Vec<SfsComponentProofProfileV1>,
+    components: Vec<SyntheticGovernedComponent>,
+    edges: Vec<ProducerConsumerEdge>,
+    profile_rows: Vec<SyntheticProfileRow>,
+    bound_rows: Vec<SyntheticBoundRow>,
+    source_profiles: Vec<SfsComponentProofProfile>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -93,7 +93,7 @@ struct DelimitedFields<'a> {
 /// Closed synthetic channel kinds.
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SyntheticChannelKindV1 {
+pub enum SyntheticChannelKind {
     Field = 0,
     Relation = 1,
     Contribution = 2,
@@ -220,7 +220,7 @@ impl From<SfsProfileRecordError> for SfsValidationError {
     }
 }
 
-impl ProducerConsumerEdgeV1 {
+impl ProducerConsumerEdge {
     /// Constructs one bounded NFC typed edge.
     ///
     /// # Errors
@@ -228,7 +228,7 @@ impl ProducerConsumerEdgeV1 {
     pub fn new(
         producer_id: &str,
         consumer_id: &str,
-        channel_kind: SyntheticChannelKindV1,
+        channel_kind: SyntheticChannelKind,
         channel_id: &str,
     ) -> Result<Self, SfsValidationError> {
         validate_nfc(producer_id, 256, 0)?;
@@ -243,14 +243,14 @@ impl ProducerConsumerEdgeV1 {
     }
 }
 
-impl SyntheticGovernedComponentV1 {
+impl SyntheticGovernedComponent {
     /// Constructs one digest-bound synthetic component descriptor.
     ///
     /// # Errors
     /// Returns an exact NFC or length refusal.
     pub fn new(
         component_id: &str,
-        component_kind: ComponentKindV1,
+        component_kind: ComponentKind,
         component_source_digest: Digest32,
     ) -> Result<Self, SfsValidationError> {
         validate_nfc(component_id, 256, 0)?;
@@ -265,7 +265,7 @@ impl SyntheticGovernedComponentV1 {
     }
 }
 
-impl SyntheticGovernedManifestV1 {
+impl SyntheticGovernedManifest {
     #[must_use]
     pub const fn manifest_digest(&self) -> Digest32 {
         self.manifest_digest
@@ -285,7 +285,7 @@ pub fn parse_synthetic_governed_manifest(
     manifest_bytes: &[u8],
     scoped_bsl_rule: &SExpr,
     scoped_bsl_audit: &SfsRuleAuditResult,
-) -> Result<SyntheticGovernedManifestV1, SfsValidationError> {
+) -> Result<SyntheticGovernedManifest, SfsValidationError> {
     preflight_manifest(manifest_bytes)?;
     let lines = manifest_lines(manifest_bytes)?;
     let mut manifest = empty_manifest(manifest_bytes);
@@ -403,8 +403,8 @@ fn manifest_lines(bytes: &[u8]) -> Result<Vec<&[u8]>, SfsValidationError> {
     Ok(lines)
 }
 
-fn empty_manifest(bytes: &[u8]) -> SyntheticGovernedManifestV1 {
-    SyntheticGovernedManifestV1 {
+fn empty_manifest(bytes: &[u8]) -> SyntheticGovernedManifest {
+    SyntheticGovernedManifest {
         canonical_bytes: bytes.to_vec(),
         manifest_digest: domain_digest(GOVERNED_DOMAIN, bytes),
         host_component_manifest_digest: Digest32::from_bytes([0; 32]),
@@ -419,7 +419,7 @@ fn empty_manifest(bytes: &[u8]) -> SyntheticGovernedManifestV1 {
 fn dispatch_row(
     line: &[u8],
     row: usize,
-    manifest: &mut SyntheticGovernedManifestV1,
+    manifest: &mut SyntheticGovernedManifest,
 ) -> Result<(), SfsValidationError> {
     let text = std::str::from_utf8(line)
         .map_err(|_| SfsValidationError::GovernedManifestMalformed { row })?;
@@ -437,7 +437,7 @@ fn parse_component(
     fields: &DelimitedFields<'_>,
     line: &[u8],
     row: usize,
-    manifest: &mut SyntheticGovernedManifestV1,
+    manifest: &mut SyntheticGovernedManifest,
 ) -> Result<(), SfsValidationError> {
     if fields.len != 6 {
         return malformed(row);
@@ -480,7 +480,7 @@ fn parse_component(
     if computed != source_digest {
         return Err(SfsValidationError::ComponentSourceDigestMismatch { component_id });
     }
-    manifest.components.push(SyntheticGovernedComponentV1 {
+    manifest.components.push(SyntheticGovernedComponent {
         component_id,
         component_kind,
         component_source_digest: source_digest,
@@ -494,7 +494,7 @@ fn parse_component(
 fn parse_profile(
     fields: &DelimitedFields<'_>,
     row: usize,
-    manifest: &mut SyntheticGovernedManifestV1,
+    manifest: &mut SyntheticGovernedManifest,
 ) -> Result<(), SfsValidationError> {
     if fields.len != 4 {
         return malformed(row);
@@ -509,7 +509,7 @@ fn parse_profile(
         return malformed(row);
     }
     let entry = decode_nfc_hex(fields.values[3], 96, row)?;
-    manifest.profile_rows.push(SyntheticProfileRowV1 {
+    manifest.profile_rows.push(SyntheticProfileRow {
         component_id,
         set_name: fields.values[2].to_owned(),
         entry,
@@ -520,7 +520,7 @@ fn parse_profile(
 fn parse_bound(
     fields: &DelimitedFields<'_>,
     row: usize,
-    manifest: &mut SyntheticGovernedManifestV1,
+    manifest: &mut SyntheticGovernedManifest,
 ) -> Result<(), SfsValidationError> {
     if fields.len != 6 {
         return malformed(row);
@@ -530,7 +530,7 @@ fn parse_bound(
             actual: manifest.bound_rows.len() + 1,
         });
     }
-    manifest.bound_rows.push(SyntheticBoundRowV1 {
+    manifest.bound_rows.push(SyntheticBoundRow {
         component_id: decode_nfc_hex(fields.values[1], 256, row)?,
         declared_fuel: fields.values[2]
             .parse()
@@ -547,7 +547,7 @@ fn parse_bound(
 fn parse_edge(
     fields: &DelimitedFields<'_>,
     row: usize,
-    manifest: &mut SyntheticGovernedManifestV1,
+    manifest: &mut SyntheticGovernedManifest,
 ) -> Result<(), SfsValidationError> {
     if fields.len != 5 {
         return malformed(row);
@@ -577,21 +577,21 @@ fn parse_edge(
             });
         }
     }
-    manifest.edges.push(ProducerConsumerEdgeV1::new(
+    manifest.edges.push(ProducerConsumerEdge::new(
         &producer, &consumer, kind, &channel,
     )?);
     Ok(())
 }
 
 fn close_manifest(
-    manifest: &mut SyntheticGovernedManifestV1,
+    manifest: &mut SyntheticGovernedManifest,
     rule: &SExpr,
     audit: &SfsRuleAuditResult,
 ) -> Result<(), SfsValidationError> {
     let expected = [
-        ("membership-reducer", ComponentKindV1::Reducer),
-        ("post-commit-producer", ComponentKindV1::PostCommitProducer),
-        ("scoped-bsl-rule", ComponentKindV1::BslRule),
+        ("membership-reducer", ComponentKind::Reducer),
+        ("post-commit-producer", ComponentKind::PostCommitProducer),
+        ("scoped-bsl-rule", ComponentKind::BslRule),
     ];
     if manifest.components.len() != expected.len() {
         return Err(SfsValidationError::GovernedComponentSetMismatch);
@@ -627,7 +627,7 @@ fn close_manifest(
 }
 
 fn close_sources(
-    manifest: &SyntheticGovernedManifestV1,
+    manifest: &SyntheticGovernedManifest,
     rule: &SExpr,
     audit: &SfsRuleAuditResult,
 ) -> Result<(), SfsValidationError> {
@@ -664,7 +664,7 @@ fn close_sources(
 }
 
 fn close_bound(
-    manifest: &SyntheticGovernedManifestV1,
+    manifest: &SyntheticGovernedManifest,
     audit: &SfsRuleAuditResult,
 ) -> Result<(), SfsValidationError> {
     if manifest.bound_rows.len() != 1 || manifest.bound_rows[0].component_id != "scoped-bsl-rule" {
@@ -688,7 +688,7 @@ fn close_bound(
     Ok(())
 }
 
-fn close_references(manifest: &SyntheticGovernedManifestV1) -> Result<(), SfsValidationError> {
+fn close_references(manifest: &SyntheticGovernedManifest) -> Result<(), SfsValidationError> {
     for index in 0..MAX_PROFILE_ROWS {
         if index >= manifest.profile_rows.len() {
             break;
@@ -718,13 +718,13 @@ fn close_references(manifest: &SyntheticGovernedManifestV1) -> Result<(), SfsVal
     Ok(())
 }
 
-fn component_exists(manifest: &SyntheticGovernedManifestV1, id: &str) -> bool {
+fn component_exists(manifest: &SyntheticGovernedManifest, id: &str) -> bool {
     component_index(manifest, id).is_some()
 }
 
 fn source_bound_profiles(
     audit: &SfsRuleAuditResult,
-) -> Result<Vec<SfsComponentProofProfileV1>, SfsValidationError> {
+) -> Result<Vec<SfsComponentProofProfile>, SfsValidationError> {
     Ok(vec![
         membership_source_profile()?,
         producer_source_profile()?,
@@ -732,10 +732,10 @@ fn source_bound_profiles(
     ])
 }
 
-fn membership_source_profile() -> Result<SfsComponentProofProfileV1, SfsValidationError> {
-    Ok(SfsComponentProofProfileV1::new(
+fn membership_source_profile() -> Result<SfsComponentProofProfile, SfsValidationError> {
+    Ok(SfsComponentProofProfile::new(
         "membership-reducer",
-        ComponentKindV1::Reducer,
+        ComponentKind::Reducer,
         domain_digest(COMPONENT_SOURCE_DOMAIN, MEMBERSHIP_DESCRIPTOR),
         CanonicalProfileSet::new("field_reads", vec!["synthetic-source/quanta".to_owned()])?,
         CanonicalProfileSet::new("edge_reads", vec![])?,
@@ -751,10 +751,10 @@ fn membership_source_profile() -> Result<SfsComponentProofProfileV1, SfsValidati
     )?)
 }
 
-fn producer_source_profile() -> Result<SfsComponentProofProfileV1, SfsValidationError> {
-    Ok(SfsComponentProofProfileV1::new(
+fn producer_source_profile() -> Result<SfsComponentProofProfile, SfsValidationError> {
+    Ok(SfsComponentProofProfile::new(
         "post-commit-producer",
-        ComponentKindV1::PostCommitProducer,
+        ComponentKind::PostCommitProducer,
         domain_digest(COMPONENT_SOURCE_DOMAIN, PRODUCER_DESCRIPTOR),
         CanonicalProfileSet::new(
             "field_reads",
@@ -771,7 +771,7 @@ fn producer_source_profile() -> Result<SfsComponentProofProfileV1, SfsValidation
 }
 
 fn validate_profile_edge_closure(
-    manifest: &SyntheticGovernedManifestV1,
+    manifest: &SyntheticGovernedManifest,
 ) -> Result<(), SfsValidationError> {
     for index in 0..MAX_PROFILE_ROWS {
         if index >= manifest.profile_rows.len() {
@@ -801,8 +801,8 @@ fn validate_profile_edge_closure(
 }
 
 fn matching_edge_count(
-    manifest: &SyntheticGovernedManifestV1,
-    row: &SyntheticProfileRowV1,
+    manifest: &SyntheticGovernedManifest,
+    row: &SyntheticProfileRow,
     incoming: bool,
 ) -> usize {
     let mut count = 0_usize;
@@ -831,11 +831,11 @@ fn matching_edge_count(
 pub fn component_profile_from_bsl(
     component_id: &str,
     audit: &SfsRuleAuditResult,
-) -> Result<SfsComponentProofProfileV1, SfsValidationError> {
+) -> Result<SfsComponentProofProfile, SfsValidationError> {
     let footprint = audit.footprint();
-    Ok(SfsComponentProofProfileV1::new(
+    Ok(SfsComponentProofProfile::new(
         component_id,
-        ComponentKindV1::BslRule,
+        ComponentKind::BslRule,
         Digest32::from_bytes(*footprint.source_digest()),
         set("field_reads", footprint.field_reads())?,
         set("edge_reads", footprint.edge_reads())?,
@@ -856,9 +856,9 @@ pub fn component_profile_from_bsl(
 /// # Errors
 /// Returns the first exact identity, profile, edge, or reachability refusal.
 pub fn validate_synthetic_cone(
-    cone: &CausalConeV1,
-    profile: &SfsProofProfileV1,
-    governed_manifest: &SyntheticGovernedManifestV1,
+    cone: &CausalCone,
+    profile: &SfsProofProfile,
+    governed_manifest: &SyntheticGovernedManifest,
 ) -> Result<(), SfsValidationError> {
     if profile.governed_manifest_digest() != governed_manifest.manifest_digest {
         return Err(SfsValidationError::GovernedManifestDigestMismatch);
@@ -879,8 +879,8 @@ pub fn validate_synthetic_cone(
 }
 
 fn manifest_profiles(
-    manifest: &SyntheticGovernedManifestV1,
-) -> Result<Vec<SfsComponentProofProfileV1>, SfsValidationError> {
+    manifest: &SyntheticGovernedManifest,
+) -> Result<Vec<SfsComponentProofProfile>, SfsValidationError> {
     let mut output = Vec::with_capacity(manifest.components.len());
     for index in 0..MAX_COMPONENTS {
         if index >= manifest.components.len() {
@@ -888,7 +888,7 @@ fn manifest_profiles(
         }
         let component = &manifest.components[index];
         let values = |name| profile_entries(manifest, &component.component_id, name);
-        output.push(SfsComponentProofProfileV1::new(
+        output.push(SfsComponentProofProfile::new(
             &component.component_id,
             component.component_kind,
             component.component_source_digest,
@@ -908,7 +908,7 @@ fn manifest_profiles(
     Ok(output)
 }
 
-fn profile_entries(manifest: &SyntheticGovernedManifestV1, id: &str, name: &str) -> Vec<String> {
+fn profile_entries(manifest: &SyntheticGovernedManifest, id: &str, name: &str) -> Vec<String> {
     let mut output = Vec::new();
     for index in 0..MAX_PROFILE_ROWS {
         if index >= manifest.profile_rows.len() {
@@ -923,8 +923,8 @@ fn profile_entries(manifest: &SyntheticGovernedManifestV1, id: &str, name: &str)
 }
 
 fn validate_endpoints(
-    cone: &CausalConeV1,
-    manifest: &SyntheticGovernedManifestV1,
+    cone: &CausalCone,
+    manifest: &SyntheticGovernedManifest,
 ) -> Result<(), SfsValidationError> {
     validate_endpoint_set("roots", cone.roots(), manifest)?;
     validate_endpoint_set("sinks", cone.sinks(), manifest)
@@ -933,7 +933,7 @@ fn validate_endpoints(
 fn validate_endpoint_set(
     set_name: &'static str,
     ids: &[String],
-    manifest: &SyntheticGovernedManifestV1,
+    manifest: &SyntheticGovernedManifest,
 ) -> Result<(), SfsValidationError> {
     for index in 0..MAX_COMPONENTS {
         if index >= ids.len() {
@@ -950,8 +950,8 @@ fn validate_endpoint_set(
 }
 
 fn validate_typed_edges(
-    manifest: &SyntheticGovernedManifestV1,
-    profiles: &[SfsComponentProofProfileV1],
+    manifest: &SyntheticGovernedManifest,
+    profiles: &[SfsComponentProofProfile],
 ) -> Result<(), SfsValidationError> {
     for index in 0..MAX_EDGES {
         if index >= manifest.edges.len() {
@@ -979,9 +979,9 @@ fn validate_typed_edges(
 }
 
 fn component_profile<'a>(
-    profiles: &'a [SfsComponentProofProfileV1],
+    profiles: &'a [SfsComponentProofProfile],
     id: &str,
-) -> Option<&'a SfsComponentProofProfileV1> {
+) -> Option<&'a SfsComponentProofProfile> {
     for index in 0..MAX_COMPONENTS {
         if index >= profiles.len() {
             break;
@@ -993,22 +993,22 @@ fn component_profile<'a>(
     None
 }
 
-fn edge_tokens(edge: &ProducerConsumerEdgeV1) -> (String, String, &'static str) {
+fn edge_tokens(edge: &ProducerConsumerEdge) -> (String, String, &'static str) {
     match edge.channel_kind {
-        SyntheticChannelKindV1::Field => (
+        SyntheticChannelKind::Field => (
             format!("node:{}", edge.channel_id),
             edge.channel_id.clone(),
             "field_reads",
         ),
-        SyntheticChannelKindV1::Relation => (
+        SyntheticChannelKind::Relation => (
             format!("edge:{}", edge.channel_id),
             edge.channel_id.clone(),
             "edge_reads",
         ),
-        SyntheticChannelKindV1::Contribution => prefixed("contribution", &edge.channel_id),
-        SyntheticChannelKindV1::LedgerRow => prefixed("ledger-row", &edge.channel_id),
-        SyntheticChannelKindV1::Receipt => prefixed("receipt", &edge.channel_id),
-        SyntheticChannelKindV1::ReducerOutput => prefixed("reducer-output", &edge.channel_id),
+        SyntheticChannelKind::Contribution => prefixed("contribution", &edge.channel_id),
+        SyntheticChannelKind::LedgerRow => prefixed("ledger-row", &edge.channel_id),
+        SyntheticChannelKind::Receipt => prefixed("receipt", &edge.channel_id),
+        SyntheticChannelKind::ReducerOutput => prefixed("reducer-output", &edge.channel_id),
     }
 }
 
@@ -1017,7 +1017,7 @@ fn prefixed(prefix: &str, channel: &str) -> (String, String, &'static str) {
     (token.clone(), token, "field_reads")
 }
 
-fn profile_has(manifest: &SyntheticGovernedManifestV1, id: &str, set: &str, entry: &str) -> bool {
+fn profile_has(manifest: &SyntheticGovernedManifest, id: &str, set: &str, entry: &str) -> bool {
     for index in 0..MAX_PROFILE_ROWS {
         if index >= manifest.profile_rows.len() {
             break;
@@ -1031,8 +1031,8 @@ fn profile_has(manifest: &SyntheticGovernedManifestV1, id: &str, set: &str, entr
 }
 
 fn validate_reachability(
-    cone: &CausalConeV1,
-    manifest: &SyntheticGovernedManifestV1,
+    cone: &CausalCone,
+    manifest: &SyntheticGovernedManifest,
 ) -> Result<(), SfsValidationError> {
     let count = manifest.components.len();
     let mut adjacency = [[false; MAX_COMPONENTS]; MAX_COMPONENTS];
@@ -1068,7 +1068,7 @@ fn validate_reachability(
 
 fn closure(
     starts: &[String],
-    manifest: &SyntheticGovernedManifestV1,
+    manifest: &SyntheticGovernedManifest,
     adjacency: &[[bool; MAX_COMPONENTS]; MAX_COMPONENTS],
     reverse: bool,
 ) -> [bool; MAX_COMPONENTS] {
@@ -1102,7 +1102,7 @@ fn closure(
     found
 }
 
-fn component_index(manifest: &SyntheticGovernedManifestV1, id: &str) -> Option<usize> {
+fn component_index(manifest: &SyntheticGovernedManifest, id: &str) -> Option<usize> {
     for index in 0..MAX_COMPONENTS {
         if index >= manifest.components.len() {
             break;
@@ -1119,10 +1119,10 @@ fn component_index(manifest: &SyntheticGovernedManifestV1, id: &str) -> Option<u
 /// # Errors
 /// Returns the first exact manifest, profile, mutation, or preregistration mismatch.
 pub fn validate_synthetic_profile_identity(
-    run_identity: &RunIdentityV1,
-    proof_profile: &SfsProofProfileV1,
-    preregistration: &crate::SfsPreregistrationV1,
-    governed_manifest: &SyntheticGovernedManifestV1,
+    run_identity: &RunIdentity,
+    proof_profile: &SfsProofProfile,
+    preregistration: &crate::SfsPreregistration,
+    governed_manifest: &SyntheticGovernedManifest,
     mutation_manifest_digest: Digest32,
 ) -> Result<(), SfsValidationError> {
     if run_identity.host_component_manifest_digest()
@@ -1158,7 +1158,7 @@ pub fn validate_synthetic_profile_identity(
 /// Returns the first framing, schema, coverage, activation, or digest refusal.
 pub fn validate_synthetic_mutation_manifest(
     bytes: &[u8],
-    preregistration: &crate::SfsPreregistrationV1,
+    preregistration: &crate::SfsPreregistration,
 ) -> Result<Digest32, SfsValidationError> {
     if bytes.len() > MAX_MUTATION_MANIFEST_BYTES {
         return Err(SfsValidationError::MutationManifestByteLimit {
@@ -1227,26 +1227,26 @@ fn mutation_rows(bytes: &[u8]) -> Result<([&[u8]; 41], usize), SfsValidationErro
     Ok((rows, row_count))
 }
 
-fn parse_component_kind(value: &str, id: &str) -> Result<ComponentKindV1, SfsValidationError> {
+fn parse_component_kind(value: &str, id: &str) -> Result<ComponentKind, SfsValidationError> {
     match value {
-        "0" => Ok(ComponentKindV1::BslRule),
-        "1" => Ok(ComponentKindV1::RustBoundary),
-        "2" => Ok(ComponentKindV1::Reducer),
-        "3" => Ok(ComponentKindV1::PostCommitProducer),
+        "0" => Ok(ComponentKind::BslRule),
+        "1" => Ok(ComponentKind::RustBoundary),
+        "2" => Ok(ComponentKind::Reducer),
+        "3" => Ok(ComponentKind::PostCommitProducer),
         _ => Err(SfsValidationError::ComponentKindMismatch {
             component_id: id.to_owned(),
         }),
     }
 }
 
-fn parse_channel(value: &str, row: usize) -> Result<SyntheticChannelKindV1, SfsValidationError> {
+fn parse_channel(value: &str, row: usize) -> Result<SyntheticChannelKind, SfsValidationError> {
     match value {
-        "0" => Ok(SyntheticChannelKindV1::Field),
-        "1" => Ok(SyntheticChannelKindV1::Relation),
-        "2" => Ok(SyntheticChannelKindV1::Contribution),
-        "3" => Ok(SyntheticChannelKindV1::LedgerRow),
-        "4" => Ok(SyntheticChannelKindV1::Receipt),
-        "5" => Ok(SyntheticChannelKindV1::ReducerOutput),
+        "0" => Ok(SyntheticChannelKind::Field),
+        "1" => Ok(SyntheticChannelKind::Relation),
+        "2" => Ok(SyntheticChannelKind::Contribution),
+        "3" => Ok(SyntheticChannelKind::LedgerRow),
+        "4" => Ok(SyntheticChannelKind::Receipt),
+        "5" => Ok(SyntheticChannelKind::ReducerOutput),
         _ => malformed(row),
     }
 }

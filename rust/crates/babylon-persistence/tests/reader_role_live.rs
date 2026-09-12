@@ -2,50 +2,41 @@
 //! fog-safe committed-tick status view (ADR249 R8).
 //!
 //! Each test clones the validated Rust-active runtime template, commits real
-//! ticks through `DurableReplayRuntimeV2`, installs the additive Archive and
+//! ticks through `DurableMaterialRuntimeV3`, verifies the current Archive and
 //! reader-role schemas, and then proves one privilege property against the
-//! live `PostgreSQL` privilege layer. No test runs `migrate_schema_epoch`
-//! after installing the role or view: both are additive, non-epoch objects
-//! and would fail the digest-pinned epoch census as unexpected extras.
+//! live `PostgreSQL` privilege layer on the one current schema.
+
+#[path = "support/current_material.rs"]
+mod current_material;
+use babylon_persistence::{material_runtime, michigan_content, michigan_material};
 
 use std::str::FromStr;
 
-use babylon_bsl::rule_pipeline::split_content;
-use babylon_bsl::rules_hash_of;
 use babylon_bsl::structural_verbs::CollectingSink;
-use babylon_graph::hypergraph_store::HypergraphStore;
-use babylon_kernel::replay::{ReplaySeed, ReplaySessionIdV1};
-use babylon_kernel::sha256_of;
-use babylon_kernel::tick_content_hash::RefDigestV1;
-use babylon_kernel::ContentDigest;
+use babylon_kernel::content_digest::sha256_of;
 use babylon_persistence::archive_revision::{
-    ArchiveDossierBoundsV2, ArchiveDossierPageV2, ArchiveDossierPendingV2, ArchiveDossierReadV2,
-    ArchiveDossierStateV2, ArchiveDossierUnavailableV2, ArchiveReadScopeV2, ArchiveSearchStateV2,
+    ArchiveDossierBounds, ArchiveDossierPage, ArchiveDossierPending, ArchiveDossierRead,
+    ArchiveDossierState, ArchiveDossierUnavailable, ArchiveReadScope, ArchiveSearchState,
 };
-use babylon_persistence::material_runtime::{DurableMaterialRuntimeV3, MaterialRuntimeErrorV3};
-use babylon_persistence::michigan_content::MichiganContentPresetV1;
-use babylon_persistence::michigan_material::MichiganDeliveryPresetV1;
+use babylon_persistence::material_runtime::{DurableMaterialRuntime, MaterialRuntimeError};
+use babylon_persistence::michigan_content::MichiganContentPreset;
+use babylon_persistence::michigan_material::MichiganDeliveryPreset;
 use babylon_persistence::runtime_session::{
-    run_runtime_session_v3, RuntimeSessionRequestV3, RuntimeSessionResponseV3,
-    RuntimeSessionScopeV3, RuntimeSessionTailV3, RuntimeSessionTargetV3,
-    RUNTIME_SESSION_PROTOCOL_VERSION_V3,
+    run_runtime_session, RuntimeSessionRequest, RuntimeSessionResponse, RuntimeSessionScope,
+    RuntimeSessionTail, RuntimeSessionTarget, RUNTIME_SESSION_PROTOCOL_VERSION,
 };
 use babylon_persistence::{
-    install_observer_economy_schema_v1, michigan_observer_foundation_v1, ObserverEconomyErrorV1,
-    ObserverEconomyReaderV1, ObserverVisibilityV1,
+    identity::CampaignId, install_reader_role, postgres_catalog::validate_connection_target,
+    ArchiveCitation, ArchiveDirtyBatch, ArchiveKnowledgeGrant, ArchiveMaterializeMode,
+    ArchivePageInput, ArchivePageRef, ArchiveSignal, ArchiveSubject, ArchiveSubjectKind,
+    ReaderRoleDisposition, SemanticArchiveReader, SemanticArchiveStore,
 };
 use babylon_persistence::{
-    install_reader_role_v1, michigan_dynamic_hex_foundation_v1, validate_connection_target,
-    ArchiveCitationV1, ArchiveDirtyBatchV1, ArchiveKnowledgeGrantV1, ArchiveMaterializeModeV1,
-    ArchivePageInputV1, ArchivePageRefV1, ArchiveSchemaDispositionV1, ArchiveSignalV1,
-    ArchiveSubjectKindV1, ArchiveSubjectV1, CampaignId, DurableReplayRuntimeV2,
-    FoundationContentBundleV1, ReaderRoleDispositionV1, SemanticArchiveReaderV1,
-    SemanticArchiveStoreV1,
+    observer_reader::provision_observer_role, observer_reader::ObserverEconomyError,
+    observer_reader::ObserverEconomyReader, observer_reader::ObserverVisibility,
 };
-use babylon_practice_contract::ordered_action_v1::OrderedPracticeActionBatchV1;
-use babylon_tick::material_replay::IdentifiedMaterialTickV3;
-use babylon_tick::material_state::MaterialStateV1;
-use babylon_tick::replay_session::ReplayTickSession;
+use babylon_practice_contract::OrderedPracticeActionBatch;
+use babylon_tick::material_replay::IdentifiedMaterialTick;
 use postgres::{Config, NoTls};
 use uuid::Uuid;
 
@@ -55,12 +46,6 @@ const ACK: &str = "I_UNDERSTAND_THIS_DISPOSABLE_RUNTIME_DROPS_ITS_SCRATCH_DATABA
 const CANARY_ENV: &str = "BABYLON_POSTGRES_DISPOSABLE_CANARY";
 const TEMPLATE_DB_ENV: &str = "BABYLON_RUNTIME_TEMPLATE_DB";
 const READER_DSN_ENV: &str = "BABYLON_READER_DSN";
-const DEFINES: &[u8] = br#"{"alpha":1}"#;
-const REFERENCE_BUNDLE_DOMAIN: &[u8] = b"babylon.h3.reference-bundle-composite.v1\0";
-const SCENARIO: &str =
-    include_str!("../../babylon-tick/content/scenarios/struggle-spark-conformance.bscn");
-const RULE: &str = include_str!("../../babylon-tick/content/rules/struggle-spark.bsl");
-const READER_SEED: i64 = 3;
 
 fn validated_base_config() -> Config {
     assert_eq!(std::env::var(ACK_ENV).as_deref(), Ok(ACK));
@@ -133,10 +118,7 @@ impl TestDatabase {
             .expect("runtime clone connection")
             .query_one(
                 "SELECT \
-                   (SELECT pg_catalog.string_agg(ordinal::pg_catalog.text || ':' || \
-                            state_tag::pg_catalog.text || ':' || schema_epoch::pg_catalog.text, \
-                            ',' ORDER BY ordinal) \
-                    FROM babylon_meta.persistence_authority_ledger), \
+                   (SELECT pg_catalog.encode(schema_sha256, 'hex') FROM babylon_meta.current_schema WHERE singleton), \
                    (SELECT pg_catalog.count(*) FROM babylon_meta.campaign)",
                 &[],
             )
@@ -144,8 +126,8 @@ impl TestDatabase {
         assert_eq!(
             observation
                 .try_get::<_, String>(0)
-                .expect("authority ledger decodes"),
-            "1:1:8,2:2:9"
+                .expect("current schema identity decodes"),
+            babylon_tick::hex(&babylon_persistence::current_schema_sha256())
         );
         assert_eq!(
             observation
@@ -289,37 +271,34 @@ impl ReaderTarget {
         let template = validated_template_name();
         let database = TestDatabase::create_from_template(&base, &template, label);
         let config = database.config(&base);
-        let store = SemanticArchiveStoreV1::new(&config);
-        match store
-            .install_schema()
-            .expect("Archive schema installs before foundation")
-        {
-            ArchiveSchemaDispositionV1::Installed | ArchiveSchemaDispositionV1::AlreadyCurrent => {}
-        }
+        let store = SemanticArchiveStore::new(&config);
+        store
+            .verify_schema()
+            .expect("Archive schema installs before foundation");
         let campaign_id = CampaignId::from_uuid(Uuid::from_u128(campaign_uuid));
-        let (session, bundle) = runtime_fixture_with_seed(READER_SEED);
-        let mut runtime = DurableReplayRuntimeV2::create(&config, campaign_id, session, bundle)
+        let foundation = current_material::foundation();
+        let mut runtime = DurableMaterialRuntime::create(&config, campaign_id, foundation)
             .expect("runtime constructs after activation");
         for tick in 1..=tick_count {
-            let actions = OrderedPracticeActionBatchV1::empty(
-                runtime.foundation().replay_session_identity().clone(),
+            let actions = OrderedPracticeActionBatch::empty(
+                runtime.session().graph_session().session_identity().clone(),
                 tick,
             )
             .expect("empty action batch");
             let receipt = runtime
                 .advance_and_commit(&mut CollectingSink::default(), &actions)
                 .expect("tick commits");
-            assert_eq!(receipt.resolve_tick().get(), tick);
+            assert_eq!(receipt.resolve_tick(), tick);
         }
         drop(runtime);
 
         assert_eq!(
-            install_reader_role_v1(&config).expect("reader role installs"),
-            ReaderRoleDispositionV1::Installed
+            install_reader_role(&config).expect("reader role installs"),
+            ReaderRoleDisposition::Installed
         );
         assert_eq!(
-            install_reader_role_v1(&config).expect("reader role reinstall reconciles"),
-            ReaderRoleDispositionV1::AlreadyCurrent,
+            install_reader_role(&config).expect("reader role reinstall reconciles"),
+            ReaderRoleDisposition::AlreadyCurrent,
             "the exact role, view, and grants reinstall idempotently"
         );
         Self {
@@ -334,65 +313,26 @@ impl ReaderTarget {
     }
 }
 
-fn runtime_fixture_with_seed(
-    seed: i64,
-) -> (
-    ReplayTickSession<HypergraphStore>,
-    FoundationContentBundleV1,
-) {
-    let (_, rules) = split_content(RULE).expect("live rule parses");
-    let forms = rules.into_iter().map(|rule| rule.form).collect::<Vec<_>>();
-    let content = ContentDigest {
-        defines_hash: sha256_of(DEFINES),
-        rules_hash: rules_hash_of(&forms).expect("live rule hashes"),
-    };
-    let foundation = michigan_dynamic_hex_foundation_v1().expect("foundation decodes");
-    let mut reference_manifest = REFERENCE_BUNDLE_DOMAIN.to_vec();
-    reference_manifest.extend_from_slice(&foundation.base_reference_cohort_digest());
-    reference_manifest.extend_from_slice(&foundation.r8_section_digest());
-    assert_eq!(
-        sha256_of(&reference_manifest),
-        foundation.reference_bundle_digest()
-    );
-    let reference = RefDigestV1::from_bytes(foundation.reference_bundle_digest());
-    let session = ReplayTickSession::new(
-        SCENARIO,
-        None,
-        RULE,
-        HypergraphStore::new(),
-        ReplaySessionIdV1::try_from("per23/reader-role-live").expect("session id"),
-        ReplaySeed::new(seed),
-        content,
-        reference,
-        MaterialStateV1::try_new(foundation).expect("material state"),
-    )
-    .expect("tick-zero session prepares");
-    let bundle =
-        FoundationContentBundleV1::try_new(SCENARIO, None, RULE, DEFINES, &reference_manifest)
-            .expect("content bundle");
-    (session, bundle)
-}
-
-fn county_subject() -> ArchiveSubjectV1 {
-    ArchiveSubjectV1::try_new(
-        ArchiveSubjectKindV1::County,
+fn county_subject() -> ArchiveSubject {
+    ArchiveSubject::try_new(
+        ArchiveSubjectKind::County,
         "26163".to_owned(),
         "Wayne County".to_owned(),
     )
     .expect("county identity")
 }
 
-fn county_page_input(tick_content_hash: [u8; 32]) -> ArchivePageInputV1 {
-    ArchivePageInputV1::try_new(
+fn county_page_input(tick_content_hash: [u8; 32]) -> ArchivePageInput {
+    ArchivePageInput::try_new(
         county_subject(),
         1,
         tick_content_hash,
         "Which neighboring place should organizers investigate next?".to_owned(),
-        vec![ArchiveSignalV1::try_new(
+        vec![ArchiveSignal::try_new(
             "employment".to_owned(),
             "Employment".to_owned(),
             "728576 jobs".to_owned(),
-            ArchiveCitationV1::try_new(
+            ArchiveCitation::try_new(
                 "qcew-2024".to_owned(),
                 "fact_qcew_county_rollup county_fips=26163".to_owned(),
             )
@@ -409,17 +349,17 @@ fn county_page_input(tick_content_hash: [u8; 32]) -> ArchivePageInputV1 {
 /// no explicit insert: foundation seeding granted every real Michigan county
 /// subject at tick zero, and a conflicting re-grant would refuse `GrantConflict`.
 fn materialize_county_page(config: &Config, campaign_id: CampaignId, tick_content_hash: [u8; 32]) {
-    let store = SemanticArchiveStoreV1::new(config);
-    let county_ref = ArchivePageRefV1::try_new(ArchiveSubjectKindV1::County, "26163".to_owned())
+    let store = SemanticArchiveStore::new(config);
+    let county_ref = ArchivePageRef::try_new(ArchiveSubjectKind::County, "26163".to_owned())
         .expect("county ref");
     store
         .grant_knowledge(
             campaign_id,
-            &ArchiveKnowledgeGrantV1::try_new(
+            &ArchiveKnowledgeGrant::try_new(
                 county_ref,
                 "employment".to_owned(),
                 1,
-                ArchiveCitationV1::try_new(
+                ArchiveCitation::try_new(
                     "reader-live-employment".to_owned(),
                     "employment@tick-1".to_owned(),
                 )
@@ -428,14 +368,14 @@ fn materialize_county_page(config: &Config, campaign_id: CampaignId, tick_conten
             .expect("live knowledge grant"),
         )
         .expect("knowledge grant persists");
-    let batch = ArchiveDirtyBatchV1::try_new(
+    let batch = ArchiveDirtyBatch::try_new(
         1,
         tick_content_hash,
         vec![county_page_input(tick_content_hash)],
     )
     .expect("live dirty batch");
     store
-        .materialize_receipt(campaign_id, &batch, ArchiveMaterializeModeV1::Consume)
+        .materialize_receipt(campaign_id, &batch, ArchiveMaterializeMode::Consume)
         .expect("live receipt materializes");
 }
 
@@ -468,14 +408,10 @@ fn assert_owner_side_privilege_matrix(client: &mut postgres::Client) {
                  ('babylon_meta.archive_receipt_consumption_v1'), \
                  ('babylon_meta.archive_atom_v1'), \
                  ('babylon_meta.archive_revision_atom_v2'), \
-                 ('babylon_meta.archive_revision_schema_v2'), \
-                 ('babylon_meta.archive_retention_v2'), \
                  ('babylon_meta.archive_revision_grant_v2'), \
-                 ('babylon_meta.archive_retention_seal_v2'), \
                  ('babylon_meta.archive_tick_knowledge_v2'), \
                  ('babylon_meta.archive_tick_knowledge_member_v2'), \
-                 ('babylon_meta.archive_page_retired_v1'), \
-                 ('babylon_meta.archive_page_atom_retired_v1')) AS tables(relation) \
+                 ('babylon_meta.current_schema')) AS tables(relation) \
              CROSS JOIN (VALUES \
                  ('SELECT'::pg_catalog.text), ('INSERT'), ('UPDATE'), ('DELETE'), \
                  ('TRUNCATE'), ('REFERENCES'), ('TRIGGER')) AS privileges(privilege) \
@@ -496,7 +432,6 @@ fn assert_owner_side_privilege_matrix(client: &mut postgres::Client) {
         "public.v_archive_revision_index_v2",
         "public.v_archive_revision_atom_v2",
         "public.v_archive_revision_grant_v2",
-        "public.v_archive_retention_v2",
         "public.v_archive_subject_grant_v2",
         "public.v_archive_tick_knowledge_v2",
         "public.v_archive_revision_scope_v2",
@@ -534,15 +469,11 @@ fn assert_owner_side_privilege_matrix(client: &mut postgres::Client) {
 /// `SET ROLE babylon_reader` on a superuser connection.
 fn assert_reader_query_refusals(client: &mut postgres::Client) {
     for relation in [
-        "archive_wakeup_schema_v1",
-        "archive_revision_schema_v2",
-        "archive_retention_v2",
         "archive_revision_grant_v2",
-        "archive_retention_seal_v2",
         "archive_tick_knowledge_v2",
         "archive_tick_knowledge_member_v2",
-        "archive_page_retired_v1",
-        "archive_page_atom_retired_v1",
+        "archive_atom_v1",
+        "current_schema",
     ] {
         assert!(
             client
@@ -679,24 +610,23 @@ fn live_reader_role_reads_the_view_and_refuses_every_base_relation() {
 /// The confined search and dossier agree on the exact retained composition.
 /// Its original atoms and changes remain cited; an ungranted county stays dark.
 fn assert_confined_reader_search_and_card(
-    reader: &SemanticArchiveReaderV1,
-    scope: &ArchiveReadScopeV2,
+    reader: &SemanticArchiveReader,
+    scope: &ArchiveReadScope,
 ) {
     let search = reader
         .search_as_of(scope, "728576", 10)
         .expect("confined scoped search");
     assert_eq!(search.scope, *scope);
-    assert_eq!(search.state, ArchiveSearchStateV2::Ready);
+    assert_eq!(search.state, ArchiveSearchState::Ready);
     assert!(!search.truncated);
     assert_eq!(search.hits.len(), 1);
     let hit = &search.hits[0];
-    assert_eq!(hit.subject.kind(), ArchiveSubjectKindV1::County);
+    assert_eq!(hit.subject.kind(), ArchiveSubjectKind::County);
     assert_eq!(hit.subject.id(), "26163");
     assert_eq!(hit.title, "Wayne County");
     let card = read_county(reader, scope, "26163");
     assert_eq!(card.scope, *scope);
-    assert_eq!(card.history_floor_tick, 0);
-    let ArchiveDossierStateV2::Ready {
+    let ArchiveDossierState::Ready {
         page,
         verified_through_tick,
     } = &card.state
@@ -712,7 +642,7 @@ fn assert_confined_reader_search_and_card(
     let dark = read_county(reader, scope, "99901");
     assert_eq!(
         dark.state,
-        ArchiveDossierStateV2::Unavailable(ArchiveDossierUnavailableV2::SubjectNotDisclosed)
+        ArchiveDossierState::Unavailable(ArchiveDossierUnavailable::SubjectNotDisclosed)
     );
     assert!(reader
         .search_as_of(scope, "99901", 10)
@@ -721,7 +651,7 @@ fn assert_confined_reader_search_and_card(
         .is_empty());
 }
 
-fn assert_first_county_revision_evidence(page: &ArchiveDossierPageV2) {
+fn assert_first_county_revision_evidence(page: &ArchiveDossierPage) {
     assert!(page.markdown.contains("728576 jobs"));
     assert!(page.atoms.iter().any(|atom| atom.signal_key() == "subject"));
     let employment = page
@@ -733,7 +663,7 @@ fn assert_first_county_revision_evidence(page: &ArchiveDossierPageV2) {
     assert_eq!(employment[0].grant_key(), "employment");
     assert!(matches!(
         employment[0].value(),
-        babylon_persistence::ArchiveAtomValueV1::Text(text) if text == "728576 jobs"
+        babylon_persistence::ArchiveAtomValue::Text(text) if text == "728576 jobs"
     ));
     assert_eq!(page.signals[0].label(), "Employment");
     assert_eq!(page.signals[0].citation().source_id(), "qcew-2024");
@@ -755,23 +685,23 @@ fn assert_first_county_revision_evidence(page: &ArchiveDossierPageV2) {
 }
 
 fn read_county(
-    reader: &SemanticArchiveReaderV1,
-    scope: &ArchiveReadScopeV2,
+    reader: &SemanticArchiveReader,
+    scope: &ArchiveReadScope,
     geoid: &str,
-) -> ArchiveDossierReadV2 {
+) -> ArchiveDossierRead {
     reader
         .dossier_as_of(
             scope,
-            &ArchivePageRefV1::try_new(ArchiveSubjectKindV1::County, geoid.into()).unwrap(),
-            &ArchiveDossierBoundsV2::default(),
+            &ArchivePageRef::try_new(ArchiveSubjectKind::County, geoid.into()).unwrap(),
+            &ArchiveDossierBounds::default(),
         )
         .expect("confined scoped dossier")
 }
 
-fn retained_page(read: &ArchiveDossierReadV2) -> &ArchiveDossierPageV2 {
+fn retained_page(read: &ArchiveDossierRead) -> &ArchiveDossierPage {
     match &read.state {
-        ArchiveDossierStateV2::Ready { page, .. }
-        | ArchiveDossierStateV2::Pending {
+        ArchiveDossierState::Ready { page, .. }
+        | ArchiveDossierState::Pending {
             page: Some(page), ..
         } => page,
         other => panic!("expected exact retained content: {other:?}"),
@@ -779,19 +709,19 @@ fn retained_page(read: &ArchiveDossierReadV2) -> &ArchiveDossierPageV2 {
 }
 
 struct Undrained;
-impl babylon_persistence::ArchiveDossierProducerV1 for Undrained {
+impl babylon_persistence::ArchiveDossierProducer for Undrained {
     fn produce(
         &self,
         _campaign: Uuid,
-        receipt: &babylon_persistence::PendingArchiveReceiptV1,
-        _knowledge: &babylon_persistence::ArchiveKnowledgeV1,
+        receipt: &babylon_persistence::PendingArchiveReceipt,
+        _knowledge: &babylon_persistence::ArchiveKnowledge,
         _budget: usize,
     ) -> Result<
-        babylon_persistence::ArchiveProducerOutcomeV1,
-        babylon_persistence::SemanticArchiveErrorV1,
+        babylon_persistence::ArchiveProducerOutcome,
+        babylon_persistence::SemanticArchiveError,
     > {
-        Ok(babylon_persistence::ArchiveProducerOutcomeV1::new(
-            ArchiveDirtyBatchV1::try_new(
+        Ok(babylon_persistence::ArchiveProducerOutcome::new(
+            ArchiveDirtyBatch::try_new(
                 receipt.resolve_tick(),
                 *receipt.tick_content_hash(),
                 Vec::new(),
@@ -802,19 +732,18 @@ impl babylon_persistence::ArchiveDossierProducerV1 for Undrained {
 }
 
 fn assert_quiet_receipt_verification(
-    reader: &SemanticArchiveReaderV1,
+    reader: &SemanticArchiveReader,
     target: &ReaderTarget,
     owner_tail: Vec<u8>,
 ) {
-    let first = ArchiveReadScopeV2::committed(
+    let first = ArchiveReadScope::committed(
         target.campaign_id,
         1,
         tick_one_content_hash(&target.config, target.campaign_id),
     )
     .unwrap();
     let scope =
-        ArchiveReadScopeV2::committed(target.campaign_id, 2, owner_tail.try_into().unwrap())
-            .unwrap();
+        ArchiveReadScope::committed(target.campaign_id, 2, owner_tail.try_into().unwrap()).unwrap();
     let before = read_county(reader, &first, "26163");
     let source = retained_page(&before).clone();
     assert_pending_retained_page(reader, &scope, &source);
@@ -823,7 +752,7 @@ fn assert_quiet_receipt_verification(
         .unwrap()
         .unwrap();
     assert_eq!((pending.durable_tick(), pending.processed_tick()), (2, 1));
-    let mut worker = babylon_persistence::ArchiveWorkerV1::new(&target.config);
+    let mut worker = babylon_persistence::ArchiveWorker::new(&target.config);
     let staged = worker.sweep_once(target.campaign_id, &Undrained).unwrap();
     assert_eq!(staged.paged_count(), 1);
     assert_eq!(staged.verified_tick(), 1);
@@ -837,7 +766,7 @@ fn assert_quiet_receipt_verification(
     let settled = worker
         .sweep_once(
             target.campaign_id,
-            &babylon_persistence::NullArchiveDossierProducerV1::new(),
+            &babylon_persistence::NullArchiveDossierProducer::new(),
         )
         .unwrap();
     assert_eq!(settled.applied_count(), 1);
@@ -850,7 +779,7 @@ fn assert_quiet_receipt_verification(
     let current = read_county(reader, &scope, "26163");
     assert!(matches!(
         current.state,
-        ArchiveDossierStateV2::Ready {
+        ArchiveDossierState::Ready {
             verified_through_tick: 2,
             ..
         }
@@ -863,18 +792,17 @@ fn assert_quiet_receipt_verification(
     let historical = read_county(reader, &first, "26163");
     assert_eq!(historical.scope, before.scope);
     assert_eq!(historical.subject, before.subject);
-    assert_eq!(historical.history_floor_tick, before.history_floor_tick);
     assert_eq!(historical.state, before.state);
     assert_eq!((historical.durable_tick, historical.processed_tick), (2, 2));
     assert_eq!(source.content_source.tick(), 1);
     let search = reader.search_as_of(&scope, "728576", 10).unwrap();
-    assert_eq!(search.state, ArchiveSearchStateV2::Ready);
+    assert_eq!(search.state, ArchiveSearchState::Ready);
     assert_eq!(search.hits[0].content_source, first);
-    let mut restarted = babylon_persistence::ArchiveWorkerV1::new(&target.config);
+    let mut restarted = babylon_persistence::ArchiveWorker::new(&target.config);
     let idle = restarted
         .sweep_once(
             target.campaign_id,
-            &babylon_persistence::NullArchiveDossierProducerV1::new(),
+            &babylon_persistence::NullArchiveDossierProducer::new(),
         )
         .unwrap();
     assert!(idle.dispositions().is_empty());
@@ -889,35 +817,31 @@ fn assert_quiet_receipt_verification(
     assert_pin_worker_identity_refused(reader, target, &scope, &current);
 }
 
-fn assert_quiet_retry(target: &ReaderTarget, scope: &ArchiveReadScopeV2) {
+fn assert_quiet_retry(target: &ReaderTarget, scope: &ArchiveReadScope) {
     let empty =
-        ArchiveDirtyBatchV1::try_new(2, scope.tick_content_hash().unwrap(), Vec::new()).unwrap();
-    let retry = SemanticArchiveStoreV1::new(&target.config)
-        .materialize_receipt(
-            target.campaign_id,
-            &empty,
-            ArchiveMaterializeModeV1::Consume,
-        )
+        ArchiveDirtyBatch::try_new(2, scope.tick_content_hash().unwrap(), Vec::new()).unwrap();
+    let retry = SemanticArchiveStore::new(&target.config)
+        .materialize_receipt(target.campaign_id, &empty, ArchiveMaterializeMode::Consume)
         .expect("exact quiet receipt retry");
     assert_eq!(
         retry.disposition(),
-        babylon_persistence::ArchiveMaterializeDispositionV1::AlreadyConsumed
+        babylon_persistence::ArchiveMaterializeDisposition::AlreadyConsumed
     );
     assert!(retry.pages().is_empty());
 }
 
 fn assert_pending_retained_page(
-    reader: &SemanticArchiveReaderV1,
-    scope: &ArchiveReadScopeV2,
-    source: &ArchiveDossierPageV2,
+    reader: &SemanticArchiveReader,
+    scope: &ArchiveReadScope,
+    source: &ArchiveDossierPage,
 ) {
     let pending = read_county(reader, scope, "26163");
     assert_eq!(pending.scope, *scope);
     assert_eq!((pending.durable_tick, pending.processed_tick), (2, 1));
     assert!(matches!(
         pending.state,
-        ArchiveDossierStateV2::Pending {
-            reason: ArchiveDossierPendingV2::ReceiptProcessing,
+        ArchiveDossierState::Pending {
+            reason: ArchiveDossierPending::ReceiptProcessing,
             page: Some(_)
         }
     ));
@@ -935,7 +859,7 @@ fn assert_pending_retained_page(
     let search = reader.search_as_of(scope, "728576", 10).unwrap();
     assert_eq!(
         search.state,
-        ArchiveSearchStateV2::Pending(ArchiveDossierPendingV2::ReceiptProcessing)
+        ArchiveSearchState::Pending(ArchiveDossierPending::ReceiptProcessing)
     );
     assert_eq!(search.hits.len(), 1);
     assert_eq!(search.hits[0].revision_id, source.revision_id);
@@ -943,12 +867,12 @@ fn assert_pending_retained_page(
 }
 
 fn assert_pin_worker_identity_refused(
-    reader: &SemanticArchiveReaderV1,
+    reader: &SemanticArchiveReader,
     target: &ReaderTarget,
-    scope: &ArchiveReadScopeV2,
-    unchanged: &ArchiveDossierReadV2,
+    scope: &ArchiveReadScope,
+    unchanged: &ArchiveDossierRead,
 ) {
-    use babylon_persistence::{SemanticArchiveErrorV1, SemanticArchiveReaderErrorV1};
+    use babylon_persistence::{SemanticArchiveError, SemanticArchiveReaderError};
     let mut client = target.config.connect(NoTls).unwrap();
     let tick = i64::try_from(scope.tick()).unwrap();
     let original: Vec<u8> = client
@@ -969,10 +893,10 @@ fn assert_pin_worker_identity_refused(
             .unwrap(),
         1
     );
-    let subject = ArchivePageRefV1::try_new(ArchiveSubjectKindV1::County, "26163".into()).unwrap();
+    let subject = ArchivePageRef::try_new(ArchiveSubjectKind::County, "26163".into()).unwrap();
     let failures = [
         reader
-            .dossier_as_of(scope, &subject, &ArchiveDossierBoundsV2::default())
+            .dossier_as_of(scope, &subject, &ArchiveDossierBounds::default())
             .map(|_| ()),
         reader.search_as_of(scope, "728576", 10).map(|_| ()),
     ];
@@ -980,9 +904,9 @@ fn assert_pin_worker_identity_refused(
         assert!(
             matches!(
                 result,
-                Err(SemanticArchiveReaderErrorV1::Archive(
-                    SemanticArchiveErrorV1::StoredPageMismatch
-                        | SemanticArchiveErrorV1::ReceiptConflict
+                Err(SemanticArchiveReaderError::Archive(
+                    SemanticArchiveError::StoredPageMismatch
+                        | SemanticArchiveError::ReceiptConflict
                 ))
             ),
             "{result:?}"
@@ -997,7 +921,7 @@ fn assert_pin_worker_identity_refused(
     assert_eq!(&read_county(reader, scope, "26163"), unchanged);
     assert_eq!(
         reader.search_as_of(scope, "728576", 10).unwrap().state,
-        ArchiveSearchStateV2::Ready
+        ArchiveSearchState::Ready
     );
 }
 
@@ -1027,7 +951,7 @@ fn live_reader_handle_reads_through_confined_login_and_refuses_writer_authority(
         READER_DSN_ENV,
         login.dsn(&host, port, &target.database.name),
     );
-    let reader = SemanticArchiveReaderV1::from_env().expect("BABYLON_READER_DSN admits");
+    let reader = SemanticArchiveReader::from_env().expect("BABYLON_READER_DSN admits");
     std::env::remove_var(READER_DSN_ENV);
 
     let status = reader
@@ -1054,7 +978,7 @@ fn live_reader_handle_reads_through_confined_login_and_refuses_writer_authority(
         "the reader status preserves the acknowledged commit tail hash exactly"
     );
 
-    let first = ArchiveReadScopeV2::committed(target.campaign_id, 1, tick_one_hash).unwrap();
+    let first = ArchiveReadScope::committed(target.campaign_id, 1, tick_one_hash).unwrap();
     assert_confined_reader_search_and_card(&reader, &first);
 
     assert_quiet_receipt_verification(&reader, &target, owner_tail);
@@ -1066,11 +990,11 @@ fn live_reader_handle_reads_through_confined_login_and_refuses_writer_authority(
         target.database.name
     );
     std::env::set_var(READER_DSN_ENV, &owner_dsn);
-    let owner_reader = SemanticArchiveReaderV1::from_env().expect("loopback owner DSN admits");
+    let owner_reader = SemanticArchiveReader::from_env().expect("loopback owner DSN admits");
     std::env::remove_var(READER_DSN_ENV);
     let refused = owner_reader.committed_tick_status(target.campaign_id);
     match refused {
-        Err(babylon_persistence::SemanticArchiveReaderErrorV1::WriterAuthorityRefused(held)) => {
+        Err(babylon_persistence::SemanticArchiveReaderError::WriterAuthorityRefused(held)) => {
             assert!(
                 !held.is_empty(),
                 "the refusal must carry the observed census"
@@ -1083,9 +1007,33 @@ fn live_reader_handle_reads_through_confined_login_and_refuses_writer_authority(
     target.finish();
 }
 
+fn reader_installation_catalog(client: &mut postgres::Client) -> Vec<(String, String)> {
+    client
+        .query(
+            "SELECT namespace.nspname || '.' || relation.relname, \
+                    pg_catalog.jsonb_build_object(\
+                        'kind', relation.relkind, 'owner', relation.relowner, \
+                        'acl', relation.relacl, \
+                        'view', CASE WHEN relation.relkind = 'v' \
+                            THEN pg_catalog.pg_get_viewdef(relation.oid, true) \
+                            ELSE '' END)::text \
+             FROM pg_catalog.pg_class AS relation \
+             JOIN pg_catalog.pg_namespace AS namespace ON namespace.oid = relation.relnamespace \
+             WHERE namespace.nspname IN ('babylon_ref', 'babylon_state', 'babylon_meta', 'public') \
+             ORDER BY namespace.nspname, relation.relname",
+            &[],
+        )
+        .expect("reader provisioning catalog snapshot")
+        .into_iter()
+        .map(|row| (row.get(0), row.get(1)))
+        .collect()
+}
+
 #[test]
 #[ignore = "requires the task-owned disposable PostgreSQL runtime and committed ticks"]
 fn live_reader_installer_refuses_privilege_drift_and_view_identity_mismatch() {
+    use babylon_persistence::{CurrentSchemaError, SemanticArchiveReaderError};
+
     let target = ReaderTarget::create(
         "readerroledrift",
         0x2300_0000_0000_0000_0000_0000_0000_00a3,
@@ -1095,86 +1043,72 @@ fn live_reader_installer_refuses_privilege_drift_and_view_identity_mismatch() {
         .config
         .connect(NoTls)
         .expect("drift probe connection");
-
-    // Drift: one extra effective privilege outside the exact footprint. The
-    // installer must census and refuse, never silently re-grant.
-    client
-        .batch_execute("GRANT SELECT ON babylon_meta.archive_page_revision_v2 TO babylon_reader")
-        .expect("drift grant applies");
-    let drift = install_reader_role_v1(&target.config).map(|_| ());
-    match drift {
-        Err(babylon_persistence::SemanticArchiveReaderErrorV1::PrivilegeDrift(held)) => assert!(
-            held.contains(&"babylon_meta.archive_page_revision_v2:SELECT".to_owned()),
-            "the drift census names the offending entry, held={held:?}"
-        ),
-        other => panic!("privilege drift must refuse loudly, got {other:?}"),
+    let refusal = Err(SemanticArchiveReaderError::CurrentSchema(
+        CurrentSchemaError::CurrentCensusMismatch,
+    ));
+    for relation in ["archive_page_revision_v2", "archive_atom_v1"] {
+        client
+            .batch_execute(&format!(
+                "GRANT SELECT ON babylon_meta.{relation} TO babylon_reader"
+            ))
+            .expect("extra base-table grant applies");
+        let before = reader_installation_catalog(&mut client);
+        assert_eq!(install_reader_role(&target.config).map(|_| ()), refusal);
+        assert_eq!(
+            reader_installation_catalog(&mut client),
+            before,
+            "schema refusal must leave the excessive grant and every catalog relation unchanged"
+        );
+        client
+            .batch_execute(&format!(
+                "REVOKE SELECT ON babylon_meta.{relation} FROM babylon_reader"
+            ))
+            .expect("test restores the exact grant footprint");
+        assert_eq!(
+            install_reader_role(&target.config),
+            Ok(ReaderRoleDisposition::AlreadyCurrent),
+            "restoring the exact footprint permits idempotent provisioning"
+        );
     }
-    client
-        .batch_execute("REVOKE SELECT ON babylon_meta.archive_page_revision_v2 FROM babylon_reader")
-        .expect("drift revoke applies");
-    assert_eq!(
-        install_reader_role_v1(&target.config).map(|_| ()),
-        Ok(()),
-        "the census reconciles to AlreadyCurrent once the drift is revoked"
-    );
 
-    // Atom-schema drift: a base atom-table grant is privilege drift too.
-    client
-        .batch_execute("GRANT SELECT ON babylon_meta.archive_atom_v1 TO babylon_reader")
-        .expect("atom drift grant applies");
-    let atom_drift = install_reader_role_v1(&target.config).map(|_| ());
-    match atom_drift {
-        Err(babylon_persistence::SemanticArchiveReaderErrorV1::PrivilegeDrift(held)) => assert!(
-            held.contains(&"babylon_meta.archive_atom_v1:SELECT".to_owned()),
-            "the drift census names the atom-table entry, held={held:?}"
-        ),
-        other => panic!("atom-table privilege drift must refuse loudly, got {other:?}"),
-    }
-    client
-        .batch_execute("REVOKE SELECT ON babylon_meta.archive_atom_v1 FROM babylon_reader")
-        .expect("atom drift revoke applies");
-    assert_eq!(
-        install_reader_role_v1(&target.config).map(|_| ()),
-        Ok(()),
-        "the census reconciles once the atom-table drift is revoked"
-    );
-
-    // Identity: a same-named base table is not the pinned view.
     client
         .batch_execute(
             "DROP VIEW public.v_committed_tick_status_v1; \
              CREATE TABLE public.v_committed_tick_status_v1(id bigint)",
         )
         .expect("impostor table replaces the view");
+    let impostor = reader_installation_catalog(&mut client);
+    assert_eq!(install_reader_role(&target.config).map(|_| ()), refusal);
     assert_eq!(
-        install_reader_role_v1(&target.config).map(|_| ()),
-        Err(babylon_persistence::SemanticArchiveReaderErrorV1::ViewMismatch),
-        "a non-view relation with the pinned name must refuse"
+        reader_installation_catalog(&mut client),
+        impostor,
+        "a same-named table is refused without replacement or grant changes"
     );
     client
         .batch_execute("DROP TABLE public.v_committed_tick_status_v1")
-        .expect("impostor table drops");
+        .expect("test removes the impostor table");
+    let absent = reader_installation_catalog(&mut client);
+    assert_eq!(install_reader_role(&target.config).map(|_| ()), refusal);
     assert_eq!(
-        install_reader_role_v1(&target.config),
-        Ok(ReaderRoleDispositionV1::Installed),
-        "removal of the view reinstalls it transactionally"
+        reader_installation_catalog(&mut client),
+        absent,
+        "a missing mandatory view is refused without schema repair"
     );
-
     target.finish();
 }
 
 fn assert_economic_grant_boundary(
     config: &Config,
     observer_config: &Config,
-    observer: &ObserverEconomyReaderV1,
-    preview: &ObserverEconomyReaderV1,
+    observer: &ObserverEconomyReader,
+    preview: &ObserverEconomyReader,
     campaign: CampaignId,
 ) {
     let owner_reader =
-        ObserverEconomyReaderV1::connect(config, ObserverVisibilityV1::FullObserver).unwrap();
+        ObserverEconomyReader::connect(config, ObserverVisibility::FullObserver).unwrap();
     assert_eq!(
         owner_reader.snapshot(campaign, 1),
-        Err(ObserverEconomyErrorV1::Authority)
+        Err(ObserverEconomyError::Authority)
     );
     config.connect(NoTls).unwrap().execute("DELETE FROM babylon_meta.archive_knowledge_grant_v1 WHERE campaign_id = $1 AND subject_kind = 'county' AND subject_id = '26163' AND grant_key = 'qcew-employment'", &[campaign.as_uuid()]).unwrap();
     let known = preview
@@ -1217,15 +1151,15 @@ fn live_observer_economics_reads_exact_foundation_commit_and_granted_preview() {
     let config = database.config(&base);
     let campaign =
         CampaignId::from_uuid(Uuid::from_u128(0x3190_0000_0000_0000_0000_0000_0000_0001));
-    let (session, bundle) = michigan_observer_foundation_v1().expect("exact Michigan foundation");
-    let mut runtime = DurableReplayRuntimeV2::create(&config, campaign, session, bundle)
-        .expect("observer campaign");
-    SemanticArchiveStoreV1::new(&config)
-        .install_schema()
+    let foundation = current_material::foundation();
+    let mut runtime =
+        DurableMaterialRuntime::create(&config, campaign, foundation).expect("observer campaign");
+    SemanticArchiveStore::new(&config)
+        .verify_schema()
         .expect("Archive schema");
-    install_reader_role_v1(&config).expect("reader role");
-    install_observer_economy_schema_v1(&config).expect("economic views and groups");
-    install_observer_economy_schema_v1(&config).expect("idempotent exact observer schema");
+    install_reader_role(&config).expect("reader role");
+    provision_observer_role(&config).expect("economic views and groups");
+    provision_observer_role(&config).expect("idempotent exact observer schema");
     let observer_login = ConfinedLogin::create_for_role(&base, "babylon_observer");
     let known_login = ConfinedLogin::create(&base);
     let mut observer_config = config.clone();
@@ -1237,23 +1171,21 @@ fn live_observer_economics_reads_exact_foundation_commit_and_granted_preview() {
         .user(&known_login.name)
         .password(ConfinedLogin::PASSWORD);
     let observer =
-        ObserverEconomyReaderV1::connect(&observer_config, ObserverVisibilityV1::FullObserver)
-            .unwrap();
+        ObserverEconomyReader::connect(&observer_config, ObserverVisibility::FullObserver).unwrap();
     let preview =
-        ObserverEconomyReaderV1::connect(&known_config, ObserverVisibilityV1::KnownPreview)
-            .unwrap();
+        ObserverEconomyReader::connect(&known_config, ObserverVisibility::KnownPreview).unwrap();
     let foundation = observer
         .snapshot(campaign, 0)
         .expect("true foundation, without hidden tick");
     assert_eq!(foundation.counties.len(), 83);
     assert_eq!(foundation.tick_content_hash, None);
-    assert_eq!(runtime.last_committed_tick(), None);
+    assert_eq!(runtime.tail(), None);
     assert_eq!(
         preview.snapshot(campaign, 0).unwrap().counties,
         foundation.counties
     );
-    let actions = OrderedPracticeActionBatchV1::empty(
-        runtime.foundation().replay_session_identity().clone(),
+    let actions = OrderedPracticeActionBatch::empty(
+        runtime.session().graph_session().session_identity().clone(),
         1,
     )
     .unwrap();
@@ -1264,20 +1196,39 @@ fn live_observer_economics_reads_exact_foundation_commit_and_granted_preview() {
         .snapshot(campaign, 1)
         .expect("exact committed baseline");
     assert_eq!(committed.counties, foundation.counties);
-    assert_eq!(committed.resolve_tick, receipt.resolve_tick().get());
+    assert_eq!(committed.resolve_tick, receipt.resolve_tick());
     assert!(committed.tick_content_hash.is_some());
     assert_eq!(
         observer.snapshot(campaign, 2),
-        Err(ObserverEconomyErrorV1::TickAbsent)
+        Err(ObserverEconomyError::TickAbsent)
     );
     assert_economic_grant_boundary(&config, &observer_config, &observer, &preview, campaign);
     let other = CampaignId::from_uuid(Uuid::from_u128(0x3190_0000_0000_0000_0000_0000_0000_0002));
-    let (session, bundle) = runtime_fixture_with_seed(4);
-    let other_runtime = DurableReplayRuntimeV2::create(&config, other, session, bundle)
-        .expect("distinct other scenario");
+    let foundation = current_material::foundation();
+    let other_runtime = DurableMaterialRuntime::create(&config, other, foundation)
+        .expect("distinct campaign with the same admitted foundation");
+    let other_snapshot = observer
+        .snapshot(other, 0)
+        .expect("second current campaign has its own foundation scope");
+    assert_eq!(other_snapshot.campaign_id, other.as_uuid().to_string());
+    assert_eq!(other_snapshot.resolve_tick, 0);
+    assert_eq!(other_snapshot.tick_content_hash, None);
+    assert_eq!(other_runtime.tail(), None);
+    assert_eq!(other_snapshot.counties, committed.counties);
     assert_eq!(
-        observer.snapshot(other, 0),
-        Err(ObserverEconomyErrorV1::ScenarioMismatch)
+        preview.snapshot(other, 0).unwrap().counties,
+        other_snapshot.counties,
+        "the first campaign's withheld grant cannot hide the second campaign's foundation field"
+    );
+    assert_eq!(
+        observer.snapshot(other, 1),
+        Err(ObserverEconomyError::TickAbsent),
+        "the first campaign's committed tick cannot satisfy the second campaign's scope"
+    );
+    assert_eq!(
+        observer.snapshot(campaign, 1).unwrap(),
+        committed,
+        "creating another campaign preserves the first campaign's exact committed observation"
     );
     drop(other_runtime);
     drop(runtime);
@@ -1290,8 +1241,8 @@ fn assert_material_lock_refusal(
     config: &Config,
     owner: &mut postgres::Client,
     campaign: CampaignId,
-    runtime: &mut DurableMaterialRuntimeV3,
-    actions: &OrderedPracticeActionBatchV1,
+    runtime: &mut DurableMaterialRuntime,
+    actions: &OrderedPracticeActionBatch,
     sink: &mut CollectingSink,
 ) {
     let before = runtime.session().current_world_hash().unwrap();
@@ -1323,7 +1274,7 @@ fn assert_material_lock_refusal(
     lock_holder.join().unwrap();
     assert!(matches!(
         locked_result,
-        Err(MaterialRuntimeErrorV3::DatabaseLockRefused(_))
+        Err(MaterialRuntimeError::DatabaseLockRefused(_))
     ));
     assert_eq!(runtime.session().completed_tick(), 0);
     assert_eq!(runtime.session().graph_session().completed_tick(), 0);
@@ -1344,8 +1295,8 @@ fn assert_material_lock_refusal(
 fn assert_material_marker_rollback(
     owner: &mut postgres::Client,
     campaign: CampaignId,
-    runtime: &mut DurableMaterialRuntimeV3,
-    actions: &OrderedPracticeActionBatchV1,
+    runtime: &mut DurableMaterialRuntime,
+    actions: &OrderedPracticeActionBatch,
     sink: &mut CollectingSink,
 ) {
     let before = runtime.session().current_world_hash().unwrap();
@@ -1376,10 +1327,10 @@ fn assert_material_marker_rollback(
 }
 
 fn assert_committed_material_visibility(
-    observer: &ObserverEconomyReaderV1,
-    known: &ObserverEconomyReaderV1,
+    observer: &ObserverEconomyReader,
+    known: &ObserverEconomyReader,
     campaign: CampaignId,
-    first: &IdentifiedMaterialTickV3,
+    first: &IdentifiedMaterialTick,
 ) {
     let snapshot = observer.snapshot(campaign, 1).unwrap();
     assert_eq!(
@@ -1399,13 +1350,13 @@ fn assert_committed_material_visibility(
 fn assert_material_restart_reconciliation(
     config: &Config,
     campaign: CampaignId,
-    runtime: &mut DurableMaterialRuntimeV3,
+    runtime: &mut DurableMaterialRuntime,
     sink: &mut CollectingSink,
-) -> (DurableMaterialRuntimeV3, IdentifiedMaterialTickV3) {
-    let mut reopened = DurableMaterialRuntimeV3::open(
+) -> (DurableMaterialRuntime, IdentifiedMaterialTick) {
+    let mut reopened = DurableMaterialRuntime::open(
         config,
         campaign,
-        MichiganContentPresetV1::new_campaign(MichiganDeliveryPresetV1::Standard)
+        MichiganContentPreset::new_campaign(MichiganDeliveryPreset::Standard)
             .create_foundation(&crate::test_support::catalog())
             .unwrap()
             .digest(),
@@ -1419,7 +1370,7 @@ fn assert_material_restart_reconciliation(
         reopened.session().current_world_hash().unwrap(),
         runtime.session().current_world_hash().unwrap()
     );
-    let second_actions = OrderedPracticeActionBatchV1::empty(
+    let second_actions = OrderedPracticeActionBatch::empty(
         runtime.session().graph_session().session_identity().clone(),
         2,
     )
@@ -1430,15 +1381,15 @@ fn assert_material_restart_reconciliation(
         .unwrap();
     assert_eq!(uninterrupted, reconciled);
     assert!(matches!(
-        DurableMaterialRuntimeV3::open(
+        DurableMaterialRuntime::open(
             config,
             campaign,
-            MichiganContentPresetV1::new_campaign(MichiganDeliveryPresetV1::Delayed)
+            MichiganContentPreset::new_campaign(MichiganDeliveryPreset::Delayed)
                 .create_foundation(&crate::test_support::catalog())
                 .unwrap()
                 .digest()
         ),
-        Err(MaterialRuntimeErrorV3::FoundationMismatch)
+        Err(MaterialRuntimeError::FoundationMismatch)
     ));
     (reopened, uninterrupted)
 }
@@ -1447,7 +1398,7 @@ fn assert_material_corruption_refused(
     owner: &mut postgres::Client,
     config: &Config,
     campaign: CampaignId,
-    observer: &ObserverEconomyReaderV1,
+    observer: &ObserverEconomyReader,
 ) {
     let exact:Vec<u8>=owner.query_one("SELECT register_bytes FROM babylon_state.material_tick_v3 WHERE campaign_id=$1::uuid AND resolve_tick=2",&[campaign.as_uuid()]).unwrap().get(0);
     let mut corrupted = exact.clone();
@@ -1455,10 +1406,10 @@ fn assert_material_corruption_refused(
     corrupted[last] ^= 1;
     owner.execute("UPDATE babylon_state.material_tick_v3 SET register_bytes=$2 WHERE campaign_id=$1::uuid AND resolve_tick=2",&[campaign.as_uuid(),&corrupted]).unwrap();
     assert!(observer.snapshot(campaign, 2).is_err());
-    assert!(DurableMaterialRuntimeV3::open(
+    assert!(DurableMaterialRuntime::open(
         config,
         campaign,
-        MichiganContentPresetV1::new_campaign(MichiganDeliveryPresetV1::Standard)
+        MichiganContentPreset::new_campaign(MichiganDeliveryPreset::Standard)
             .create_foundation(&crate::test_support::catalog())
             .unwrap()
             .digest()
@@ -1470,37 +1421,37 @@ fn assert_material_corruption_refused(
 fn assert_material_stdio_advance(
     config: &Config,
     campaign: CampaignId,
-    observer: &ObserverEconomyReaderV1,
-    uninterrupted: &IdentifiedMaterialTickV3,
+    observer: &ObserverEconomyReader,
+    uninterrupted: &IdentifiedMaterialTick,
 ) {
-    let scope = RuntimeSessionScopeV3 {
+    let scope = RuntimeSessionScope {
         epoch: 1,
         campaign_id: Some(campaign.as_uuid().to_string()),
     };
-    let open = RuntimeSessionRequestV3::Switch {
-        protocol_version: RUNTIME_SESSION_PROTOCOL_VERSION_V3,
+    let open = RuntimeSessionRequest::Switch {
+        protocol_version: RUNTIME_SESSION_PROTOCOL_VERSION,
         request_id: 6,
-        scope: RuntimeSessionScopeV3 {
+        scope: RuntimeSessionScope {
             epoch: 0,
             campaign_id: None,
         },
-        target: RuntimeSessionTargetV3::Open {
+        target: RuntimeSessionTarget::Open {
             campaign_id: campaign.as_uuid().to_string(),
         },
     };
-    let request = RuntimeSessionRequestV3::Advance {
-        protocol_version: RUNTIME_SESSION_PROTOCOL_VERSION_V3,
+    let request = RuntimeSessionRequest::Advance {
+        protocol_version: RUNTIME_SESSION_PROTOCOL_VERSION,
         scope: scope.clone(),
         request_id: 7,
-        expected_tail: RuntimeSessionTailV3 {
+        expected_tail: RuntimeSessionTail {
             resolve_tick: 2,
             tick_content_hash: Some(babylon_tick::hex(
                 uninterrupted.tick_content_hash().as_bytes(),
             )),
         },
     };
-    let stop = RuntimeSessionRequestV3::Stop {
-        protocol_version: RUNTIME_SESSION_PROTOCOL_VERSION_V3,
+    let stop = RuntimeSessionRequest::Stop {
+        protocol_version: RUNTIME_SESSION_PROTOCOL_VERSION,
         scope,
         request_id: 8,
     };
@@ -1511,7 +1462,7 @@ fn assert_material_stdio_advance(
     input.extend(serde_json::to_vec(&stop).unwrap());
     input.push(b'\n');
     let mut output = Vec::new();
-    run_runtime_session_v3(
+    run_runtime_session(
         config,
         std::path::Path::new(concat!(
             env!("CARGO_MANIFEST_DIR"),
@@ -1521,36 +1472,34 @@ fn assert_material_stdio_advance(
         &mut output,
     )
     .unwrap();
-    let responses: Vec<RuntimeSessionResponseV3> = output
+    let responses: Vec<RuntimeSessionResponse> = output
         .split(|byte| *byte == b'\n')
         .filter(|line| !line.is_empty())
         .map(|line| serde_json::from_slice(line).unwrap())
         .collect();
     assert!(
-        matches!(&responses[0],RuntimeSessionResponseV3::Hello{scope,..} if scope.epoch==0 && scope.campaign_id.is_none())
+        matches!(&responses[0],RuntimeSessionResponse::Hello{scope,..} if scope.epoch==0 && scope.campaign_id.is_none())
     );
-    assert!(
-        matches!(&responses[2],RuntimeSessionResponseV3::Ready{tail,..} if tail.resolve_tick==2)
-    );
+    assert!(matches!(&responses[2],RuntimeSessionResponse::Ready{tail,..} if tail.resolve_tick==2));
     assert!(responses.iter().any(|response| matches!(
         response,
-        RuntimeSessionResponseV3::Committed { request_id: 7, tail, .. }
+        RuntimeSessionResponse::Committed { request_id: 7, tail, .. }
             if tail.resolve_tick == 3
     )));
     let mut acknowledged_tick = 2;
     for response in &responses {
         match response {
-            RuntimeSessionResponseV3::Ready { tail, .. }
-            | RuntimeSessionResponseV3::Committed { tail, .. } => {
+            RuntimeSessionResponse::Ready { tail, .. }
+            | RuntimeSessionResponse::Committed { tail, .. } => {
                 acknowledged_tick = tail.resolve_tick;
             }
-            RuntimeSessionResponseV3::ArchiveProgress { durable_tick, .. } => {
+            RuntimeSessionResponse::ArchiveProgress { durable_tick, .. } => {
                 assert_eq!(*durable_tick, acknowledged_tick);
             }
-            RuntimeSessionResponseV3::Hello { .. }
-            | RuntimeSessionResponseV3::Switching { .. }
-            | RuntimeSessionResponseV3::Error { .. }
-            | RuntimeSessionResponseV3::Stopped { .. } => {}
+            RuntimeSessionResponse::Hello { .. }
+            | RuntimeSessionResponse::Switching { .. }
+            | RuntimeSessionResponse::Error { .. }
+            | RuntimeSessionResponse::Stopped { .. } => {}
         }
     }
     assert_eq!(observer.snapshot(campaign, 3).unwrap().resolve_tick, 3);
@@ -1558,21 +1507,21 @@ fn assert_material_stdio_advance(
 
 #[test]
 #[ignore = "requires task-owned disposable PostgreSQL runtime template"]
-fn live_material_runtime_v3_atomic_restart_identity_and_observer_projection() {
+fn live_material_runtime_atomic_restart_identity_and_observer_projection() {
     let base = validated_base_config();
     let database =
         TestDatabase::create_from_template(&base, &validated_template_name(), "materialruntime");
     let config = database.config(&base);
     let campaign =
         CampaignId::from_uuid(Uuid::from_u128(0x3190_0000_0000_0000_0000_0000_0000_0003));
-    let preset = MichiganDeliveryPresetV1::Standard;
-    let foundation = MichiganContentPresetV1::new_campaign(preset)
+    let preset = MichiganDeliveryPreset::Standard;
+    let foundation = MichiganContentPreset::new_campaign(preset)
         .create_foundation(&crate::test_support::catalog())
         .unwrap();
     let digest = foundation.digest();
-    let mut runtime = DurableMaterialRuntimeV3::create(&config, campaign, foundation).unwrap();
-    install_reader_role_v1(&config).unwrap();
-    install_observer_economy_schema_v1(&config).unwrap();
+    let mut runtime = DurableMaterialRuntime::create(&config, campaign, foundation).unwrap();
+    install_reader_role(&config).unwrap();
+    provision_observer_role(&config).unwrap();
     let observer_login = ConfinedLogin::create_for_role(&base, "babylon_observer");
     let known_login = ConfinedLogin::create(&base);
     let mut observer_config = config.clone();
@@ -1584,16 +1533,15 @@ fn live_material_runtime_v3_atomic_restart_identity_and_observer_projection() {
         .user(&known_login.name)
         .password(ConfinedLogin::PASSWORD);
     let observer =
-        ObserverEconomyReaderV1::connect(&observer_config, ObserverVisibilityV1::FullObserver)
-            .unwrap();
-    let known = ObserverEconomyReaderV1::connect(&known_config, ObserverVisibilityV1::KnownPreview)
-        .unwrap();
+        ObserverEconomyReader::connect(&observer_config, ObserverVisibility::FullObserver).unwrap();
+    let known =
+        ObserverEconomyReader::connect(&known_config, ObserverVisibility::KnownPreview).unwrap();
     let zero = observer.snapshot(campaign, 0).unwrap();
     assert!(zero.production.is_some());
     assert!(known.snapshot(campaign, 0).unwrap().production.is_none());
     assert_eq!(zero.foundation_digest, babylon_tick::hex(&digest));
     let mut owner = config.connect(NoTls).unwrap();
-    let actions = OrderedPracticeActionBatchV1::empty(
+    let actions = OrderedPracticeActionBatch::empty(
         runtime.session().graph_session().session_identity().clone(),
         1,
     )

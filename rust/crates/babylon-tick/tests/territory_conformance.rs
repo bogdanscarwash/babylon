@@ -34,7 +34,7 @@
 use babylon_bsl::scenario::load_scenario;
 use babylon_graph::hypergraph_store::HypergraphStore;
 use babylon_graph::substrate::{GraphSubstrate, NodeId};
-use babylon_kernel::SessionId;
+use babylon_kernel::replay::ReplaySessionId;
 use babylon_tick::run_once_into;
 
 const SCENARIO: &str = include_str!("../content/scenarios/territory-conformance.bscn");
@@ -382,7 +382,7 @@ fn p2_sub_threshold_territory_is_untouched() {
 
 /// An already-latched territory keeps compounding across ticks:
 /// rent 1.0 -> 1.5e6 (tick 1) -> 2.25e6 (tick 2), via TWO
-/// `TickSession::advance` calls. `TERRITORY_RULES` is the WHOLE pack (all
+/// `RuleDiagnosticSession::advance` calls. `TERRITORY_RULES` is the WHOLE pack (all
 /// five rules, p1 through p4) even at this point in the file — the
 /// section markers below are for reading order, not content accretion;
 /// p3/p4 fire on every tick this test runs too (harmlessly: p3 moves
@@ -391,11 +391,13 @@ fn p2_sub_threshold_territory_is_untouched() {
 #[test]
 fn p2_already_latched_territory_compounds_rent_across_two_ticks() {
     let mut sink = babylon_bsl::structural_verbs::CollectingSink::default();
-    let mut session = babylon_tick::TickSession::new(
+    let mut session = babylon_tick::diagnostic::RuleDiagnosticSession::new(
         SCENARIO,
+        None,
         TERRITORY_RULES,
         HypergraphStore::new(),
-        SessionId::new("territory-conformance-test").expect("literal is non-empty"),
+        ReplaySessionId::try_from("territory-conformance-test").expect("literal is non-empty"),
+        babylon_kernel::replay::ReplaySeed::new(0),
     )
     .expect("the pack must load into a session");
     session.advance(&mut sink).expect("tick 1");

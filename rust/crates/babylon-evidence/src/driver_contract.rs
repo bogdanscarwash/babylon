@@ -1,13 +1,13 @@
 //! Exact source-bound contract for the fixture-only synthetic driver.
 
-use babylon_kernel::sha256_of;
-use babylon_practice_contract::PracticeIntentV1;
+use babylon_kernel::content_digest::sha256_of;
+use babylon_practice_contract::PracticeIntent;
 
 use crate::driver;
 use crate::{
-    DifferingLedgerKindV1, Digest32, InterventionDeltaV1, PersistenceComparisonV1,
-    PracticeAttemptLedgerV1, PracticeCandidateScheduleV1, RunIdentityV1, SfsPreregistrationV1,
-    SfsTraceV1, SyntheticDriverError, SyntheticMaterialSample,
+    DifferingLedgerKind, Digest32, InterventionDelta, PersistenceComparison, PracticeAttemptLedger,
+    PracticeCandidateSchedule, RunIdentity, SfsPreregistration, SfsTrace, SyntheticDriverError,
+    SyntheticMaterialSample,
 };
 
 const DRIVER_SOURCE: &[u8] = include_bytes!("driver.rs");
@@ -18,7 +18,7 @@ const ROW_COUNT: usize = 7;
 
 /// Parsed exact seven-row synthetic driver source contract.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SyntheticDriverContractV1 {
+pub struct SyntheticDriverContract {
     canonical_bytes: Vec<u8>,
     manifest_digest: Digest32,
     source_digest: Digest32,
@@ -27,7 +27,7 @@ pub struct SyntheticDriverContractV1 {
 /// Opaque proof that a preregistration selected the parsed driver contract.
 #[derive(Debug)]
 pub struct ValidatedSyntheticDriver<'a> {
-    contract: &'a SyntheticDriverContractV1,
+    contract: &'a SyntheticDriverContract,
 }
 
 /// Exact driver-contract framing and identity refusals.
@@ -40,7 +40,7 @@ pub enum SyntheticDriverContractError {
     PreregistrationDigestMismatch,
 }
 
-impl SyntheticDriverContractV1 {
+impl SyntheticDriverContract {
     /// Returns the complete domain-separated manifest identity.
     #[must_use]
     pub const fn manifest_digest(&self) -> Digest32 {
@@ -66,7 +66,7 @@ impl SyntheticDriverContractV1 {
 /// Returns the first byte, row, source, or contract identity refusal.
 pub fn parse_synthetic_driver_contract(
     manifest_bytes: &[u8],
-) -> Result<SyntheticDriverContractV1, SyntheticDriverContractError> {
+) -> Result<SyntheticDriverContract, SyntheticDriverContractError> {
     if manifest_bytes.len() > MAX_MANIFEST_BYTES {
         return Err(SyntheticDriverContractError::ManifestByteLimit {
             actual: manifest_bytes.len(),
@@ -82,7 +82,7 @@ pub fn parse_synthetic_driver_contract(
     let source_row = format!("source|driver.rs|{}", source_digest.to_hex());
     let expected = [
         "schema|1",
-        "predicate|candidate-projection|1",
+        "predicate|candidate-projection|2",
         "predicate|cumulative-driver-shape|1",
         "predicate|persistence-comparison-identity|1",
         "predicate|aligned-material-sequence|1",
@@ -105,7 +105,7 @@ pub fn parse_synthetic_driver_contract(
     if rows.next().is_some() {
         return Err(SyntheticDriverContractError::ManifestMalformed { row: 8 });
     }
-    Ok(SyntheticDriverContractV1 {
+    Ok(SyntheticDriverContract {
         canonical_bytes: manifest_bytes.to_vec(),
         manifest_digest: domain_digest(CONTRACT_DOMAIN, manifest_bytes),
         source_digest,
@@ -117,8 +117,8 @@ pub fn parse_synthetic_driver_contract(
 /// # Errors
 /// Returns `PreregistrationDigestMismatch` before exposing any predicate.
 pub fn bind_synthetic_driver<'a>(
-    preregistration: &SfsPreregistrationV1,
-    contract: &'a SyntheticDriverContractV1,
+    preregistration: &SfsPreregistration,
+    contract: &'a SyntheticDriverContract,
 ) -> Result<ValidatedSyntheticDriver<'a>, SyntheticDriverContractError> {
     if preregistration.driver_contract_digest() != contract.manifest_digest {
         return Err(SyntheticDriverContractError::PreregistrationDigestMismatch);
@@ -133,11 +133,11 @@ impl ValidatedSyntheticDriver<'_> {
     /// Returns the first exact candidate, ledger, cadence, or intent refusal.
     pub fn validate_candidate_projection(
         &self,
-        run_identity: &RunIdentityV1,
-        preregistration: &SfsPreregistrationV1,
-        schedule: &PracticeCandidateScheduleV1,
-        attempts: &PracticeAttemptLedgerV1,
-        intents: &[PracticeIntentV1],
+        run_identity: &RunIdentity,
+        preregistration: &SfsPreregistration,
+        schedule: &PracticeCandidateSchedule,
+        attempts: &PracticeAttemptLedger,
+        intents: &[PracticeIntent],
         actual_exogenous_ledger_digest: Digest32,
     ) -> Result<(), SyntheticDriverError> {
         let _ = self.contract;
@@ -157,9 +157,9 @@ impl ValidatedSyntheticDriver<'_> {
     /// Returns the exact twin-identity refusal.
     pub fn validate_twin_identity_difference(
         &self,
-        control: &RunIdentityV1,
-        intervention: &RunIdentityV1,
-        selected: DifferingLedgerKindV1,
+        control: &RunIdentity,
+        intervention: &RunIdentity,
+        selected: DifferingLedgerKind,
     ) -> Result<(), SyntheticDriverError> {
         driver::validate_twin_identity_difference(control, intervention, selected)
     }
@@ -170,12 +170,12 @@ impl ValidatedSyntheticDriver<'_> {
     /// Returns the first exact trace, ledger, comparison, or delta refusal.
     pub fn validate_persistence_comparison_identity(
         &self,
-        control: &RunIdentityV1,
-        intervention: &RunIdentityV1,
-        control_trace: &SfsTraceV1,
-        intervention_trace: &SfsTraceV1,
-        comparison: &PersistenceComparisonV1,
-        intervention_delta: &InterventionDeltaV1,
+        control: &RunIdentity,
+        intervention: &RunIdentity,
+        control_trace: &SfsTrace,
+        intervention_trace: &SfsTrace,
+        comparison: &PersistenceComparison,
+        intervention_delta: &InterventionDelta,
     ) -> Result<(), SyntheticDriverError> {
         driver::validate_persistence_comparison_identity(
             control,

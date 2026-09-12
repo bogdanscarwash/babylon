@@ -1,7 +1,7 @@
 use super::{hex, refused, report::Candidate, Result};
-use babylon_kernel::sha256_of;
+use babylon_kernel::content_digest::sha256_of;
 use babylon_persistence::michigan_material::{
-    MichiganPhysicalNetworkV2, MAX_MICHIGAN_CAPTURED_CONTENT_BYTES_V2,
+    MichiganPhysicalNetwork, MAX_MICHIGAN_CAPTURED_CONTENT_BYTES,
 };
 use serde::Serialize;
 use std::{
@@ -23,7 +23,7 @@ pub struct Arguments {
 pub struct Inputs {
     pub defines: String,
     pub qualification: Vec<u8>,
-    pub physical: MichiganPhysicalNetworkV2,
+    pub physical: MichiganPhysicalNetwork,
     pub hashes: BTreeMap<&'static str, String>,
 }
 impl Arguments {
@@ -85,9 +85,9 @@ impl Arguments {
 fn bounded_read(path: &Path) -> Result<Vec<u8>> {
     let mut data = Vec::new();
     File::open(path)?
-        .take((MAX_MICHIGAN_CAPTURED_CONTENT_BYTES_V2 + 1) as u64)
+        .take((MAX_MICHIGAN_CAPTURED_CONTENT_BYTES + 1) as u64)
         .read_to_end(&mut data)?;
-    if data.len() > MAX_MICHIGAN_CAPTURED_CONTENT_BYTES_V2 {
+    if data.len() > MAX_MICHIGAN_CAPTURED_CONTENT_BYTES {
         return Err(refused(format!(
             "input exceeds captured-content bound: {}",
             path.display()
@@ -99,7 +99,7 @@ pub fn read_inputs(args: &Arguments) -> Result<Inputs> {
     let defines = bounded_read(&args.defines)?;
     let qualification = bounded_read(&args.qualification)?;
     let physical_bytes = bounded_read(&args.physical)?;
-    let physical: MichiganPhysicalNetworkV2 = serde_json::from_slice(&physical_bytes)?;
+    let physical: MichiganPhysicalNetwork = serde_json::from_slice(&physical_bytes)?;
     if physical.source.pbf_url.starts_with("synthetic://") {
         return Err(refused(
             "synthetic networks are restricted to the focused example tests",

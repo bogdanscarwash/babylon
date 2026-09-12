@@ -1,6 +1,6 @@
 //! PER-22 county dossier producer (slice 2) for the semantic Archive worker.
 //!
-//! [`CountyDossierProducerV1`] turns one committed dirty receipt into a
+//! [`CountyDossierProducer`] turns one committed dirty receipt into a
 //! bounded batch of county dossier pages. Counties enumerate from the
 //! campaign's declared `babylon_meta.territory_county_map_v1` rows in GEOID
 //! order; titles, place links, and place labels resolve from the checked,
@@ -31,22 +31,22 @@
 //! projection. The projection folds the grant-visible rendering: each signal
 //! counts only while the campaign grants that field key on the county, and a
 //! place link name counts only while the campaign grants that place subject,
-//! both snapshotted at the receipt tick through [`ARCHIVE_COUNTY_GRANTS_SQL_V1`].
+//! both snapshotted at the receipt tick through [`ARCHIVE_COUNTY_GRANTS_SQL`].
 //! A page published redacted therefore re-dirties the moment later grants
 //! reveal its signals or link names, and the next sweep republishes it.
 //! Receipt-stamped fields (`verified_tick`, `tick_content_hash`, and the tick
 //! segment of each citation locator) never dirty a page: the projection is
 //! recomputed from the stored Markdown with the pinned `archive_page_v1.md.j2`
-//! shape ([`crate::ARCHIVE_PAGE_TEMPLATE_SHA256_V1`] bytes folded into the
+//! shape ([`crate::ARCHIVE_PAGE_TEMPLATE_SHA256`] bytes folded into the
 //! hash), stripping the receipt-stamped frontmatter. Malformed stored pages
 //! are treated as dirty, which safely republishes drifted content.
 //!
 //! # Drain bound
 //!
 //! The producer never truncates a dirty set and never refuses an over-bound
-//! one. When more than [`ArchiveDirtyBatchV1::MAX_PAGES`] counties are dirty
+//! one. When more than [`ArchiveDirtyBatch::MAX_PAGES`] counties are dirty
 //! for one receipt it selects the leading `limit` entries in geoid order and
-//! reports the exact undrained tail count ([`ArchiveDirtySelectionV1`]), so
+//! reports the exact undrained tail count ([`ArchiveDirtySelection`]), so
 //! the sweep stages one bounded batch and the receipt stays pending until
 //! the tail drains across successive sweeps. Michigan's 83 mapped counties
 //! keep the production county drain a normal complete batch, leaving most of
@@ -54,49 +54,49 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use babylon_graph::stable_element::StableElementKeyV1;
-use babylon_kernel::tick_content_hash::RefDigestV1;
+use babylon_graph::stable_element::StableElementKey;
+use babylon_kernel::tick_content_hash::RefDigest;
 use postgres::{Config, NoTls};
 use sha2::{Digest as _, Sha256};
 use uuid::Uuid;
 
-use crate::archive::{database, decode, validate_text, ARCHIVE_PAGE_TEMPLATE_SHA256_V1};
+use crate::archive::{database, decode, validate_text, ARCHIVE_PAGE_TEMPLATE_SHA256};
 use crate::archive_foundation_grants::county_qcew_citation;
 use crate::michigan_economy::{
-    QCEW_ECONOMICS_ARTIFACT_SHA256_V1, QCEW_ECONOMICS_FIELD_KEYS_V1, QCEW_ECONOMICS_SOURCE_ID_V1,
+    QCEW_ECONOMICS_ARTIFACT_SHA256, QCEW_ECONOMICS_FIELD_KEYS, QCEW_ECONOMICS_SOURCE_ID,
 };
 use crate::place_producer::{
-    PINNED_COUNTY_PLACE_OVERLAP_ARTIFACT_SHA256_V1, PINNED_PLACE_IDENTITY_ARTIFACT_SHA256_V1,
+    PINNED_COUNTY_PLACE_OVERLAP_ARTIFACT_SHA256, PINNED_PLACE_IDENTITY_ARTIFACT_SHA256,
 };
 use crate::{
-    michigan_spatial_reference_products_v1, representative_h3_reference_cohort_v1,
-    ArchiveCitationV1, ArchiveDirtySelectionV1, ArchiveDossierProducerV1, ArchiveLinkV1,
-    ArchivePageInputV1, ArchivePageRefV1, ArchiveProducerOutcomeV1, ArchiveSignalV1,
-    ArchiveSubjectKindV1, ArchiveSubjectV1, CampaignId, PendingArchiveReceiptV1,
-    SemanticArchiveErrorV1, SpatialReferenceProducts,
+    h3_reference_cohort::representative_h3_reference_cohort, identity::CampaignId,
+    spatial_reference_products::michigan_spatial_reference_products,
+    spatial_reference_products::SpatialReferenceProducts, ArchiveCitation, ArchiveDirtySelection,
+    ArchiveDossierProducer, ArchiveLink, ArchivePageInput, ArchivePageRef, ArchiveProducerOutcome,
+    ArchiveSignal, ArchiveSubject, ArchiveSubjectKind, PendingArchiveReceipt, SemanticArchiveError,
 };
 
 /// Stable decision question every county dossier page answers.
-pub const COUNTY_DECISION_QUESTION_V1: &str =
+pub const COUNTY_DECISION_QUESTION: &str =
     "Which neighboring place should organizers investigate next?";
 
 /// Knowledge-grant key addressing the committed median-wage signal.
-pub const COUNTY_MEDIAN_WAGE_GRANT_KEY_V1: &str = "median-wage";
+pub const COUNTY_MEDIAN_WAGE_GRANT_KEY: &str = "median-wage";
 
 /// Knowledge-grant key addressing the committed phi-hour signal.
-pub const COUNTY_PHI_HOUR_GRANT_KEY_V1: &str = "phi-hour";
+pub const COUNTY_PHI_HOUR_GRANT_KEY: &str = "phi-hour";
 
 /// Player-facing label of the committed median-wage signal.
-pub const COUNTY_MEDIAN_WAGE_LABEL_V1: &str = "Median wage";
+pub const COUNTY_MEDIAN_WAGE_LABEL: &str = "Median wage";
 
 /// Player-facing label of the committed phi-hour signal.
-pub const COUNTY_PHI_HOUR_LABEL_V1: &str = "Imperial rent Φ";
+pub const COUNTY_PHI_HOUR_LABEL: &str = "Imperial rent Φ";
 
 /// Source identity pinning committed per-tick territory provenance.
-pub const COMMITTED_TICK_SOURCE_ID_V1: &str = "committed-tick-v1";
+pub const COMMITTED_TICK_SOURCE_ID: &str = "committed-tick-v1";
 
 /// Read-only declared county enumeration used by the county dossier.
-pub const ARCHIVE_COUNTY_MAP_READ_SQL_V1: &str = "SELECT territory_local_name, county_geoid \
+pub const ARCHIVE_COUNTY_MAP_READ_SQL: &str = "SELECT territory_local_name, county_geoid \
 FROM babylon_meta.territory_county_map_v1 \
 WHERE campaign_id = $1::uuid ORDER BY county_geoid, territory_local_name";
 
@@ -107,7 +107,7 @@ WHERE campaign_id = $1::uuid ORDER BY county_geoid, territory_local_name";
 /// name, not the declared `territory/` path); every row comes from the
 /// committed tick the receipt names, never from material ledgers or
 /// `MAX(tick)` shortcuts.
-pub const ARCHIVE_COUNTY_FIELD_READ_SQL_V1: &str = "SELECT \
+pub const ARCHIVE_COUNTY_FIELD_READ_SQL: &str = "SELECT \
     t.territory_id, f.field_name, f.value_tag, f.real_bits, f.int_value \
     FROM babylon_state.territory_state_v1 t \
     JOIN babylon_state.territory_state_field_v1 f \
@@ -123,7 +123,7 @@ pub const ARCHIVE_COUNTY_FIELD_READ_SQL_V1: &str = "SELECT \
 ///
 /// The query returns the exact stored page rows for one campaign, ordered by
 /// subject, and never joins material or raw event ledgers.
-pub const ARCHIVE_COUNTY_PAGE_READ_SQL_V1: &str = "SELECT subject_id, title, markdown \
+pub const ARCHIVE_COUNTY_PAGE_READ_SQL: &str = "SELECT subject_id, title, markdown \
 FROM babylon_meta.archive_page_v1 \
 WHERE campaign_id = $1::uuid AND subject_kind = 'county' \
 ORDER BY subject_id";
@@ -136,7 +136,7 @@ ORDER BY subject_id";
 /// knowledge only: seeded concept grants widen the grant table's subject
 /// domain (ADR249 R3/R12) but never enter the page grant snapshot, which
 /// decodes through the page-domain subject kind.
-pub const ARCHIVE_COUNTY_GRANTS_SQL_V1: &str = "SELECT subject_kind, subject_id, grant_key \
+pub const ARCHIVE_COUNTY_GRANTS_SQL: &str = "SELECT subject_kind, subject_id, grant_key \
 FROM babylon_meta.archive_knowledge_grant_v1 \
 WHERE campaign_id = $1::uuid AND granted_tick <= $2 \
   AND subject_kind IN ('county', 'place') \
@@ -144,21 +144,21 @@ ORDER BY subject_kind, subject_id, grant_key";
 
 /// Contract-pinned SHA-256 of the `dim_county` identity artifact that backs
 /// the governed county names.
-pub const PINNED_COUNTY_IDENTITY_ARTIFACT_SHA256_V1: [u8; 32] = [
+pub const PINNED_COUNTY_IDENTITY_ARTIFACT_SHA256: [u8; 32] = [
     0x13, 0x0b, 0x76, 0x79, 0xd0, 0x44, 0x1d, 0x5c, 0x3c, 0x21, 0x83, 0xa2, 0xbe, 0xf8, 0x58, 0x07,
     0x3d, 0x30, 0x11, 0x03, 0x95, 0x50, 0xbf, 0xbf, 0x01, 0x5b, 0x38, 0x05, 0x66, 0xc7, 0x20, 0x32,
 ];
 
-const COUNTY_SEMANTIC_DOMAIN_V1: &[u8] = b"babylon.county-page-semantic.v1\0";
-const COUNTY_IDENTITY_PRODUCT_CODE_V1: &str = "dim_county";
-const PLACE_IDENTITY_PRODUCT_CODE_V1: &str = "census_place_identity_mi_2023";
-const OVERLAP_PRODUCT_CODE_V1: &str = "census_county_place_h3_land_overlap_mi_2023";
-const COUNTY_SUBJECT_GRANT_KEY_V1: &str = "subject";
-const MEDIAN_WAGE_FIELD_V1: &str = "median-wage";
-const PHI_HOUR_FIELD_V1: &str = "phi-hour";
-const REAL_VALUE_TAG_V1: i16 = 3;
-const INT_VALUE_TAG_V1: i16 = 1;
-const QCEW_LABELS_V1: [&str; 4] = [
+const COUNTY_SEMANTIC_DOMAIN: &[u8] = b"babylon.county-page-semantic.v1\0";
+const COUNTY_IDENTITY_PRODUCT_CODE: &str = "dim_county";
+const PLACE_IDENTITY_PRODUCT_CODE: &str = "census_place_identity_mi_2023";
+const OVERLAP_PRODUCT_CODE: &str = "census_county_place_h3_land_overlap_mi_2023";
+const COUNTY_SUBJECT_GRANT_KEY: &str = "subject";
+const MEDIAN_WAGE_FIELD: &str = "median-wage";
+const PHI_HOUR_FIELD: &str = "phi-hour";
+const REAL_VALUE_TAG: i16 = 3;
+const INT_VALUE_TAG: i16 = 1;
+const QCEW_LABELS: [&str; 4] = [
     "QCEW 2024 annual-average establishments",
     "QCEW 2024 annual-average employment (jobs)",
     "QCEW 2024 total annual wages (USD)",
@@ -174,9 +174,9 @@ const QCEW_LABELS_V1: [&str; 4] = [
 /// # Errors
 /// Refuses a non-finite value; committed values are canonical finite binary64
 /// and any other input is a malformed committed state, never a display value.
-pub fn format_county_statblock_value_v1(value: f64) -> Result<String, SemanticArchiveErrorV1> {
+pub fn format_county_statblock_value(value: f64) -> Result<String, SemanticArchiveError> {
     if !value.is_finite() {
-        return Err(SemanticArchiveErrorV1::InvalidText);
+        return Err(SemanticArchiveError::InvalidText);
     }
     let canonical = if value == 0.0 { 0.0 } else { value };
     Ok(format!("{canonical:.6}"))
@@ -184,13 +184,13 @@ pub fn format_county_statblock_value_v1(value: f64) -> Result<String, SemanticAr
 
 /// One grant-keyed county signal with its pre-formatted statblock value.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct CountySignalV1 {
+pub struct CountySignal {
     grant_key: String,
     label: String,
     value: String,
 }
 
-impl CountySignalV1 {
+impl CountySignal {
     /// Construct one bounded county signal.
     ///
     /// # Errors
@@ -200,7 +200,7 @@ impl CountySignalV1 {
         grant_key: String,
         label: String,
         value: String,
-    ) -> Result<Self, SemanticArchiveErrorV1> {
+    ) -> Result<Self, SemanticArchiveError> {
         validate_text(&grant_key)?;
         validate_text(&label)?;
         validate_text(&value)?;
@@ -219,8 +219,8 @@ impl CountySignalV1 {
         grant_key: String,
         label: String,
         value: f64,
-    ) -> Result<Self, SemanticArchiveErrorV1> {
-        Self::try_new(grant_key, label, format_county_statblock_value_v1(value)?)
+    ) -> Result<Self, SemanticArchiveError> {
+        Self::try_new(grant_key, label, format_county_statblock_value(value)?)
     }
 
     /// Borrow the knowledge-grant address key.
@@ -244,21 +244,18 @@ impl CountySignalV1 {
 
 /// One overlapping place link of a county dossier page.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct CountyPlaceLinkV1 {
+pub struct CountyPlaceLink {
     place_geoid: String,
     place_name: String,
 }
 
-impl CountyPlaceLinkV1 {
+impl CountyPlaceLink {
     /// Construct one place link with its governed census place label.
     ///
     /// # Errors
     /// Refuses a malformed place GEOID or unsafe place label.
-    pub fn try_new(
-        place_geoid: String,
-        place_name: String,
-    ) -> Result<Self, SemanticArchiveErrorV1> {
-        ArchivePageRefV1::try_new(ArchiveSubjectKindV1::Place, place_geoid.clone())?;
+    pub fn try_new(place_geoid: String, place_name: String) -> Result<Self, SemanticArchiveError> {
+        ArchivePageRef::try_new(ArchiveSubjectKind::Place, place_geoid.clone())?;
         validate_text(&place_name)?;
         Ok(Self {
             place_geoid,
@@ -282,15 +279,15 @@ impl CountyPlaceLinkV1 {
 /// One desired county dossier page resolved from the declared mapping, the
 /// committed per-tick territory fields, and the pinned products.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct CountyPagePlanV1 {
+pub struct CountyPagePlan {
     county_geoid: String,
     territory_local_name: String,
     title: String,
-    signals: Vec<CountySignalV1>,
-    place_links: Vec<CountyPlaceLinkV1>,
+    signals: Vec<CountySignal>,
+    place_links: Vec<CountyPlaceLink>,
 }
 
-impl CountyPagePlanV1 {
+impl CountyPagePlan {
     /// Construct one desired county page plan.
     ///
     /// # Errors
@@ -301,11 +298,11 @@ impl CountyPagePlanV1 {
         county_geoid: String,
         territory_local_name: String,
         title: String,
-        signals: Vec<CountySignalV1>,
-        place_links: Vec<CountyPlaceLinkV1>,
-    ) -> Result<Self, SemanticArchiveErrorV1> {
-        ArchiveSubjectV1::try_new(
-            ArchiveSubjectKindV1::County,
+        signals: Vec<CountySignal>,
+        place_links: Vec<CountyPlaceLink>,
+    ) -> Result<Self, SemanticArchiveError> {
+        ArchiveSubject::try_new(
+            ArchiveSubjectKind::County,
             county_geoid.clone(),
             title.clone(),
         )?;
@@ -316,7 +313,7 @@ impl CountyPagePlanV1 {
             .windows(2)
             .any(|pair| pair[0].grant_key == pair[1].grant_key)
         {
-            return Err(SemanticArchiveErrorV1::DuplicateKey);
+            return Err(SemanticArchiveError::DuplicateKey);
         }
         let mut place_links = place_links;
         place_links.sort_by(|left, right| left.place_geoid.cmp(&right.place_geoid));
@@ -324,7 +321,7 @@ impl CountyPagePlanV1 {
             .windows(2)
             .any(|pair| pair[0].place_geoid == pair[1].place_geoid)
         {
-            return Err(SemanticArchiveErrorV1::DuplicateKey);
+            return Err(SemanticArchiveError::DuplicateKey);
         }
         Ok(Self {
             county_geoid,
@@ -355,13 +352,13 @@ impl CountyPagePlanV1 {
 
     /// Borrow the sorted grant-keyed signals.
     #[must_use]
-    pub fn signals(&self) -> &[CountySignalV1] {
+    pub fn signals(&self) -> &[CountySignal] {
         &self.signals
     }
 
     /// Borrow the sorted overlapping place links.
     #[must_use]
-    pub fn place_links(&self) -> &[CountyPlaceLinkV1] {
+    pub fn place_links(&self) -> &[CountyPlaceLink] {
         &self.place_links
     }
 }
@@ -372,14 +369,14 @@ impl CountyPagePlanV1 {
 /// provenance locator (`campaign/{receipt tick}/{territory local name}`); the
 /// receipt tick segment is a receipt stamp and never enters the projection.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct CountySignalProjectionV1 {
+pub struct CountySignalProjection {
     label: String,
     value: String,
     source_id: String,
     provenance_name: String,
 }
 
-impl CountySignalProjectionV1 {
+impl CountySignalProjection {
     /// Construct one signal projection.
     ///
     /// # Errors
@@ -390,13 +387,13 @@ impl CountySignalProjectionV1 {
         value: String,
         source_id: String,
         provenance_name: String,
-    ) -> Result<Self, SemanticArchiveErrorV1> {
+    ) -> Result<Self, SemanticArchiveError> {
         validate_text(&label)?;
         validate_text(&value)?;
         validate_text(&source_id)?;
         validate_text(&provenance_name)?;
         if label.contains(":** ") || value.contains(" — ") || source_id.contains("; ") {
-            return Err(SemanticArchiveErrorV1::InvalidText);
+            return Err(SemanticArchiveError::InvalidText);
         }
         Ok(Self {
             label,
@@ -438,14 +435,14 @@ impl CountySignalProjectionV1 {
 /// stored side parses it back out of the rendered Markdown. Place names are
 /// present only while the campaign grants the place subject.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct CountyPageProjectionV1 {
+pub struct CountyPageProjection {
     title: String,
     question: String,
-    signals: Vec<CountySignalProjectionV1>,
+    signals: Vec<CountySignalProjection>,
     places: Vec<(String, Option<String>)>,
 }
 
-impl CountyPageProjectionV1 {
+impl CountyPageProjection {
     /// Construct one county page projection.
     ///
     /// # Errors
@@ -454,25 +451,25 @@ impl CountyPageProjectionV1 {
     pub fn try_new(
         title: String,
         question: String,
-        signals: Vec<CountySignalProjectionV1>,
+        signals: Vec<CountySignalProjection>,
         places: Vec<(String, Option<String>)>,
-    ) -> Result<Self, SemanticArchiveErrorV1> {
+    ) -> Result<Self, SemanticArchiveError> {
         validate_text(&title)?;
         validate_text(&question)?;
         let mut signal_labels = BTreeSet::new();
         for signal in &signals {
             if !signal_labels.insert(signal.label.clone()) {
-                return Err(SemanticArchiveErrorV1::DuplicateKey);
+                return Err(SemanticArchiveError::DuplicateKey);
             }
         }
         let mut unique = BTreeSet::new();
         for (geoid, name) in &places {
-            ArchivePageRefV1::try_new(ArchiveSubjectKindV1::Place, geoid.clone())?;
+            ArchivePageRef::try_new(ArchiveSubjectKind::Place, geoid.clone())?;
             if let Some(name) = name {
                 validate_text(name)?;
             }
             if !unique.insert(geoid.clone()) {
-                return Err(SemanticArchiveErrorV1::DuplicateKey);
+                return Err(SemanticArchiveError::DuplicateKey);
             }
         }
         Ok(Self {
@@ -497,7 +494,7 @@ impl CountyPageProjectionV1 {
 
     /// Borrow the grant-visible signals in rendered order.
     #[must_use]
-    pub fn signals(&self) -> &[CountySignalProjectionV1] {
+    pub fn signals(&self) -> &[CountySignalProjection] {
         &self.signals
     }
 
@@ -514,21 +511,21 @@ impl CountyPageProjectionV1 {
 /// projection depends on: whether a county field (one committed signal) is
 /// granted, and whether a place subject (one link name) is granted.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub struct CountyGrantIndexV1 {
-    grants: BTreeMap<ArchivePageRefV1, BTreeSet<String>>,
+pub struct CountyGrantIndex {
+    grants: BTreeMap<ArchivePageRef, BTreeSet<String>>,
 }
 
-impl CountyGrantIndexV1 {
-    /// Index exact SQL grant rows decoded from [`ARCHIVE_COUNTY_GRANTS_SQL_V1`].
+impl CountyGrantIndex {
+    /// Index exact SQL grant rows decoded from [`ARCHIVE_COUNTY_GRANTS_SQL`].
     ///
     /// # Errors
     /// Refuses a malformed page identity or grant key.
     pub fn try_from_rows(
-        rows: impl IntoIterator<Item = (ArchiveSubjectKindV1, String, String)>,
-    ) -> Result<Self, SemanticArchiveErrorV1> {
-        let mut grants: BTreeMap<ArchivePageRefV1, BTreeSet<String>> = BTreeMap::new();
+        rows: impl IntoIterator<Item = (ArchiveSubjectKind, String, String)>,
+    ) -> Result<Self, SemanticArchiveError> {
+        let mut grants: BTreeMap<ArchivePageRef, BTreeSet<String>> = BTreeMap::new();
         for (kind, id, grant_key) in rows {
-            let page_ref = ArchivePageRefV1::try_new(kind, id)?;
+            let page_ref = ArchivePageRef::try_new(kind, id)?;
             validate_text(&grant_key)?;
             grants.entry(page_ref).or_default().insert(grant_key);
         }
@@ -537,7 +534,7 @@ impl CountyGrantIndexV1 {
 
     /// Return whether the snapshot grants one field key on one page.
     #[must_use]
-    pub fn knows_field(&self, page_ref: &ArchivePageRefV1, grant_key: &str) -> bool {
+    pub fn knows_field(&self, page_ref: &ArchivePageRef, grant_key: &str) -> bool {
         self.grants
             .get(page_ref)
             .is_some_and(|keys| keys.contains(grant_key))
@@ -545,8 +542,8 @@ impl CountyGrantIndexV1 {
 
     /// Return whether the snapshot grants knowledge of one page subject.
     #[must_use]
-    pub fn knows_subject(&self, page_ref: &ArchivePageRefV1) -> bool {
-        self.knows_field(page_ref, COUNTY_SUBJECT_GRANT_KEY_V1)
+    pub fn knows_subject(&self, page_ref: &ArchivePageRef) -> bool {
+        self.knows_field(page_ref, COUNTY_SUBJECT_GRANT_KEY)
     }
 }
 
@@ -558,19 +555,19 @@ impl CountyGrantIndexV1 {
 ///
 /// # Errors
 /// Refuses any unsafe projected component.
-pub fn desired_county_projection_v1(
-    plan: &CountyPagePlanV1,
-    grants: &CountyGrantIndexV1,
-) -> Result<CountyPageProjectionV1, SemanticArchiveErrorV1> {
+pub fn desired_county_projection(
+    plan: &CountyPagePlan,
+    grants: &CountyGrantIndex,
+) -> Result<CountyPageProjection, SemanticArchiveError> {
     let county_ref =
-        ArchivePageRefV1::try_new(ArchiveSubjectKindV1::County, plan.county_geoid().to_owned())?;
+        ArchivePageRef::try_new(ArchiveSubjectKind::County, plan.county_geoid().to_owned())?;
     let signals = plan
         .signals()
         .iter()
         .filter(|signal| grants.knows_field(&county_ref, signal.grant_key()))
         .map(|signal| {
             let (source_id, provenance_name) =
-                if QCEW_ECONOMICS_FIELD_KEYS_V1.contains(&signal.grant_key()) {
+                if QCEW_ECONOMICS_FIELD_KEYS.contains(&signal.grant_key()) {
                     let citation = county_qcew_citation(plan.county_geoid());
                     (
                         citation.source_id().to_owned(),
@@ -578,26 +575,24 @@ pub fn desired_county_projection_v1(
                     )
                 } else {
                     (
-                        COMMITTED_TICK_SOURCE_ID_V1.to_owned(),
+                        COMMITTED_TICK_SOURCE_ID.to_owned(),
                         plan.territory_local_name().to_owned(),
                     )
                 };
-            CountySignalProjectionV1::try_new(
+            CountySignalProjection::try_new(
                 signal.label().to_owned(),
                 signal.value().to_owned(),
                 source_id,
                 provenance_name,
             )
         })
-        .collect::<Result<Vec<_>, SemanticArchiveErrorV1>>()?;
+        .collect::<Result<Vec<_>, SemanticArchiveError>>()?;
     let places = plan
         .place_links()
         .iter()
         .map(|link| {
-            let place_ref = ArchivePageRefV1::try_new(
-                ArchiveSubjectKindV1::Place,
-                link.place_geoid().to_owned(),
-            )?;
+            let place_ref =
+                ArchivePageRef::try_new(ArchiveSubjectKind::Place, link.place_geoid().to_owned())?;
             Ok((
                 link.place_geoid().to_owned(),
                 grants
@@ -605,10 +600,10 @@ pub fn desired_county_projection_v1(
                     .then(|| link.place_name().to_owned()),
             ))
         })
-        .collect::<Result<Vec<_>, SemanticArchiveErrorV1>>()?;
-    CountyPageProjectionV1::try_new(
+        .collect::<Result<Vec<_>, SemanticArchiveError>>()?;
+    CountyPageProjection::try_new(
         plan.title().to_owned(),
-        COUNTY_DECISION_QUESTION_V1.to_owned(),
+        COUNTY_DECISION_QUESTION.to_owned(),
         signals,
         places,
     )
@@ -617,7 +612,7 @@ pub fn desired_county_projection_v1(
 /// Hash the exact receipt-stamp-free county page projection.
 ///
 /// The projection covers the county GEOID, title, decision question, the
-/// pinned page template identity ([`ARCHIVE_PAGE_TEMPLATE_SHA256_V1`]), the
+/// pinned page template identity ([`ARCHIVE_PAGE_TEMPLATE_SHA256`]), the
 /// ordered grant-visible signals with their full citation identities
 /// (source id and provenance name; the locator's receipt tick is a receipt
 /// stamp and deliberately never enters the hash), and the sorted place links
@@ -625,16 +620,16 @@ pub fn desired_county_projection_v1(
 /// `tick_content_hash` deliberately never enter the hash, so a later receipt
 /// alone never re-publishes an unchanged page.
 #[must_use]
-pub fn county_page_semantic_sha256_v1(
+pub fn county_page_semantic_sha256(
     county_geoid: &str,
-    projection: &CountyPageProjectionV1,
+    projection: &CountyPageProjection,
 ) -> [u8; 32] {
     let mut hasher = Sha256::new();
-    hasher.update(COUNTY_SEMANTIC_DOMAIN_V1);
+    hasher.update(COUNTY_SEMANTIC_DOMAIN);
     hash_text(&mut hasher, county_geoid);
     hash_text(&mut hasher, projection.title());
     hash_text(&mut hasher, projection.question());
-    hasher.update(ARCHIVE_PAGE_TEMPLATE_SHA256_V1);
+    hasher.update(ARCHIVE_PAGE_TEMPLATE_SHA256);
     hash_len(&mut hasher, projection.signals().len());
     for signal in projection.signals() {
         hash_text(&mut hasher, signal.label());
@@ -676,18 +671,18 @@ fn parse_subject_scheme_link(entry: &str) -> Option<(Option<String>, &str)> {
 /// Parse the semantic projection out of one stored rendered county page.
 ///
 /// The parser is coupled to the pinned `archive_page_v1.md.j2` template
-/// ([`crate::ARCHIVE_PAGE_TEMPLATE_SHA256_V1`]) and returns `None` for any
+/// ([`crate::ARCHIVE_PAGE_TEMPLATE_SHA256`]) and returns `None` for any
 /// stored page whose frontmatter subject, title, question, signal-bullet, or
 /// related-link shape drifted; callers treat `None` as dirty. Each signal
 /// citation locator must name the same receipt tick as the frontmatter
 /// `verified_tick`: the locator's tick is a receipt stamp, and a disagreeing
 /// locator means the stored page drifted.
 #[must_use]
-pub fn parse_stored_county_page_v1(
+pub fn parse_stored_county_page(
     county_geoid: &str,
     title: &str,
     markdown: &str,
-) -> Option<CountyPageProjectionV1> {
+) -> Option<CountyPageProjection> {
     let mut lines = markdown.lines();
     if lines.next()? != "---" {
         return None;
@@ -751,22 +746,22 @@ pub fn parse_stored_county_page_v1(
         }
         return None;
     }
-    CountyPageProjectionV1::try_new(stored_title, question?, signals, places).ok()
+    CountyPageProjection::try_new(stored_title, question?, signals, places).ok()
 }
 
 /// Parse one pinned-template signal bullet with its committed provenance.
-fn parse_signal_bullet(line: &str, verified_tick: u64) -> Option<CountySignalProjectionV1> {
+fn parse_signal_bullet(line: &str, verified_tick: u64) -> Option<CountySignalProjection> {
     let rest = line.strip_prefix("- **")?;
     let (label, rest) = rest.split_once(":** ")?;
     let (value, citation) = rest.split_once(" — ")?;
     let (source_id, locator) = citation.split_once("; ")?;
-    let provenance_name = if source_id == QCEW_ECONOMICS_SOURCE_ID_V1 {
+    let provenance_name = if source_id == QCEW_ECONOMICS_SOURCE_ID {
         let county = locator.strip_prefix("qcew_county_economics_mi_2024.csv.gz#county_geoid=")?;
         let (geoid, digest) = county.split_once("&sha256=")?;
         if geoid.len() != 5
             || !geoid.starts_with("26")
             || !geoid.bytes().all(|byte| byte.is_ascii_digit())
-            || digest != QCEW_ECONOMICS_ARTIFACT_SHA256_V1
+            || digest != QCEW_ECONOMICS_ARTIFACT_SHA256
         {
             return None;
         }
@@ -774,7 +769,7 @@ fn parse_signal_bullet(line: &str, verified_tick: u64) -> Option<CountySignalPro
     } else {
         parse_committed_locator(locator, verified_tick)?
     };
-    CountySignalProjectionV1::try_new(
+    CountySignalProjection::try_new(
         label.to_owned(),
         value.to_owned(),
         source_id.to_owned(),
@@ -800,17 +795,15 @@ fn parse_committed_locator(locator: &str, verified_tick: u64) -> Option<String> 
 /// sweep. When its subject grant arrives later the county has no stored page,
 /// so it is dirty and publishes then — the grant gate never fabricates pages.
 #[must_use]
-pub fn filter_granted_county_plans_v1<'a>(
-    desired: &'a [CountyPagePlanV1],
-    grants: &CountyGrantIndexV1,
-) -> Vec<&'a CountyPagePlanV1> {
+pub fn filter_granted_county_plans<'a>(
+    desired: &'a [CountyPagePlan],
+    grants: &CountyGrantIndex,
+) -> Vec<&'a CountyPagePlan> {
     desired
         .iter()
         .filter(|plan| {
-            let county_ref = ArchivePageRefV1::try_new(
-                ArchiveSubjectKindV1::County,
-                plan.county_geoid().to_owned(),
-            );
+            let county_ref =
+                ArchivePageRef::try_new(ArchiveSubjectKind::County, plan.county_geoid().to_owned());
             county_ref.is_ok_and(|page_ref| grants.knows_subject(&page_ref))
         })
         .collect()
@@ -827,18 +820,18 @@ pub fn filter_granted_county_plans_v1<'a>(
 ///
 /// # Errors
 /// Returns any projection refusal.
-pub fn select_dirty_county_pages_v1<'a>(
-    desired: &'a [CountyPagePlanV1],
-    stored: &BTreeMap<String, CountyPageProjectionV1>,
-    grants: &CountyGrantIndexV1,
+pub fn select_dirty_county_pages<'a>(
+    desired: &'a [CountyPagePlan],
+    stored: &BTreeMap<String, CountyPageProjection>,
+    grants: &CountyGrantIndex,
     limit: usize,
-) -> Result<ArchiveDirtySelectionV1<&'a CountyPagePlanV1>, SemanticArchiveErrorV1> {
+) -> Result<ArchiveDirtySelection<&'a CountyPagePlan>, SemanticArchiveError> {
     let mut dirty = Vec::new();
     for plan in desired {
-        let projection = desired_county_projection_v1(plan, grants)?;
+        let projection = desired_county_projection(plan, grants)?;
         let is_dirty = stored.get(plan.county_geoid()).is_none_or(|page| {
-            county_page_semantic_sha256_v1(plan.county_geoid(), page)
-                != county_page_semantic_sha256_v1(plan.county_geoid(), &projection)
+            county_page_semantic_sha256(plan.county_geoid(), page)
+                != county_page_semantic_sha256(plan.county_geoid(), &projection)
         });
         if is_dirty {
             dirty.push(plan);
@@ -846,7 +839,7 @@ pub fn select_dirty_county_pages_v1<'a>(
     }
     let remaining = dirty.len().saturating_sub(limit);
     dirty.truncate(limit);
-    Ok(ArchiveDirtySelectionV1::new(dirty, remaining))
+    Ok(ArchiveDirtySelection::new(dirty, remaining))
 }
 
 /// Build the exact receipt-bound page input for one desired county page.
@@ -856,13 +849,13 @@ pub fn select_dirty_county_pages_v1<'a>(
 ///
 /// # Errors
 /// Refuses any unsafe page component.
-pub fn county_page_input_v1(
-    plan: &CountyPagePlanV1,
+pub fn county_page_input(
+    plan: &CountyPagePlan,
     resolve_tick: u64,
     tick_content_hash: [u8; 32],
-) -> Result<ArchivePageInputV1, SemanticArchiveErrorV1> {
-    let subject = ArchiveSubjectV1::try_new(
-        ArchiveSubjectKindV1::County,
+) -> Result<ArchivePageInput, SemanticArchiveError> {
+    let subject = ArchiveSubject::try_new(
+        ArchiveSubjectKind::County,
         plan.county_geoid.clone(),
         plan.title.clone(),
     )?;
@@ -870,15 +863,15 @@ pub fn county_page_input_v1(
         .signals
         .iter()
         .map(|signal| {
-            let citation = if QCEW_ECONOMICS_FIELD_KEYS_V1.contains(&signal.grant_key()) {
+            let citation = if QCEW_ECONOMICS_FIELD_KEYS.contains(&signal.grant_key()) {
                 county_qcew_citation(plan.county_geoid())
             } else {
-                ArchiveCitationV1::try_new(
-                    COMMITTED_TICK_SOURCE_ID_V1.to_owned(),
+                ArchiveCitation::try_new(
+                    COMMITTED_TICK_SOURCE_ID.to_owned(),
                     format!("campaign/{resolve_tick}/{}", plan.territory_local_name),
                 )?
             };
-            ArchiveSignalV1::try_new(
+            ArchiveSignal::try_new(
                 signal.grant_key.clone(),
                 signal.label.clone(),
                 signal.value.clone(),
@@ -890,17 +883,17 @@ pub fn county_page_input_v1(
         .place_links
         .iter()
         .map(|link| {
-            ArchiveLinkV1::try_new(
-                ArchivePageRefV1::try_new(ArchiveSubjectKindV1::Place, link.place_geoid.clone())?,
+            ArchiveLink::try_new(
+                ArchivePageRef::try_new(ArchiveSubjectKind::Place, link.place_geoid.clone())?,
                 link.place_name.clone(),
             )
         })
         .collect::<Result<Vec<_>, _>>()?;
-    ArchivePageInputV1::try_new(
+    ArchivePageInput::try_new(
         subject,
         resolve_tick,
         tick_content_hash,
-        COUNTY_DECISION_QUESTION_V1.to_owned(),
+        COUNTY_DECISION_QUESTION.to_owned(),
         signals,
         links,
     )
@@ -911,13 +904,13 @@ pub fn county_page_input_v1(
 /// Public baseline integers retain exact units and magnitude. Every field
 /// missing at the resolve tick stays `None` and emits no signal.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub struct CommittedTerritoryFieldsV1 {
+pub struct CommittedTerritoryFields {
     median_wage: Option<f64>,
     phi_hour: Option<f64>,
     qcew: [Option<i64>; 4],
 }
 
-impl CommittedTerritoryFieldsV1 {
+impl CommittedTerritoryFields {
     /// Construct the two committed field values, absence-maximal.
     ///
     /// # Errors
@@ -926,10 +919,10 @@ impl CommittedTerritoryFieldsV1 {
     pub fn try_new(
         median_wage: Option<f64>,
         phi_hour: Option<f64>,
-    ) -> Result<Self, SemanticArchiveErrorV1> {
+    ) -> Result<Self, SemanticArchiveError> {
         for value in [median_wage, phi_hour].into_iter().flatten() {
             if !value.is_finite() {
-                return Err(SemanticArchiveErrorV1::StoredPageMismatch);
+                return Err(SemanticArchiveError::StoredPageMismatch);
             }
         }
         Ok(Self {
@@ -942,9 +935,9 @@ impl CommittedTerritoryFieldsV1 {
     /// Construct exact public QCEW fields in `QCEW_ECONOMICS_FIELD_KEYS_V1` order.
     /// # Errors
     /// Refuses negative public-record counts or whole-USD wages.
-    pub fn try_from_qcew(values: [Option<i64>; 4]) -> Result<Self, SemanticArchiveErrorV1> {
+    pub fn try_from_qcew(values: [Option<i64>; 4]) -> Result<Self, SemanticArchiveError> {
         if values.iter().flatten().any(|value| *value < 0) {
-            return Err(SemanticArchiveErrorV1::StoredPageMismatch);
+            return Err(SemanticArchiveError::StoredPageMismatch);
         }
         Ok(Self {
             qcew: values,
@@ -958,34 +951,34 @@ impl CommittedTerritoryFieldsV1 {
         tag: i16,
         real_bits: Option<i64>,
         integer: Option<i64>,
-    ) -> Result<(), SemanticArchiveErrorV1> {
-        if let Some(index) = QCEW_ECONOMICS_FIELD_KEYS_V1
+    ) -> Result<(), SemanticArchiveError> {
+        if let Some(index) = QCEW_ECONOMICS_FIELD_KEYS
             .iter()
             .position(|key| *key == field)
         {
             let value = integer
                 .filter(|value| *value >= 0)
-                .ok_or(SemanticArchiveErrorV1::StoredPageMismatch)?;
-            if tag != INT_VALUE_TAG_V1 || real_bits.is_some() || self.qcew[index].is_some() {
-                return Err(SemanticArchiveErrorV1::StoredPageMismatch);
+                .ok_or(SemanticArchiveError::StoredPageMismatch)?;
+            if tag != INT_VALUE_TAG || real_bits.is_some() || self.qcew[index].is_some() {
+                return Err(SemanticArchiveError::StoredPageMismatch);
             }
             self.qcew[index] = Some(value);
         } else {
             let value = f64::from_bits(
                 real_bits
-                    .ok_or(SemanticArchiveErrorV1::StoredPageMismatch)?
+                    .ok_or(SemanticArchiveError::StoredPageMismatch)?
                     .cast_unsigned(),
             );
-            if tag != REAL_VALUE_TAG_V1 || integer.is_some() || !value.is_finite() {
-                return Err(SemanticArchiveErrorV1::StoredPageMismatch);
+            if tag != REAL_VALUE_TAG || integer.is_some() || !value.is_finite() {
+                return Err(SemanticArchiveError::StoredPageMismatch);
             }
             let target = match field {
-                MEDIAN_WAGE_FIELD_V1 => &mut self.median_wage,
-                PHI_HOUR_FIELD_V1 => &mut self.phi_hour,
-                _ => return Err(SemanticArchiveErrorV1::StoredPageMismatch),
+                MEDIAN_WAGE_FIELD => &mut self.median_wage,
+                PHI_HOUR_FIELD => &mut self.phi_hour,
+                _ => return Err(SemanticArchiveError::StoredPageMismatch),
             };
             if target.is_some() {
-                return Err(SemanticArchiveErrorV1::StoredPageMismatch);
+                return Err(SemanticArchiveError::StoredPageMismatch);
             }
             *target = Some(value);
         }
@@ -1009,23 +1002,23 @@ impl CommittedTerritoryFieldsV1 {
 ///
 /// A committed field that is missing emits no signal, never a fabricated
 /// value. Public baseline integers remain exact; established real fields use
-/// `%.6f`. This is the exact signal construction [`CountyDossierProducerV1`]
+/// `%.6f`. This is the exact signal construction [`CountyDossierProducer`]
 /// runs inside `desired_pages`, factored pure so the language-neutral parity
 /// vectors exercise it without a database.
 ///
 /// # Errors
 /// Refuses a non-finite committed value or unsafe text.
-pub fn county_committed_signals_v1(
-    fields: &CommittedTerritoryFieldsV1,
-) -> Result<Vec<CountySignalV1>, SemanticArchiveErrorV1> {
+pub fn county_committed_signals(
+    fields: &CommittedTerritoryFields,
+) -> Result<Vec<CountySignal>, SemanticArchiveError> {
     let mut signals = Vec::new();
-    for ((key, label), value) in QCEW_ECONOMICS_FIELD_KEYS_V1
+    for ((key, label), value) in QCEW_ECONOMICS_FIELD_KEYS
         .into_iter()
-        .zip(QCEW_LABELS_V1)
+        .zip(QCEW_LABELS)
         .zip(fields.qcew)
     {
         if let Some(value) = value {
-            signals.push(CountySignalV1::try_new(
+            signals.push(CountySignal::try_new(
                 key.to_owned(),
                 label.to_owned(),
                 value.to_string(),
@@ -1033,16 +1026,16 @@ pub fn county_committed_signals_v1(
         }
     }
     if let Some(value) = fields.median_wage {
-        signals.push(CountySignalV1::from_committed_real(
-            COUNTY_MEDIAN_WAGE_GRANT_KEY_V1.to_owned(),
-            COUNTY_MEDIAN_WAGE_LABEL_V1.to_owned(),
+        signals.push(CountySignal::from_committed_real(
+            COUNTY_MEDIAN_WAGE_GRANT_KEY.to_owned(),
+            COUNTY_MEDIAN_WAGE_LABEL.to_owned(),
             value,
         )?);
     }
     if let Some(value) = fields.phi_hour {
-        signals.push(CountySignalV1::from_committed_real(
-            COUNTY_PHI_HOUR_GRANT_KEY_V1.to_owned(),
-            COUNTY_PHI_HOUR_LABEL_V1.to_owned(),
+        signals.push(CountySignal::from_committed_real(
+            COUNTY_PHI_HOUR_GRANT_KEY.to_owned(),
+            COUNTY_PHI_HOUR_LABEL.to_owned(),
             value,
         )?);
     }
@@ -1050,22 +1043,22 @@ pub fn county_committed_signals_v1(
 }
 
 /// Production county dossier producer over the checked reference products.
-pub struct CountyDossierProducerV1 {
+pub struct CountyDossierProducer {
     config: Config,
     products: SpatialReferenceProducts,
 }
 
-impl CountyDossierProducerV1 {
+impl CountyDossierProducer {
     /// Load the checked reference products and bind the committed-state readers.
     ///
     /// # Errors
     /// Refuses loudly when the embedded reference products, their governing
     /// H3 cohort, or any contract-pinned artifact digest diverges.
-    pub fn try_new(config: &Config) -> Result<Self, SemanticArchiveErrorV1> {
-        let cohort = representative_h3_reference_cohort_v1()
-            .map_err(|_| SemanticArchiveErrorV1::ArtifactDigest)?;
-        let products = michigan_spatial_reference_products_v1(cohort)
-            .map_err(|_| SemanticArchiveErrorV1::ArtifactDigest)?;
+    pub fn try_new(config: &Config) -> Result<Self, SemanticArchiveError> {
+        let cohort = representative_h3_reference_cohort()
+            .map_err(|_| SemanticArchiveError::ArtifactDigest)?;
+        let products = michigan_spatial_reference_products(cohort)
+            .map_err(|_| SemanticArchiveError::ArtifactDigest)?;
         verify_pinned_artifact_digests(&products)?;
         Ok(Self {
             config: config.clone(),
@@ -1087,7 +1080,7 @@ impl CountyDossierProducerV1 {
         &self,
         campaign_id: CampaignId,
         resolve_tick: u64,
-    ) -> Result<Vec<CountyPagePlanV1>, SemanticArchiveErrorV1> {
+    ) -> Result<Vec<CountyPagePlan>, SemanticArchiveError> {
         let county_names = self
             .products
             .counties()
@@ -1117,10 +1110,10 @@ impl CountyDossierProducerV1 {
             .map(|(county_geoid, territory_local_name)| {
                 let title = (*county_names
                     .get(county_geoid.as_str())
-                    .ok_or(SemanticArchiveErrorV1::StoredPageMismatch)?)
+                    .ok_or(SemanticArchiveError::StoredPageMismatch)?)
                 .to_owned();
                 let signals = match committed.get(&territory_local_name) {
-                    Some(fields) => county_committed_signals_v1(fields)?,
+                    Some(fields) => county_committed_signals(fields)?,
                     None => Vec::new(),
                 };
                 let place_links = overlaps
@@ -1130,14 +1123,14 @@ impl CountyDossierProducerV1 {
                     .map(|place_geoid| {
                         let place_name = place_names
                             .get(place_geoid)
-                            .ok_or(SemanticArchiveErrorV1::StoredPageMismatch)?;
-                        CountyPlaceLinkV1::try_new(
+                            .ok_or(SemanticArchiveError::StoredPageMismatch)?;
+                        CountyPlaceLink::try_new(
                             (*place_geoid).to_owned(),
                             (*place_name).to_owned(),
                         )
                     })
                     .collect::<Result<Vec<_>, _>>()?;
-                CountyPagePlanV1::try_new(
+                CountyPagePlan::try_new(
                     county_geoid,
                     territory_local_name,
                     title,
@@ -1155,19 +1148,19 @@ impl CountyDossierProducerV1 {
     fn read_county_mapping(
         &self,
         campaign_id: CampaignId,
-    ) -> Result<Vec<(String, String)>, SemanticArchiveErrorV1> {
+    ) -> Result<Vec<(String, String)>, SemanticArchiveError> {
         let mut client = self
             .config
             .connect(NoTls)
             .map_err(|error| database("connect county mapping reader", &error))?;
         let rows = client
-            .query(ARCHIVE_COUNTY_MAP_READ_SQL_V1, &[campaign_id.as_uuid()])
+            .query(ARCHIVE_COUNTY_MAP_READ_SQL, &[campaign_id.as_uuid()])
             .map_err(|error| database("read county mapping", &error))?;
         rows.iter()
             .map(|row| {
                 let local: String = decode(row, 0)?;
                 let geoid: String = decode(row, 1)?;
-                ArchivePageRefV1::try_new(ArchiveSubjectKindV1::County, geoid.clone())?;
+                ArchivePageRef::try_new(ArchiveSubjectKind::County, geoid.clone())?;
                 validate_text(&local)?;
                 Ok((geoid, local))
             })
@@ -1186,26 +1179,26 @@ impl CountyDossierProducerV1 {
         &self,
         campaign_id: CampaignId,
         resolve_tick: u64,
-    ) -> Result<BTreeMap<String, CommittedTerritoryFieldsV1>, SemanticArchiveErrorV1> {
+    ) -> Result<BTreeMap<String, CommittedTerritoryFields>, SemanticArchiveError> {
         let resolve_tick =
-            i64::try_from(resolve_tick).map_err(|_| SemanticArchiveErrorV1::InvalidVerifiedTick)?;
+            i64::try_from(resolve_tick).map_err(|_| SemanticArchiveError::InvalidVerifiedTick)?;
         let mut client = self
             .config
             .connect(NoTls)
             .map_err(|error| database("connect committed territory field reader", &error))?;
         let rows = client
             .query(
-                ARCHIVE_COUNTY_FIELD_READ_SQL_V1,
+                ARCHIVE_COUNTY_FIELD_READ_SQL,
                 &[campaign_id.as_uuid(), &resolve_tick],
             )
             .map_err(|error| database("read committed territory fields", &error))?;
-        let mut committed: BTreeMap<String, CommittedTerritoryFieldsV1> = BTreeMap::new();
+        let mut committed: BTreeMap<String, CommittedTerritoryFields> = BTreeMap::new();
         for row in &rows {
             let key: Vec<u8> = decode(row, 0)?;
-            let Ok(StableElementKeyV1::Node { local_name, .. }) =
-                StableElementKeyV1::from_canonical_bytes(&key)
+            let Ok(StableElementKey::Node { local_name, .. }) =
+                StableElementKey::from_canonical_bytes(&key)
             else {
-                return Err(SemanticArchiveErrorV1::StoredPageMismatch);
+                return Err(SemanticArchiveError::StoredPageMismatch);
             };
             let field_name: String = decode(row, 1)?;
             let value_tag: i16 = decode(row, 2)?;
@@ -1218,14 +1211,14 @@ impl CountyDossierProducerV1 {
     }
 }
 
-impl ArchiveDossierProducerV1 for CountyDossierProducerV1 {
+impl ArchiveDossierProducer for CountyDossierProducer {
     fn produce(
         &self,
         campaign_id: Uuid,
-        receipt: &PendingArchiveReceiptV1,
-        knowledge: &crate::ArchiveKnowledgeV1,
+        receipt: &PendingArchiveReceipt,
+        knowledge: &crate::ArchiveKnowledge,
         page_budget: usize,
-    ) -> Result<ArchiveProducerOutcomeV1, SemanticArchiveErrorV1> {
+    ) -> Result<ArchiveProducerOutcome, SemanticArchiveError> {
         let campaign = CampaignId::from_uuid(campaign_id);
         let desired = self.desired_pages(campaign, receipt.resolve_tick())?;
         crate::archive_revision::publication::select_dirty_pages(
@@ -1235,53 +1228,35 @@ impl ArchiveDossierProducerV1 for CountyDossierProducerV1 {
             knowledge,
             &desired,
             page_budget,
-            county_page_input_v1,
+            county_page_input,
         )
-    }
-    fn cutover_subjects(
-        &self,
-        campaign_id: Uuid,
-        receipt: &PendingArchiveReceiptV1,
-        knowledge: &crate::ArchiveKnowledgeV1,
-    ) -> Result<Vec<ArchivePageRefV1>, SemanticArchiveErrorV1> {
-        let campaign = CampaignId::from_uuid(campaign_id);
-        let desired = self.desired_pages(campaign, receipt.resolve_tick())?;
-        let mut subjects = std::collections::BTreeSet::new();
-        for plan in &desired {
-            let page =
-                county_page_input_v1(plan, receipt.resolve_tick(), *receipt.tick_content_hash())?;
-            if knowledge.knows_subject(page.subject().page_ref()) {
-                subjects.insert(page.subject().page_ref().clone());
-            }
-        }
-        Ok(subjects.into_iter().collect())
     }
 }
 
 fn verify_pinned_artifact_digests(
     products: &SpatialReferenceProducts,
-) -> Result<(), SemanticArchiveErrorV1> {
+) -> Result<(), SemanticArchiveError> {
     for (code, pinned) in [
         (
-            COUNTY_IDENTITY_PRODUCT_CODE_V1,
-            PINNED_COUNTY_IDENTITY_ARTIFACT_SHA256_V1,
+            COUNTY_IDENTITY_PRODUCT_CODE,
+            PINNED_COUNTY_IDENTITY_ARTIFACT_SHA256,
         ),
         (
-            PLACE_IDENTITY_PRODUCT_CODE_V1,
-            PINNED_PLACE_IDENTITY_ARTIFACT_SHA256_V1,
+            PLACE_IDENTITY_PRODUCT_CODE,
+            PINNED_PLACE_IDENTITY_ARTIFACT_SHA256,
         ),
         (
-            OVERLAP_PRODUCT_CODE_V1,
-            PINNED_COUNTY_PLACE_OVERLAP_ARTIFACT_SHA256_V1,
+            OVERLAP_PRODUCT_CODE,
+            PINNED_COUNTY_PLACE_OVERLAP_ARTIFACT_SHA256,
         ),
     ] {
         let product = products
             .products()
             .iter()
             .find(|product| product.code() == code)
-            .ok_or(SemanticArchiveErrorV1::ArtifactDigest)?;
-        if product.artifact_sha256() != RefDigestV1::from_bytes(pinned) {
-            return Err(SemanticArchiveErrorV1::ArtifactDigest);
+            .ok_or(SemanticArchiveError::ArtifactDigest)?;
+        if product.artifact_sha256() != RefDigest::from_bytes(pinned) {
+            return Err(SemanticArchiveError::ArtifactDigest);
         }
     }
     Ok(())
@@ -1302,11 +1277,11 @@ mod tests {
 
     #[test]
     fn stored_qcew_ints_never_round_through_binary64() {
-        let mut fields = CommittedTerritoryFieldsV1::default();
+        let mut fields = CommittedTerritoryFields::default();
         fields
             .insert_stored("qcew-total-annual-wages", 1, None, Some(i64::MAX))
             .expect("exact integer");
-        let signals = county_committed_signals_v1(&fields).expect("signals");
+        let signals = county_committed_signals(&fields).expect("signals");
         assert_eq!(signals[0].value(), "9223372036854775807");
     }
 
@@ -1318,11 +1293,11 @@ mod tests {
             (1, None, Some(-1)),
             (1, Some(0), Some(1)),
         ] {
-            assert!(CommittedTerritoryFieldsV1::default()
+            assert!(CommittedTerritoryFields::default()
                 .insert_stored("qcew-employment", tag, real, integer)
                 .is_err());
         }
-        let mut fields = CommittedTerritoryFieldsV1::default();
+        let mut fields = CommittedTerritoryFields::default();
         fields
             .insert_stored("qcew-employment", 1, None, Some(0))
             .expect("zero is observed");
@@ -1330,7 +1305,7 @@ mod tests {
             .insert_stored("qcew-employment", 1, None, Some(0))
             .is_err());
         assert_eq!(
-            county_committed_signals_v1(&fields).expect("signals")[0].value(),
+            county_committed_signals(&fields).expect("signals")[0].value(),
             "0"
         );
     }

@@ -1,11 +1,10 @@
 use super::*;
-use babylon_tick::material_replay::MaterialLaborV1;
 
-const REGIONAL_PRESETS: [MichiganContentPresetV1; 4] = [
-    MichiganContentPresetV1::FourWeekStandardV7,
-    MichiganContentPresetV1::FourWeekDelayedV7,
-    MichiganContentPresetV1::SharedFreightAmpleV7,
-    MichiganContentPresetV1::SharedFreightConstrainedV7,
+const REGIONAL_PRESETS: [MichiganContentPreset; 4] = [
+    MichiganContentPreset::FourWeekStandard,
+    MichiganContentPreset::FourWeekDelayed,
+    MichiganContentPreset::SharedFreightAmple,
+    MichiganContentPreset::SharedFreightConstrained,
 ];
 
 #[test]
@@ -20,7 +19,7 @@ fn current_staffed_foundation_keeps_observed_cohorts_separate_from_five_designed
         assert_eq!(expected.horizon_ticks, 16);
         assert_eq!(
             expected.physical_projection,
-            MichiganPhysicalProjectionV1::NormalizedV2
+            MichiganPhysicalProjection::Normalized
         );
         let source = std::str::from_utf8(
             foundation
@@ -33,13 +32,11 @@ fn current_staffed_foundation_keeps_observed_cohorts_separate_from_five_designed
         assert_eq!(source.matches("(hyperedge sector-").count(), 19);
         assert_eq!(source.matches("(node workforce-").count(), 5);
         assert_eq!(source.matches("(deffield social-class/").count(), 3);
-        assert!(!crate::michigan_cohorts::michigan_cohorts_v2()
+        assert!(!crate::michigan_cohorts::michigan_cohorts()
             .unwrap()
             .scenario_source()
             .contains("SOCIAL_CLASS"));
-        let MaterialLaborV1::Staffed(composition) = foundation.labor() else {
-            panic!("staffed authority required")
-        };
+        let composition = foundation.labor();
         assert_eq!(composition.bindings().len(), 5);
         assert_eq!(foundation.initial_register().state().labor.len(), 5);
         assert!(foundation
@@ -50,7 +47,7 @@ fn current_staffed_foundation_keeps_observed_cohorts_separate_from_five_designed
             .all(|row| row.period == 1));
         assert_eq!(foundation.initial_register().state().capacities.len(), 80);
         assert_eq!(
-            MichiganContentPresetV1::new_campaign(preset.delivery()),
+            MichiganContentPreset::new_campaign(preset.delivery()),
             preset
         );
     }
@@ -66,10 +63,10 @@ fn unsupported_michigan_saves_are_refused_without_a_predecessor_factory() {
             "shared-freight-constrained",
         ] {
             let id = format!("michigan-material-{delivery}-v{version}");
-            assert_eq!(MichiganContentPresetV1::from_id(&id), None);
+            assert_eq!(MichiganContentPreset::from_id(&id), None);
             assert!(matches!(
-                admit_michigan_content_v1(&id, 16, &[0; 32], &[0; 32], 0, &[]),
-                Err(MichiganContentErrorV1::UnknownPreset)
+                admit_michigan_content(&id, 16, &[0; 32], &[0; 32], 0, &[]),
+                Err(MichiganContentError::UnknownPreset)
             ));
         }
     }
@@ -79,7 +76,7 @@ fn unsupported_michigan_saves_are_refused_without_a_predecessor_factory() {
 fn admission_refuses_mixed_headers_graphs_and_unadmitted_versions() {
     for preset in REGIONAL_PRESETS {
         let expected = preset.admitted(&crate::test_support::catalog()).unwrap();
-        let reopened = admit_michigan_content_v1(
+        let reopened = admit_michigan_content(
             preset.id(),
             16,
             &expected.content_digest,
@@ -97,19 +94,19 @@ fn admission_refuses_mixed_headers_graphs_and_unadmitted_versions() {
         for horizon in [-1, 0, 15, 17] {
             assert_eq!(
                 expected.validate_header(horizon, &expected.content_digest, &expected.digest, 0),
-                Err(MichiganContentErrorV1::IdentityMismatch)
+                Err(MichiganContentError::IdentityMismatch)
             );
         }
         assert_eq!(
             expected.validate_header(16, &expected.content_digest, &expected.digest, 17),
-            Err(MichiganContentErrorV1::IdentityMismatch)
+            Err(MichiganContentError::IdentityMismatch)
         );
         for other in REGIONAL_PRESETS {
             if other == preset {
                 continue;
             }
             let mixed = other.admitted(&crate::test_support::catalog()).unwrap();
-            assert!(admit_michigan_content_v1(
+            assert!(admit_michigan_content(
                 preset.id(),
                 16,
                 &mixed.content_digest,
@@ -129,7 +126,7 @@ fn admission_refuses_mixed_headers_graphs_and_unadmitted_versions() {
                     .is_err());
             }
         }
-        assert!(admit_michigan_content_v1(
+        assert!(admit_michigan_content(
             "michigan-material-standard-v8",
             16,
             &expected.content_digest,
@@ -138,7 +135,7 @@ fn admission_refuses_mixed_headers_graphs_and_unadmitted_versions() {
             &expected.canonical_bytes
         )
         .is_err());
-        assert!(admit_michigan_content_v1(
+        assert!(admit_michigan_content(
             preset.id(),
             16,
             &expected.content_digest[..31],
@@ -147,7 +144,7 @@ fn admission_refuses_mixed_headers_graphs_and_unadmitted_versions() {
             &expected.canonical_bytes
         )
         .is_err());
-        assert!(admit_michigan_content_v1(
+        assert!(admit_michigan_content(
             preset.id(),
             16,
             &expected.content_digest,
@@ -162,13 +159,13 @@ fn admission_refuses_mixed_headers_graphs_and_unadmitted_versions() {
 #[test]
 fn edited_parameters_change_new_foundations_but_stored_campaign_keeps_its_own_values() {
     let catalog = crate::test_support::catalog();
-    let preset = MichiganContentPresetV1::FourWeekStandardV7;
+    let preset = MichiganContentPreset::FourWeekStandard;
     let original = preset.admitted(&catalog).unwrap();
     let source = include_str!(concat!(
         env!("CARGO_MANIFEST_DIR"),
         "/../../../content/scenarios/michigan/defines.toml"
     ));
-    let edited = MichiganMaterialCatalogV1::from_defines_toml(
+    let edited = MichiganMaterialCatalog::from_defines_toml(
         &source
             .replace(
                 "WORK_HOURS_PER_PERSON_WEEK = 40",
@@ -206,7 +203,7 @@ fn edited_parameters_change_new_foundations_but_stored_campaign_keeps_its_own_va
             .available,
         3600
     );
-    let reopened = admit_michigan_content_v1(
+    let reopened = admit_michigan_content(
         preset.id(),
         16,
         &original.content_digest,
@@ -218,7 +215,7 @@ fn edited_parameters_change_new_foundations_but_stored_campaign_keeps_its_own_va
     assert_eq!(reopened.catalog.defines_bytes(), catalog.defines_bytes());
     assert_eq!(reopened.catalog.staffing().hours_per_worker_period, 160);
     assert_eq!(reopened.register, original.register);
-    assert!(admit_michigan_content_v1(
+    assert!(admit_michigan_content(
         preset.id(),
         16,
         &next.content_digest,
@@ -230,7 +227,7 @@ fn edited_parameters_change_new_foundations_but_stored_campaign_keeps_its_own_va
     let mut corrupted = original.canonical_bytes.clone();
     let end = corrupted.len() - 1;
     corrupted[end] ^= 1;
-    assert!(admit_michigan_content_v1(
+    assert!(admit_michigan_content(
         preset.id(),
         16,
         &original.content_digest,
@@ -240,7 +237,7 @@ fn edited_parameters_change_new_foundations_but_stored_campaign_keeps_its_own_va
     )
     .is_err());
     for length in [0, 32, original.canonical_bytes.len() - 1] {
-        assert!(admit_michigan_content_v1(
+        assert!(admit_michigan_content(
             preset.id(),
             16,
             &original.content_digest,
@@ -259,7 +256,7 @@ fn stored_shared_freight_capacities_reconstruct_without_current_default_substitu
         "/../../../content/scenarios/michigan/defines.toml"
     ));
     let defaults = crate::test_support::catalog();
-    let authored = MichiganMaterialCatalogV1::from_defines_toml(
+    let authored = MichiganMaterialCatalog::from_defines_toml(
         &source
             .replace("AMPLE_UNITS_PER_WEEK = 200", "AMPLE_UNITS_PER_WEEK = 201")
             .replace(
@@ -269,13 +266,13 @@ fn stored_shared_freight_capacities_reconstruct_without_current_default_substitu
     )
     .unwrap();
     for (preset, capacity) in [
-        (MichiganContentPresetV1::SharedFreightAmpleV7, 804),
-        (MichiganContentPresetV1::SharedFreightConstrainedV7, 164),
+        (MichiganContentPreset::SharedFreightAmple, 804),
+        (MichiganContentPreset::SharedFreightConstrained, 164),
     ] {
         let original = preset.admitted(&authored).unwrap();
         let default_campaign = preset.admitted(&defaults).unwrap();
         assert_ne!(original.digest, default_campaign.digest);
-        let reopened = admit_michigan_content_v1(
+        let reopened = admit_michigan_content(
             preset.id(),
             16,
             &original.content_digest,
@@ -300,7 +297,7 @@ fn stored_shared_freight_capacities_reconstruct_without_current_default_substitu
             .iter()
             .find(|route| route.key == "sheet-transfer")
             .unwrap();
-        let crate::michigan_material::MichiganMaterialPathV2::Routed { capacity_keys, .. } =
+        let crate::michigan_material::MichiganMaterialPath::Routed { capacity_keys, .. } =
             &sheet.path
         else {
             panic!("regional transfer requires freight");
@@ -324,7 +321,7 @@ fn stored_shared_freight_capacities_reconstruct_without_current_default_substitu
         assert!(capacities
             .iter()
             .all(|row| row.available_grams == capacity * 1000));
-        assert!(admit_michigan_content_v1(
+        assert!(admit_michigan_content(
             preset.id(),
             16,
             &default_campaign.content_digest,
@@ -339,7 +336,7 @@ fn stored_shared_freight_capacities_reconstruct_without_current_default_substitu
 #[test]
 fn statewide_presets_refuse_an_unqualified_regional_catalog() {
     let catalog = crate::test_support::catalog();
-    for preset in MICHIGAN_CONTENT_PRESETS_V1
+    for preset in MICHIGAN_CONTENT_PRESETS
         .into_iter()
         .filter(|preset| !REGIONAL_PRESETS.contains(preset))
     {

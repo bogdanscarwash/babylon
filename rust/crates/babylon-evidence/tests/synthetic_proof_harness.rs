@@ -2,38 +2,39 @@ use std::collections::{BTreeSet, HashMap};
 use std::fmt::Write as _;
 
 use babylon_bsl::{
-    canonical_bytes, read, validate_sfs_rule_profile, CardinalityCeilings, ClosedVocabulary,
-    EnumKind, GovernedComparisonSite, IntrinsicCosts, SExpr, SfsAuditPolicy, SfsComparisonContext,
-    SfsRuleAuditResult,
+    canonical_ast::canonical_bytes, fuel::CardinalityCeilings, fuel::IntrinsicCosts, reader::read,
+    reader::SExpr, sfs_profile::validate_sfs_rule_profile, sfs_profile::GovernedComparisonSite,
+    sfs_profile::SfsAuditPolicy, sfs_profile::SfsComparisonContext,
+    sfs_profile::SfsRuleAuditResult, vocabulary::ClosedVocabulary, vocabulary::EnumKind,
 };
 use babylon_evidence::{
     bind_synthetic_driver, canonical_envelope, component_profile_from_bsl, decode_envelope,
     parse_synthetic_driver_contract, parse_synthetic_governed_manifest, record_digest,
     validate_synthetic_cone, validate_synthetic_mutation_manifest,
-    validate_synthetic_profile_identity, CanonicalProfileSet, CausalConeV1, ComponentKindV1,
-    DifferingLedgerKindV1, Digest32, InterventionDeltaRowV1, InterventionDeltaV1,
-    InterventionOperationV1, PersistenceComparisonV1, PracticeAttemptLedgerV1,
-    PracticeAttemptRowV1, PracticeCandidateRowV1, PracticeCandidateScheduleV1,
-    PracticeDispositionV1, RunIdentityField, RunIdentityV1, SfsComponentProofProfileV1,
-    SfsPreregistrationV1, SfsProofProfileV1, SfsSampleV1, SfsTraceV1, SfsValidationError,
-    SyntheticDriverError, T3Record,
+    validate_synthetic_profile_identity, CanonicalProfileSet, CausalCone, ComponentKind,
+    DifferingLedgerKind, Digest32, InterventionDelta, InterventionDeltaRow, InterventionOperation,
+    PersistenceComparison, PracticeAttemptLedger, PracticeAttemptRow, PracticeCandidateRow,
+    PracticeCandidateSchedule, PracticeDisposition, RunIdentity, RunIdentityField,
+    SfsComponentProofProfile, SfsPreregistration, SfsProofProfile, SfsSample, SfsTrace,
+    SfsValidationError, SyntheticDriverError, T3Record,
 };
-use babylon_kernel::{sha256_of, SessionId};
+use babylon_kernel::{clock::SessionId, content_digest::sha256_of};
 use babylon_practice_contract::{
-    intent_digest, parameter_bytes_digest, target_selection_policy_digest, PracticeIdV1,
-    PracticeIntentV1, PracticeParameterV1, PracticeTargetDomainV1,
+    fixed_practice_target_digest, practice_intent_digest, practice_parameter_bytes_digest,
+    ActorOrganizationId, InputAuthorityId, PracticeId, PracticeIntent, PracticeParameter,
+    PracticeTargetIdentity, PracticeTargetTag, ProposalNonce, TaggedPracticeTarget,
 };
 
-const GOVERNED: &[u8] = include_bytes!("fixtures/sfs_synthetic_governed_manifest_v1.txt");
-const PROFILE: &str = include_str!("fixtures/sfs_synthetic_profile_v1.txt");
-const DRIVER_CONTRACT: &[u8] = include_bytes!("fixtures/sfs_synthetic_driver_contract_v1.txt");
-const MUTATIONS: &[u8] = include_bytes!("fixtures/sfs_mutation_manifest_v1.txt");
+const GOVERNED: &[u8] = include_bytes!("fixtures/sfs_synthetic_governed_manifest.txt");
+const PROFILE: &str = include_str!("fixtures/sfs_synthetic_profile.txt");
+const DRIVER_CONTRACT: &[u8] = include_bytes!("fixtures/sfs_synthetic_driver_contract.txt");
+const MUTATIONS: &[u8] = include_bytes!("fixtures/sfs_mutation_manifest.txt");
 const FORBIDDEN: &[u8] =
     include_bytes!("../../babylon-bsl/tests/fixtures/sfs_profile/sfs_forbidden_manifest_v1.txt");
 const AUDIT_SOURCES: &[u8] =
     include_bytes!("../../babylon-bsl/tests/fixtures/sfs_profile/sfs_audit_source_manifest_v1.txt");
-const WIRE_VECTORS: &str = include_str!("fixtures/sfs_wire_vectors_v1.txt");
-const IDENTITY_MUTATIONS: &str = include_str!("fixtures/sfs_identity_mutations_v1.txt");
+const WIRE_VECTORS: &str = include_str!("fixtures/sfs_wire_vectors.txt");
+const IDENTITY_MUTATIONS: &str = include_str!("fixtures/sfs_identity_mutations.txt");
 const SYNTHETIC_EMPTY_EXOGENOUS_DIGEST: Digest32 = Digest32::from_bytes([0xE0; 32]);
 const MEMBERSHIP_DESCRIPTOR: &[u8] =
     b"membership-reducer maps one synthetic field value to one reducer output";
@@ -141,7 +142,7 @@ fn audit() -> SfsRuleAuditResult {
     .unwrap()
 }
 
-fn proof_profile() -> SfsProofProfileV1 {
+fn proof_profile() -> SfsProofProfile {
     let governed = parse_synthetic_governed_manifest(GOVERNED, &rule(), &audit()).unwrap();
     proof_with(governed.manifest_digest(), &cone(), source_profiles())
 }
@@ -152,10 +153,10 @@ fn domain_digest(domain: &[u8], payload: &[u8]) -> Digest32 {
 
 fn proof_with(
     governed_manifest_digest: Digest32,
-    selected_cone: &CausalConeV1,
-    components: Vec<SfsComponentProofProfileV1>,
-) -> SfsProofProfileV1 {
-    SfsProofProfileV1::new(
+    selected_cone: &CausalCone,
+    components: Vec<SfsComponentProofProfile>,
+) -> SfsProofProfile {
+    SfsProofProfile::new(
         governed_manifest_digest,
         domain_digest(b"babylon.sfs-forbidden-corpus-manifest.v1", FORBIDDEN),
         AUDIT_SEMANTICS_ID,
@@ -179,12 +180,12 @@ fn profile_set(values: &[&str]) -> CanonicalProfileSet {
 
 fn host_profile(
     component_id: &str,
-    kind: ComponentKindV1,
+    kind: ComponentKind,
     descriptor: &[u8],
     field_reads: &[&str],
     effects: &[&str],
-) -> SfsComponentProofProfileV1 {
-    SfsComponentProofProfileV1::new(
+) -> SfsComponentProofProfile {
+    SfsComponentProofProfile::new(
         component_id,
         kind,
         domain_digest(b"babylon.sfs-synthetic-component-source.v1", descriptor),
@@ -200,34 +201,34 @@ fn host_profile(
     .unwrap()
 }
 
-fn membership_profile(field_read: &str) -> SfsComponentProofProfileV1 {
+fn membership_profile(field_read: &str) -> SfsComponentProofProfile {
     host_profile(
         "membership-reducer",
-        ComponentKindV1::Reducer,
+        ComponentKind::Reducer,
         MEMBERSHIP_DESCRIPTOR,
         &[field_read],
         &["reducer-output:synthetic/membership-reducer-output"],
     )
 }
 
-fn producer_profile() -> SfsComponentProofProfileV1 {
+fn producer_profile() -> SfsComponentProofProfile {
     producer_profile_with(
         "reducer-output:synthetic/membership-reducer-output",
         "receipt:synthetic/sfs-sample",
     )
 }
 
-fn producer_profile_with(field_read: &str, effect: &str) -> SfsComponentProofProfileV1 {
+fn producer_profile_with(field_read: &str, effect: &str) -> SfsComponentProofProfile {
     host_profile(
         "post-commit-producer",
-        ComponentKindV1::PostCommitProducer,
+        ComponentKind::PostCommitProducer,
         PRODUCER_DESCRIPTOR,
         &[field_read],
         &[effect],
     )
 }
 
-fn source_profiles() -> Vec<SfsComponentProofProfileV1> {
+fn source_profiles() -> Vec<SfsComponentProofProfile> {
     vec![
         membership_profile("synthetic-source/quanta"),
         producer_profile(),
@@ -239,12 +240,12 @@ fn profile_set_from_audit(values: &BTreeSet<String>) -> CanonicalProfileSet {
     CanonicalProfileSet::new("synthetic-test", values.iter().cloned().collect()).unwrap()
 }
 
-fn changed_scoped_profile(operator: &str) -> SfsComponentProofProfileV1 {
+fn changed_scoped_profile(operator: &str) -> SfsComponentProofProfile {
     let sealed = audit();
     let footprint = sealed.footprint();
-    SfsComponentProofProfileV1::new(
+    SfsComponentProofProfile::new(
         "scoped-bsl-rule",
-        ComponentKindV1::BslRule,
+        ComponentKind::BslRule,
         Digest32::from_bytes(*footprint.source_digest()),
         profile_set_from_audit(footprint.field_reads()),
         profile_set_from_audit(footprint.edge_reads()),
@@ -258,8 +259,8 @@ fn changed_scoped_profile(operator: &str) -> SfsComponentProofProfileV1 {
     .unwrap()
 }
 
-fn cone() -> CausalConeV1 {
-    CausalConeV1::new(
+fn cone() -> CausalCone {
+    CausalCone::new(
         vec!["scoped-bsl-rule".to_owned()],
         vec!["post-commit-producer".to_owned()],
         vec![
@@ -311,10 +312,10 @@ fn proof_header_pins_forbidden_audit_source_and_semantics_independently() {
     );
     assert_eq!(
         audit_source.to_hex(),
-        "91cfca31b605e3297db7e440db4007b0d15f228ce24461afdde6cb3859ce8487"
+        "a08c5c355d2f6b326860839e4c54a171331137fee3c032804e8b1913683413a9"
     );
     let envelope = canonical_envelope(&proof_profile()).unwrap();
-    let payload = SfsProofProfileV1::DOMAIN.len() + 7;
+    let payload = SfsProofProfile::DOMAIN.len() + 7;
     assert_eq!(&envelope[payload + 32..payload + 64], forbidden.as_bytes());
     assert_eq!(
         u16::from_be_bytes([envelope[payload + 64], envelope[payload + 65]]),
@@ -339,7 +340,7 @@ fn exact_three_component_cone_is_required() {
         validate_synthetic_cone(&cone(), &profile, &governed),
         Ok(())
     );
-    let missing_middle = CausalConeV1::new(
+    let missing_middle = CausalCone::new(
         vec!["scoped-bsl-rule".to_owned()],
         vec!["post-commit-producer".to_owned()],
         vec![
@@ -358,7 +359,7 @@ fn exact_three_component_cone_is_required() {
         Err(SfsValidationError::GovernedComponentSetMismatch)
     );
 
-    let extra = CausalConeV1::new(
+    let extra = CausalCone::new(
         vec!["scoped-bsl-rule".to_owned()],
         vec!["post-commit-producer".to_owned()],
         [
@@ -383,7 +384,7 @@ fn exact_three_component_cone_is_required() {
 fn reachability_profile_and_path_boundaries_are_distinct() {
     let governed = parse_synthetic_governed_manifest(GOVERNED, &rule(), &audit()).unwrap();
     let original = proof_profile();
-    let unreachable = CausalConeV1::new(
+    let unreachable = CausalCone::new(
         vec!["scoped-bsl-rule".to_owned()],
         vec!["membership-reducer".to_owned()],
         cone().components().to_vec(),
@@ -409,7 +410,7 @@ fn reachability_profile_and_path_boundaries_are_distinct() {
         Err(SfsValidationError::ConeProfileMismatch)
     );
 
-    let reversed = CausalConeV1::new(
+    let reversed = CausalCone::new(
         vec!["post-commit-producer".to_owned()],
         vec!["scoped-bsl-rule".to_owned()],
         cone().components().to_vec(),
@@ -450,7 +451,7 @@ fn recomputed_host_profile_identity_cannot_hide_changed_profile_bytes() {
 
 fn assert_changed_host_manifest_profile_refuses(
     changed_manifest_bytes: &[u8],
-    changed_components: Vec<SfsComponentProofProfileV1>,
+    changed_components: Vec<SfsComponentProofProfile>,
 ) {
     let governed =
         parse_synthetic_governed_manifest(changed_manifest_bytes, &rule(), &audit()).unwrap();
@@ -657,108 +658,118 @@ fn duplicate_component_and_typed_edge_identities_refuse_specifically() {
     );
 }
 
-fn intent(tick: u64) -> PracticeIntentV1 {
-    PracticeIntentV1 {
-        schema_version: 1,
+fn target_identity(label: u64) -> PracticeTargetIdentity {
+    let mut bytes = [0; 32];
+    bytes[24..].copy_from_slice(&label.to_be_bytes());
+    PracticeTargetIdentity::from_bytes(bytes)
+}
+
+fn intent(tick: u64) -> PracticeIntent {
+    PracticeIntent {
+        schema_version: 2,
         submit_after_tick: tick - 1,
         resolve_tick: tick,
-        actor_org_id: 7,
-        practice_id: PracticeIdV1::Organize,
-        target_domain: PracticeTargetDomainV1::SocialClass,
-        target_node_id: 99,
+        actor_org_id: ActorOrganizationId::from_bytes(7_u64.to_be_bytes()),
+        input_authority_id: InputAuthorityId::from_bytes([1; 16]),
+        proposal_nonce: ProposalNonce::from_bytes([2; 16]),
+        practice_id: PracticeId::Organize,
+        target: TaggedPracticeTarget {
+            tag: PracticeTargetTag::SocialClass,
+            identity: target_identity(99),
+        },
         quoted_content_digest: [7; 32],
-        quoted_action_budget_cost: 3,
+        quoted_resource_contract_digest: *digest(3).as_bytes(),
         parameters: vec![],
         evidence_digests: vec![],
     }
 }
 
 fn candidate_bundle() -> (
-    Vec<PracticeIntentV1>,
-    PracticeCandidateScheduleV1,
-    PracticeAttemptLedgerV1,
+    Vec<PracticeIntent>,
+    PracticeCandidateSchedule,
+    PracticeAttemptLedger,
 ) {
     let intents = vec![intent(100), intent(102), intent(104)];
     let rows = intents
         .iter()
         .enumerate()
         .map(|(index, value)| {
-            PracticeCandidateRowV1::new(
+            PracticeCandidateRow::new(
                 value.resolve_tick,
                 digest(20 + u8::try_from(index).unwrap()),
-                Digest32::from_bytes(intent_digest(value).unwrap()),
+                Digest32::from_bytes(practice_intent_digest(value).unwrap()),
             )
         })
         .collect::<Vec<_>>();
-    let schedule = PracticeCandidateScheduleV1::new(rows.clone()).unwrap();
+    let schedule = PracticeCandidateSchedule::new(rows.clone()).unwrap();
     let attempts = rows
         .into_iter()
         .enumerate()
         .map(|(index, row)| {
-            PracticeAttemptRowV1::new(
+            PracticeAttemptRow::new(
                 row,
-                PracticeDispositionV1::Rejected,
+                PracticeDisposition::Rejected,
                 digest(40 + u8::try_from(index).unwrap()),
             )
             .unwrap()
         })
         .collect();
-    let ledger = PracticeAttemptLedgerV1::new(digest(50), attempts).unwrap();
+    let ledger = PracticeAttemptLedger::new(digest(50), attempts).unwrap();
     (intents, schedule, ledger)
 }
 
 fn bundle_from_intents(
-    intents: Vec<PracticeIntentV1>,
+    intents: Vec<PracticeIntent>,
 ) -> (
-    Vec<PracticeIntentV1>,
-    PracticeCandidateScheduleV1,
-    PracticeAttemptLedgerV1,
+    Vec<PracticeIntent>,
+    PracticeCandidateSchedule,
+    PracticeAttemptLedger,
 ) {
     let rows = intents
         .iter()
         .enumerate()
         .map(|(index, value)| {
-            PracticeCandidateRowV1::new(
+            PracticeCandidateRow::new(
                 value.resolve_tick,
                 digest(150 + u8::try_from(index).unwrap()),
-                Digest32::from_bytes(intent_digest(value).unwrap()),
+                Digest32::from_bytes(practice_intent_digest(value).unwrap()),
             )
         })
         .collect::<Vec<_>>();
-    let schedule = PracticeCandidateScheduleV1::new(rows.clone()).unwrap();
+    let schedule = PracticeCandidateSchedule::new(rows.clone()).unwrap();
     let ledger = ledger_from_rows(rows);
     (intents, schedule, ledger)
 }
 
-fn ledger_from_rows(rows: Vec<PracticeCandidateRowV1>) -> PracticeAttemptLedgerV1 {
+fn ledger_from_rows(rows: Vec<PracticeCandidateRow>) -> PracticeAttemptLedger {
     let attempts = rows
         .into_iter()
         .enumerate()
         .map(|(index, row)| {
-            PracticeAttemptRowV1::new(
+            PracticeAttemptRow::new(
                 row,
-                PracticeDispositionV1::Rejected,
+                PracticeDisposition::Rejected,
                 digest(160 + u8::try_from(index).unwrap()),
             )
             .unwrap()
         })
         .collect();
-    PracticeAttemptLedgerV1::new(digest(170), attempts).unwrap()
+    PracticeAttemptLedger::new(digest(170), attempts).unwrap()
 }
 
 #[allow(clippy::too_many_arguments)]
 fn preregistration_custom(
-    schedule: &PracticeCandidateScheduleV1,
+    schedule: &PracticeCandidateSchedule,
     driver_digest: Digest32,
     first: u64,
     stride: u16,
     count: u16,
-    practice: PracticeIdV1,
+    practice: PracticeId,
     target: u64,
-    cost: u32,
+    resource_tag: u8,
     parameter_digest: Digest32,
-) -> SfsPreregistrationV1 {
-    SfsPreregistrationV1::new(
+) -> SfsPreregistration {
+    SfsPreregistration::new(
         90,
         digest(2),
         Digest32::from_bytes(*record_digest(schedule).unwrap().as_bytes()),
@@ -770,21 +781,21 @@ fn preregistration_custom(
         stride,
         count,
         practice,
-        Digest32::from_bytes(target_selection_policy_digest(
-            PracticeTargetDomainV1::SocialClass,
-            target,
+        Digest32::from_bytes(fixed_practice_target_digest(
+            PracticeTargetTag::SocialClass,
+            target_identity(target),
         )),
-        cost,
+        digest(resource_tag),
         parameter_digest,
     )
     .unwrap()
 }
 
 fn run_for_candidate(
-    preregistration: &SfsPreregistrationV1,
-    attempts: &PracticeAttemptLedgerV1,
+    preregistration: &SfsPreregistration,
+    attempts: &PracticeAttemptLedger,
     exogenous: Digest32,
-) -> RunIdentityV1 {
+) -> RunIdentity {
     run_identity(
         digest(1),
         digest(2),
@@ -796,11 +807,11 @@ fn run_for_candidate(
 }
 
 fn preregistration(
-    schedule: &PracticeCandidateScheduleV1,
-    proof: &SfsProofProfileV1,
+    schedule: &PracticeCandidateSchedule,
+    proof: &SfsProofProfile,
     driver_digest: Digest32,
-) -> SfsPreregistrationV1 {
-    SfsPreregistrationV1::new(
+) -> SfsPreregistration {
+    SfsPreregistration::new(
         90,
         digest(2),
         Digest32::from_bytes(*record_digest(schedule).unwrap().as_bytes()),
@@ -813,24 +824,24 @@ fn preregistration(
         100,
         2,
         3,
-        PracticeIdV1::Organize,
-        Digest32::from_bytes(target_selection_policy_digest(
-            PracticeTargetDomainV1::SocialClass,
-            99,
+        PracticeId::Organize,
+        Digest32::from_bytes(fixed_practice_target_digest(
+            PracticeTargetTag::SocialClass,
+            target_identity(99),
         )),
-        3,
-        Digest32::from_bytes(parameter_bytes_digest(&intent(100)).unwrap()),
+        digest(3),
+        Digest32::from_bytes(practice_parameter_bytes_digest(&intent(100)).unwrap()),
     )
     .unwrap()
 }
 
 fn identity_preregistration(
-    schedule: &PracticeCandidateScheduleV1,
+    schedule: &PracticeCandidateSchedule,
     proof_digest: Digest32,
     driver_digest: Digest32,
     mutation_digest: Digest32,
-) -> SfsPreregistrationV1 {
-    SfsPreregistrationV1::new(
+) -> SfsPreregistration {
+    SfsPreregistration::new(
         90,
         digest(2),
         Digest32::from_bytes(*record_digest(schedule).unwrap().as_bytes()),
@@ -841,13 +852,13 @@ fn identity_preregistration(
         100,
         2,
         3,
-        PracticeIdV1::Organize,
-        Digest32::from_bytes(target_selection_policy_digest(
-            PracticeTargetDomainV1::SocialClass,
-            99,
+        PracticeId::Organize,
+        Digest32::from_bytes(fixed_practice_target_digest(
+            PracticeTargetTag::SocialClass,
+            target_identity(99),
         )),
-        3,
-        Digest32::from_bytes(parameter_bytes_digest(&intent(100)).unwrap()),
+        digest(3),
+        Digest32::from_bytes(practice_parameter_bytes_digest(&intent(100)).unwrap()),
     )
     .unwrap()
 }
@@ -859,8 +870,8 @@ fn run_identity(
     preregistration: Digest32,
     attempts: Digest32,
     exogenous: Digest32,
-) -> RunIdentityV1 {
-    RunIdentityV1::new(
+) -> RunIdentity {
+    RunIdentity::new(
         SessionId::new("synthetic-run").unwrap(),
         digest(60),
         digest(61),
@@ -1101,14 +1112,14 @@ fn proof_header_preregistration_and_mutation_identities_are_closed() {
 fn candidate_ledger_schedule_exogenous_and_cadence_precedence_is_exact() {
     let (intents, schedule, attempts) = candidate_bundle();
     let contract = parse_synthetic_driver_contract(DRIVER_CONTRACT).unwrap();
-    let parameter = Digest32::from_bytes(parameter_bytes_digest(&intents[0]).unwrap());
+    let parameter = Digest32::from_bytes(practice_parameter_bytes_digest(&intents[0]).unwrap());
     let prereg = preregistration_custom(
         &schedule,
         contract.manifest_digest(),
         100,
         2,
         3,
-        PracticeIdV1::Organize,
+        PracticeId::Organize,
         99,
         3,
         parameter,
@@ -1158,7 +1169,7 @@ fn candidate_ledger_schedule_exogenous_and_cadence_precedence_is_exact() {
         Err(SyntheticDriverError::ExogenousLedgerDigestMismatch)
     );
 
-    let wrong_schedule_prereg = SfsPreregistrationV1::new(
+    let wrong_schedule_prereg = SfsPreregistration::new(
         90,
         digest(2),
         digest(95),
@@ -1169,12 +1180,12 @@ fn candidate_ledger_schedule_exogenous_and_cadence_precedence_is_exact() {
         100,
         2,
         3,
-        PracticeIdV1::Organize,
-        Digest32::from_bytes(target_selection_policy_digest(
-            PracticeTargetDomainV1::SocialClass,
-            99,
+        PracticeId::Organize,
+        Digest32::from_bytes(fixed_practice_target_digest(
+            PracticeTargetTag::SocialClass,
+            target_identity(99),
         )),
-        3,
+        digest(3),
         parameter,
     )
     .unwrap();
@@ -1201,14 +1212,14 @@ fn candidate_ledger_schedule_exogenous_and_cadence_precedence_is_exact() {
 fn candidate_count_tick_and_intent_count_refusals_are_specific() {
     let (intents, schedule, attempts) = candidate_bundle();
     let contract = parse_synthetic_driver_contract(DRIVER_CONTRACT).unwrap();
-    let parameter = Digest32::from_bytes(parameter_bytes_digest(&intents[0]).unwrap());
+    let parameter = Digest32::from_bytes(practice_parameter_bytes_digest(&intents[0]).unwrap());
     let count_prereg = preregistration_custom(
         &schedule,
         contract.manifest_digest(),
         100,
         2,
         4,
-        PracticeIdV1::Organize,
+        PracticeId::Organize,
         99,
         3,
         parameter,
@@ -1235,7 +1246,7 @@ fn candidate_count_tick_and_intent_count_refusals_are_specific() {
         101,
         2,
         3,
-        PracticeIdV1::Organize,
+        PracticeId::Organize,
         99,
         3,
         parameter,
@@ -1288,17 +1299,18 @@ fn candidate_count_tick_and_intent_count_refusals_are_specific() {
 #[test]
 fn candidate_intent_field_and_parameter_identities_refuse_specifically() {
     let contract = parse_synthetic_driver_contract(DRIVER_CONTRACT).unwrap();
-    let base_parameter = Digest32::from_bytes(parameter_bytes_digest(&intent(100)).unwrap());
+    let base_parameter =
+        Digest32::from_bytes(practice_parameter_bytes_digest(&intent(100)).unwrap());
     let cases = [
-        (PracticeIdV1::Agitate, 99_u64, 3_u32),
-        (PracticeIdV1::Organize, 100_u64, 3_u32),
-        (PracticeIdV1::Organize, 99_u64, 4_u32),
+        (PracticeId::Agitate, 99_u64, 3_u8),
+        (PracticeId::Organize, 100_u64, 3_u8),
+        (PracticeId::Organize, 99_u64, 4_u8),
     ];
-    for (index, (practice, target, cost)) in cases.into_iter().enumerate() {
+    for (index, (practice, target, resource_tag)) in cases.into_iter().enumerate() {
         let mut changed = vec![intent(100), intent(102), intent(104)];
         changed[0].practice_id = practice;
-        changed[0].target_node_id = target;
-        changed[0].quoted_action_budget_cost = cost;
+        changed[0].target.identity = target_identity(target);
+        changed[0].quoted_resource_contract_digest = *digest(resource_tag).as_bytes();
         let (intents, schedule, attempts) = bundle_from_intents(changed);
         let prereg = preregistration_custom(
             &schedule,
@@ -1306,7 +1318,7 @@ fn candidate_intent_field_and_parameter_identities_refuse_specifically() {
             100,
             2,
             3,
-            PracticeIdV1::Organize,
+            PracticeId::Organize,
             99,
             3,
             base_parameter,
@@ -1328,7 +1340,7 @@ fn candidate_intent_field_and_parameter_identities_refuse_specifically() {
             [
                 SyntheticDriverError::CandidatePracticeMismatch { index: 0 },
                 SyntheticDriverError::CandidateTargetPolicyMismatch { index: 0 },
-                SyntheticDriverError::CandidateGovernedCostMismatch { index: 0 },
+                SyntheticDriverError::CandidateResourceContractMismatch { index: 0 },
             ][index]
         );
     }
@@ -1339,7 +1351,7 @@ fn candidate_intent_field_and_parameter_identities_refuse_specifically() {
         100,
         2,
         3,
-        PracticeIdV1::Organize,
+        PracticeId::Organize,
         99,
         3,
         digest(96),
@@ -1384,11 +1396,7 @@ fn candidate_projection_and_complete_intent_order_are_closed() {
         .iter()
         .cloned()
         .map(|row| {
-            PracticeCandidateRowV1::new(
-                row.attempt_tick(),
-                digest(95),
-                row.practice_intent_digest(),
-            )
+            PracticeCandidateRow::new(row.attempt_tick(), digest(95), row.practice_intent_digest())
         })
         .collect();
     let alternate_attempts = ledger_from_rows(alternate_rows);
@@ -1419,10 +1427,10 @@ fn candidate_projection_and_complete_intent_order_are_closed() {
         100,
         2,
         3,
-        PracticeIdV1::Organize,
+        PracticeId::Organize,
         99,
         3,
-        Digest32::from_bytes(parameter_bytes_digest(&moved_intents[0]).unwrap()),
+        Digest32::from_bytes(practice_parameter_bytes_digest(&moved_intents[0]).unwrap()),
     );
     let moved_run = run_for_candidate(
         &moved_prereg,
@@ -1456,7 +1464,7 @@ fn malformed_adapter_intents_map_before_any_synthetic_run_membership() {
     let driver = bind_synthetic_driver(&prereg, &contract).unwrap();
 
     let mut invalid_parameter = intents.clone();
-    invalid_parameter[0].parameters.push(PracticeParameterV1 {
+    invalid_parameter[0].parameters.push(PracticeParameter {
         key_u8: 1,
         value_kind_u8: 1,
         value_length_u16: 2,
@@ -1495,13 +1503,13 @@ fn every_run_field_moves_identity() {
         .lines()
         .find(|row| row.starts_with("wire|run-identity|"))
         .unwrap();
-    let base: RunIdentityV1 =
+    let base: RunIdentity =
         decode_envelope(&hex_bytes(base_row.split('|').nth(3).unwrap())).unwrap();
     let base_envelope = canonical_envelope(&base).unwrap();
     let mut fields = Vec::new();
     for row in IDENTITY_MUTATIONS.lines() {
         let parts = row.split('|').collect::<Vec<_>>();
-        let changed: RunIdentityV1 = decode_envelope(&hex_bytes(parts[3])).unwrap();
+        let changed: RunIdentity = decode_envelope(&hex_bytes(parts[3])).unwrap();
         let differences = base.differing_fields(&changed);
         assert_eq!(differences.len(), 1, "{}", parts[2]);
         assert_ne!(canonical_envelope(&changed).unwrap(), base_envelope);
@@ -1551,7 +1559,7 @@ fn every_run_field_moves_identity() {
         driver.validate_twin_identity_difference(
             &base,
             &changed_attempt,
-            babylon_evidence::DifferingLedgerKindV1::PracticeAttempt,
+            babylon_evidence::DifferingLedgerKind::PracticeAttempt,
         ),
         Ok(())
     );
@@ -1559,14 +1567,14 @@ fn every_run_field_moves_identity() {
         .validate_twin_identity_difference(
             &base,
             &changed_both,
-            babylon_evidence::DifferingLedgerKindV1::PracticeAttempt,
+            babylon_evidence::DifferingLedgerKind::PracticeAttempt,
         )
         .is_err());
     assert_eq!(
         driver.validate_twin_identity_difference(
             &base,
             &changed_attempt,
-            DifferingLedgerKindV1::ExogenousInput,
+            DifferingLedgerKind::ExogenousInput,
         ),
         Err(SyntheticDriverError::TwinChangedWrongLedger)
     );
@@ -1582,7 +1590,7 @@ fn every_run_field_moves_identity() {
         driver.validate_twin_identity_difference(
             &base,
             &changed_host,
-            DifferingLedgerKindV1::PracticeAttempt,
+            DifferingLedgerKind::PracticeAttempt,
         ),
         Err(SyntheticDriverError::TwinChangedNonLedgerField {
             field: RunIdentityField::HostComponentManifest,
@@ -1590,14 +1598,14 @@ fn every_run_field_moves_identity() {
     );
 }
 
-fn trace(run: &RunIdentityV1, tag: u8) -> SfsTraceV1 {
+fn trace(run: &RunIdentity, tag: u8) -> SfsTrace {
     let run_digest = Digest32::from_bytes(*record_digest(run).unwrap().as_bytes());
     let masses = [0.0, 1.0, 2.0, 5.0, 8.0, 10.0, 11.0];
     let samples = masses
         .iter()
         .enumerate()
         .map(|(index, mass)| {
-            SfsSampleV1::new(
+            SfsSample::new(
                 200 + u64::try_from(index).unwrap(),
                 digest(tag),
                 digest(tag + 1),
@@ -1607,18 +1615,18 @@ fn trace(run: &RunIdentityV1, tag: u8) -> SfsTraceV1 {
             .unwrap()
         })
         .collect();
-    SfsTraceV1::new(run_digest, digest(90), 7, 200, 2, samples).unwrap()
+    SfsTrace::new(run_digest, digest(90), 7, 200, 2, samples).unwrap()
 }
 
 fn make_comparison(
     control_trace_digest: Digest32,
     intervention_trace_digest: Digest32,
-    kind: DifferingLedgerKindV1,
+    kind: DifferingLedgerKind,
     control_ledger_digest: Digest32,
     intervention_ledger_digest: Digest32,
     delta_digest: Digest32,
-) -> PersistenceComparisonV1 {
-    PersistenceComparisonV1::new(
+) -> PersistenceComparison {
+    PersistenceComparison::new(
         control_trace_digest,
         intervention_trace_digest,
         kind,
@@ -1633,12 +1641,12 @@ fn make_comparison(
 }
 
 struct PersistenceFixture {
-    control: RunIdentityV1,
-    intervention: RunIdentityV1,
-    control_trace: SfsTraceV1,
-    intervention_trace: SfsTraceV1,
-    delta: InterventionDeltaV1,
-    comparison: PersistenceComparisonV1,
+    control: RunIdentity,
+    intervention: RunIdentity,
+    control_trace: SfsTrace,
+    intervention_trace: SfsTrace,
+    delta: InterventionDelta,
+    comparison: PersistenceComparison,
     control_trace_digest: Digest32,
     intervention_trace_digest: Digest32,
     delta_digest: Digest32,
@@ -1663,10 +1671,10 @@ fn persistence_fixture() -> PersistenceFixture {
     );
     let control_trace = trace(&control, 100);
     let intervention_trace = trace(&intervention, 110);
-    let delta = InterventionDeltaV1::new(
-        DifferingLedgerKindV1::PracticeAttempt,
-        vec![InterventionDeltaRowV1::new(
-            InterventionOperationV1::Replace,
+    let delta = InterventionDelta::new(
+        DifferingLedgerKind::PracticeAttempt,
+        vec![InterventionDeltaRow::new(
+            InterventionOperation::Replace,
             digest(120),
             digest(121),
             digest(122),
@@ -1682,7 +1690,7 @@ fn persistence_fixture() -> PersistenceFixture {
     let comparison = make_comparison(
         control_trace_digest,
         intervention_trace_digest,
-        DifferingLedgerKindV1::PracticeAttempt,
+        DifferingLedgerKind::PracticeAttempt,
         control.practice_attempt_ledger_digest(),
         intervention.practice_attempt_ledger_digest(),
         delta_digest,
@@ -1701,8 +1709,8 @@ fn persistence_fixture() -> PersistenceFixture {
 }
 
 fn bound_driver_contract() -> (
-    babylon_evidence::SyntheticDriverContractV1,
-    SfsPreregistrationV1,
+    babylon_evidence::SyntheticDriverContract,
+    SfsPreregistration,
 ) {
     let contract = parse_synthetic_driver_contract(DRIVER_CONTRACT).unwrap();
     let (_, schedule, _) = candidate_bundle();
@@ -1762,7 +1770,7 @@ fn persistence_comparison_stored_digests_are_exact() {
             make_comparison(
                 digest(200),
                 fixture.intervention_trace_digest,
-                DifferingLedgerKindV1::PracticeAttempt,
+                DifferingLedgerKind::PracticeAttempt,
                 fixture.control.practice_attempt_ledger_digest(),
                 fixture.intervention.practice_attempt_ledger_digest(),
                 fixture.delta_digest,
@@ -1773,7 +1781,7 @@ fn persistence_comparison_stored_digests_are_exact() {
             make_comparison(
                 fixture.control_trace_digest,
                 digest(201),
-                DifferingLedgerKindV1::PracticeAttempt,
+                DifferingLedgerKind::PracticeAttempt,
                 fixture.control.practice_attempt_ledger_digest(),
                 fixture.intervention.practice_attempt_ledger_digest(),
                 fixture.delta_digest,
@@ -1784,7 +1792,7 @@ fn persistence_comparison_stored_digests_are_exact() {
             make_comparison(
                 fixture.control_trace_digest,
                 fixture.intervention_trace_digest,
-                DifferingLedgerKindV1::PracticeAttempt,
+                DifferingLedgerKind::PracticeAttempt,
                 digest(202),
                 fixture.intervention.practice_attempt_ledger_digest(),
                 fixture.delta_digest,
@@ -1795,7 +1803,7 @@ fn persistence_comparison_stored_digests_are_exact() {
             make_comparison(
                 fixture.control_trace_digest,
                 fixture.intervention_trace_digest,
-                DifferingLedgerKindV1::PracticeAttempt,
+                DifferingLedgerKind::PracticeAttempt,
                 fixture.control.practice_attempt_ledger_digest(),
                 digest(203),
                 fixture.delta_digest,
@@ -1806,7 +1814,7 @@ fn persistence_comparison_stored_digests_are_exact() {
             make_comparison(
                 fixture.control_trace_digest,
                 fixture.intervention_trace_digest,
-                DifferingLedgerKindV1::PracticeAttempt,
+                DifferingLedgerKind::PracticeAttempt,
                 fixture.control.practice_attempt_ledger_digest(),
                 fixture.intervention.practice_attempt_ledger_digest(),
                 digest(204),
@@ -1837,7 +1845,7 @@ fn persistence_selected_kind_and_delta_kind_are_exact() {
     let wrong_kind = make_comparison(
         fixture.control_trace_digest,
         fixture.intervention_trace_digest,
-        DifferingLedgerKindV1::ExogenousInput,
+        DifferingLedgerKind::ExogenousInput,
         fixture.control.exogenous_input_ledger_digest(),
         fixture.intervention.exogenous_input_ledger_digest(),
         fixture.delta_digest,
@@ -1854,10 +1862,10 @@ fn persistence_selected_kind_and_delta_kind_are_exact() {
         Err(SyntheticDriverError::TwinChangedWrongLedger)
     );
 
-    let wrong_delta = InterventionDeltaV1::new(
-        DifferingLedgerKindV1::ExogenousInput,
-        vec![InterventionDeltaRowV1::new(
-            InterventionOperationV1::Replace,
+    let wrong_delta = InterventionDelta::new(
+        DifferingLedgerKind::ExogenousInput,
+        vec![InterventionDeltaRow::new(
+            InterventionOperation::Replace,
             digest(120),
             digest(121),
             digest(122),
@@ -1886,23 +1894,23 @@ fn cadence_overflow_precedes_tick_comparison() {
         .iter()
         .enumerate()
         .map(|(index, value)| {
-            PracticeCandidateRowV1::new(
+            PracticeCandidateRow::new(
                 value.resolve_tick,
                 digest(130 + u8::try_from(index).unwrap()),
-                Digest32::from_bytes(intent_digest(value).unwrap()),
+                Digest32::from_bytes(practice_intent_digest(value).unwrap()),
             )
         })
         .collect::<Vec<_>>();
-    let schedule = PracticeCandidateScheduleV1::new(rows.clone()).unwrap();
+    let schedule = PracticeCandidateSchedule::new(rows.clone()).unwrap();
     let attempts = rows
         .into_iter()
         .map(|row| {
-            PracticeAttemptRowV1::new(row, PracticeDispositionV1::Rejected, digest(140)).unwrap()
+            PracticeAttemptRow::new(row, PracticeDisposition::Rejected, digest(140)).unwrap()
         })
         .collect();
-    let attempts = PracticeAttemptLedgerV1::new(digest(141), attempts).unwrap();
+    let attempts = PracticeAttemptLedger::new(digest(141), attempts).unwrap();
     let contract = parse_synthetic_driver_contract(DRIVER_CONTRACT).unwrap();
-    let prereg = SfsPreregistrationV1::new(
+    let prereg = SfsPreregistration::new(
         80,
         digest(2),
         Digest32::from_bytes(*record_digest(&schedule).unwrap().as_bytes()),
@@ -1913,13 +1921,13 @@ fn cadence_overflow_precedes_tick_comparison() {
         u64::MAX - 1,
         2,
         2,
-        PracticeIdV1::Organize,
-        Digest32::from_bytes(target_selection_policy_digest(
-            PracticeTargetDomainV1::SocialClass,
-            99,
+        PracticeId::Organize,
+        Digest32::from_bytes(fixed_practice_target_digest(
+            PracticeTargetTag::SocialClass,
+            target_identity(99),
         )),
-        3,
-        Digest32::from_bytes(parameter_bytes_digest(&first).unwrap()),
+        digest(3),
+        Digest32::from_bytes(practice_parameter_bytes_digest(&first).unwrap()),
     )
     .unwrap();
     let run = run_identity(

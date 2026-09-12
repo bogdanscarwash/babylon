@@ -1,8 +1,6 @@
 //! Shared test-only synthetic scale fixture; no real infrastructure claim.
 
-use babylon_persistence::michigan_material::{
-    MichiganMaterialCatalogV1, MichiganPhysicalNetworkV2,
-};
+use babylon_persistence::michigan_material::{MichiganMaterialCatalog, MichiganPhysicalNetwork};
 use serde::Deserialize;
 use std::io::Read;
 
@@ -14,7 +12,7 @@ const CANONICAL_DEFINES: &str =
 pub struct SyntheticFixture {
     pub scope: String,
     pub qualification: serde_json::Value,
-    pub physical: MichiganPhysicalNetworkV2,
+    pub physical: MichiganPhysicalNetwork,
 }
 
 pub fn load() -> SyntheticFixture {
@@ -45,10 +43,10 @@ pub fn load() -> SyntheticFixture {
     fixture
 }
 
-pub fn catalog() -> MichiganMaterialCatalogV1 {
+pub fn catalog() -> MichiganMaterialCatalog {
     let fixture = load();
     let qualification = serde_json::to_vec(&fixture.qualification).unwrap();
-    MichiganMaterialCatalogV1::from_statewide_qualification(
+    MichiganMaterialCatalog::from_statewide_qualification(
         CANONICAL_DEFINES,
         &qualification,
         fixture.physical,
@@ -143,7 +141,7 @@ impl Drop for SyntheticSources {
 fn hex_digest(bytes: &[u8]) -> String {
     use std::fmt::Write;
     let mut text = String::new();
-    for byte in babylon_kernel::sha256_of(bytes) {
+    for byte in babylon_kernel::content_digest::sha256_of(bytes) {
         write!(&mut text, "{byte:02x}").unwrap();
     }
     text

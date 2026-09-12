@@ -2,48 +2,44 @@
 
 use postgres::Config;
 
-use crate::h3_reference_cohort::{representative_h3_reference_cohort_v1, H3ReferenceCohortError};
+use crate::current_schema::{install_current_schema, CurrentSchemaError, CurrentSchemaReport};
+use crate::h3_reference_cohort::{representative_h3_reference_cohort, H3ReferenceCohortError};
 use crate::h3_reference_installer::{
-    install_michigan_h3_reference_bundle_v1, H3ReferenceInstallError, H3ReferenceInstallReport,
+    install_michigan_h3_reference_bundle, H3ReferenceInstallError, H3ReferenceInstallReport,
 };
 use crate::michigan_dynamic_hex_foundation::{
-    michigan_dynamic_hex_foundation_v1, MichiganDynamicHexFoundationDecodeErrorV1,
-};
-use crate::schema_epoch::{
-    migrate_schema_epoch, SchemaEpochError, SchemaEpochReport, CURRENT_SCHEMA_EPOCH,
+    michigan_dynamic_hex_foundation, MichiganDynamicHexFoundationDecodeError,
 };
 
 /// Receipts from the native schema and immutable reference installation.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct H3ReaderBootstrapReportV1 {
+pub struct CurrentRuntimeBootstrapReport {
     /// Exact immutable Michigan H3 reference-bundle installation receipt.
     pub reference_bundle_installation: H3ReferenceInstallReport,
     /// Completed native schema construction.
-    pub final_epoch: SchemaEpochReport,
+    pub schema: CurrentSchemaReport,
 }
 
 /// Closed failure boundary for native H3 bootstrap.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum H3ReaderBootstrapErrorV1 {
+pub enum CurrentRuntimeBootstrapError {
     /// The embedded H3 source fixture failed before database access.
     ReferenceCohort(H3ReferenceCohortError),
     /// The embedded Michigan foundation fixture failed before database access.
-    ReferenceFoundation(MichiganDynamicHexFoundationDecodeErrorV1),
+    ReferenceFoundation(MichiganDynamicHexFoundationDecodeError),
     /// The current schema could not be constructed or verified.
-    SchemaEpoch(SchemaEpochError),
+    CurrentSchema(CurrentSchemaError),
     /// The exact immutable reference bundle could not be installed.
     ReferenceInstall(H3ReferenceInstallError),
-    /// Schema construction did not complete its compiled registry.
-    UnexpectedSchemaEpoch { actual: usize },
 }
 
-impl std::fmt::Display for H3ReaderBootstrapErrorV1 {
+impl std::fmt::Display for CurrentRuntimeBootstrapError {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(formatter, "H3 reader bootstrap failed: {self:?}")
     }
 }
 
-impl std::error::Error for H3ReaderBootstrapErrorV1 {}
+impl std::error::Error for CurrentRuntimeBootstrapError {}
 
 /// Validate source bytes, construct the current schema, and install its reference bundle.
 ///
@@ -51,27 +47,22 @@ impl std::error::Error for H3ReaderBootstrapErrorV1 {}
 /// objects cannot enter the exact fresh/current schema census and are never adopted or deleted.
 ///
 /// # Errors
-/// Returns [`H3ReaderBootstrapErrorV1`] for invalid source data, a refused database shape,
+/// Returns [`CurrentRuntimeBootstrapError`] for invalid source data, a refused database shape,
 /// incomplete schema construction, or a failed immutable reference installation.
-pub fn bootstrap_h3_reader_epoch_v1(
+pub fn bootstrap_current_runtime(
     config: &Config,
-) -> Result<H3ReaderBootstrapReportV1, H3ReaderBootstrapErrorV1> {
-    let cohort = representative_h3_reference_cohort_v1()
-        .map_err(H3ReaderBootstrapErrorV1::ReferenceCohort)?;
-    let foundation = michigan_dynamic_hex_foundation_v1()
-        .map_err(H3ReaderBootstrapErrorV1::ReferenceFoundation)?;
-    let final_epoch =
-        migrate_schema_epoch(config).map_err(H3ReaderBootstrapErrorV1::SchemaEpoch)?;
-    if final_epoch.final_applied != CURRENT_SCHEMA_EPOCH {
-        return Err(H3ReaderBootstrapErrorV1::UnexpectedSchemaEpoch {
-            actual: final_epoch.final_applied,
-        });
-    }
+) -> Result<CurrentRuntimeBootstrapReport, CurrentRuntimeBootstrapError> {
+    let cohort = representative_h3_reference_cohort()
+        .map_err(CurrentRuntimeBootstrapError::ReferenceCohort)?;
+    let foundation = michigan_dynamic_hex_foundation()
+        .map_err(CurrentRuntimeBootstrapError::ReferenceFoundation)?;
+    let schema =
+        install_current_schema(config).map_err(CurrentRuntimeBootstrapError::CurrentSchema)?;
     let reference_bundle_installation =
-        install_michigan_h3_reference_bundle_v1(config, cohort, foundation)
-            .map_err(H3ReaderBootstrapErrorV1::ReferenceInstall)?;
-    Ok(H3ReaderBootstrapReportV1 {
+        install_michigan_h3_reference_bundle(config, cohort, foundation)
+            .map_err(CurrentRuntimeBootstrapError::ReferenceInstall)?;
+    Ok(CurrentRuntimeBootstrapReport {
         reference_bundle_installation,
-        final_epoch,
+        schema,
     })
 }

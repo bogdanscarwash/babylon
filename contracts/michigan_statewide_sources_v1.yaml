@@ -19,7 +19,7 @@ outputs:
   manifest_fields: [schema, defines_sha256, qualification_sha256, physical_network_sha256]
   schema: MichiganStatewideSourcesV1
   qualification: statewide-qualification.json.gz; retain every qualification field and ordered route path
-  physical: statewide-physical.json.gz; exact MichiganPhysicalNetworkV2
+  physical: statewide-physical.json.gz; exact babylon_persistence::michigan_material::MichiganPhysicalNetwork
   physical_fields: [source, profile, terminal_source_pins, terminal_policy, terminal_attachment_limit_meters,
                     terminals, edges, capacity_groups]
   road_source: original graph.source plus routing_profile_version and SHA-256 of the complete graph artifact

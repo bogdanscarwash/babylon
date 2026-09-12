@@ -6,6 +6,13 @@ hash_domain_separator: babylon.relational-territory-dossier.v1
 draft_record: RtdDossierDraftV1
 sealed_record: RelationalTerritoryDossierV1
 
+rust_binding:
+  crate: babylon_rtd
+  draft_type: babylon_rtd::RtdDossierDraft
+  sealed_type: babylon_rtd::RelationalTerritoryDossier
+  schema_names: Versioned enum and record keys name the language-neutral format.
+  implementation_names: Rust enum and record names omit the V1 suffix.
+
 scalar_types:
   string:
     json_type: string

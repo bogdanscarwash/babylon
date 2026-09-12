@@ -28,8 +28,8 @@ fn local_handoff_receipts() -> Vec<u8> {
 
 #[test]
 fn committed_receipts_admit_explicit_merchant_handling_and_local_fulfillment() {
-    use babylon_material_circuit::{OrderIdV1, OutboundOrderIdV3};
-    let receipt = decode_material_receipts_v4(&local_handoff_receipts()).unwrap();
+    use babylon_material_circuit::{OrderId, OutboundOrderId};
+    let receipt = decode_material_receipts(&local_handoff_receipts()).unwrap();
     assert_eq!(receipt.resolve_tick, 1);
     assert!(receipt.dispatches.is_empty());
     assert!(receipt.arrivals.is_empty());
@@ -37,7 +37,7 @@ fn committed_receipts_admit_explicit_merchant_handling_and_local_fulfillment() {
     let work = &receipt.handling[0];
     assert_eq!(
         work.order,
-        OutboundOrderIdV3::LocalFinalDemand(OrderIdV1::from_bytes([2; 32]))
+        OutboundOrderId::LocalFinalDemand(OrderId::from_bytes([2; 32]))
     );
     assert_eq!((work.feasible_quantity, work.handled_quantity), (10, 2));
     assert_eq!((work.needed_hours, work.used_hours), (20, 4));
@@ -59,8 +59,8 @@ fn handling_wire_refuses_unknown_kinds_overdraws_and_false_hours() {
         let mut changed = canonical.clone();
         changed[offset..offset + replacement.len()].copy_from_slice(&replacement);
         assert_eq!(
-            decode_material_receipts_v4(&changed),
-            Err(MaterialWorldErrorV3::Wire)
+            decode_material_receipts(&changed),
+            Err(MaterialWorldError::Wire)
         );
     }
 }
@@ -72,21 +72,21 @@ fn receipt_version_and_local_delivery_quantity_are_strict() {
     let version = RECEIPT_DOMAIN.len();
     previous_version[version..version + 4].copy_from_slice(&3_u32.to_be_bytes());
     assert_eq!(
-        decode_material_receipts_v4(&previous_version),
-        Err(MaterialWorldErrorV3::Wire)
+        decode_material_receipts(&previous_version),
+        Err(MaterialWorldError::Wire)
     );
     let mut zero_delivery = canonical;
     let end = zero_delivery.len() - 9; // The empty local-transfer family follows.
     zero_delivery[end - 8..end].copy_from_slice(&0_u64.to_be_bytes());
     assert_eq!(
-        decode_material_receipts_v4(&zero_delivery),
-        Err(MaterialWorldErrorV3::Wire)
+        decode_material_receipts(&zero_delivery),
+        Err(MaterialWorldError::Wire)
     );
 }
 
 #[test]
 fn local_transfer_receipts_preserve_both_owners_without_freight() {
-    use babylon_material_circuit::SiteIdV1;
+    use babylon_material_circuit::SiteId;
     let mut bytes = local_handoff_receipts();
     let count = bytes.len() - 8;
     bytes[count..].copy_from_slice(&1_u64.to_be_bytes());
@@ -95,11 +95,11 @@ fn local_transfer_receipts_preserve_both_owners_without_freight() {
         bytes.extend_from_slice(&[key; 32]);
     }
     bytes.extend_from_slice(&3_u64.to_be_bytes());
-    let receipts = decode_material_receipts_v4(&bytes).unwrap();
+    let receipts = decode_material_receipts(&bytes).unwrap();
     assert_eq!(receipts.local_transfers.len(), 1);
     let transfer = &receipts.local_transfers[0];
-    assert_eq!(transfer.supplier_site_id, SiteIdV1::from_bytes([7; 32]));
-    assert_eq!(transfer.buyer_site_id, SiteIdV1::from_bytes([1; 32]));
+    assert_eq!(transfer.supplier_site_id, SiteId::from_bytes([7; 32]));
+    assert_eq!(transfer.buyer_site_id, SiteId::from_bytes([1; 32]));
     assert_eq!(transfer.quantity, 3);
     assert!(receipts.dispatches.is_empty());
     assert!(receipts.arrivals.is_empty());
@@ -107,13 +107,13 @@ fn local_transfer_receipts_preserve_both_owners_without_freight() {
     let mut self_transfer = bytes.clone();
     self_transfer[row_start + 64..row_start + 96].copy_from_slice(&[7; 32]);
     assert_eq!(
-        decode_material_receipts_v4(&self_transfer),
-        Err(MaterialWorldErrorV3::Wire)
+        decode_material_receipts(&self_transfer),
+        Err(MaterialWorldError::Wire)
     );
     let end = bytes.len();
     bytes[end - 8..].fill(0);
     assert_eq!(
-        decode_material_receipts_v4(&bytes),
-        Err(MaterialWorldErrorV3::Wire)
+        decode_material_receipts(&bytes),
+        Err(MaterialWorldError::Wire)
     );
 }

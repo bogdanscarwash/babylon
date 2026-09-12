@@ -2,19 +2,19 @@
 
 use babylon_evidence::{
     canonical_envelope, classify_persistence, classify_sfs, record_digest, CanonicalProfileSet,
-    CausalConeV1, ComponentKindV1, DifferingLedgerKindV1, Digest32, InterventionDeltaRowV1,
-    InterventionDeltaV1, InterventionOperationV1, PersistenceComparisonV1, PracticeAttemptLedgerV1,
-    PracticeAttemptRowV1, PracticeCandidateRowV1, PracticeCandidateScheduleV1,
-    PracticeDispositionV1, RunIdentityV1, SfsComponentProofProfileV1, SfsPreregistrationV1,
-    SfsProofProfileV1, SfsSampleV1, SfsTraceV1, T3Record,
+    CausalCone, ComponentKind, DifferingLedgerKind, Digest32, InterventionDelta,
+    InterventionDeltaRow, InterventionOperation, PersistenceComparison, PracticeAttemptLedger,
+    PracticeAttemptRow, PracticeCandidateRow, PracticeCandidateSchedule, PracticeDisposition,
+    RunIdentity, SfsComponentProofProfile, SfsPreregistration, SfsProofProfile, SfsSample,
+    SfsTrace, T3Record,
 };
-use babylon_kernel::SessionId;
-use babylon_practice_contract::PracticeIdV1;
+use babylon_kernel::clock::SessionId;
+use babylon_practice_contract::PracticeId;
 
 const MAX_VECTOR_BYTES: usize = 16_777_216;
-const WIRE_VECTORS: &str = include_str!("fixtures/sfs_wire_vectors_v1.txt");
-const CLASSIFIER_VECTORS: &str = include_str!("fixtures/sfs_classifier_vectors_v1.txt");
-const IDENTITY_MUTATIONS: &str = include_str!("fixtures/sfs_identity_mutations_v1.txt");
+const WIRE_VECTORS: &str = include_str!("fixtures/sfs_wire_vectors.txt");
+const CLASSIFIER_VECTORS: &str = include_str!("fixtures/sfs_classifier_vectors.txt");
+const IDENTITY_MUTATIONS: &str = include_str!("fixtures/sfs_identity_mutations.txt");
 
 fn digest(tag: u8) -> Digest32 {
     let mut bytes = [0_u8; 32];
@@ -88,7 +88,7 @@ fn assert_record<T: T3Record>(record: &T, domain: &str, envelope_hex: &str, dige
     );
 }
 
-fn run_identity_with_mutation(field: &str) -> RunIdentityV1 {
+fn run_identity_with_mutation(field: &str) -> RunIdentity {
     let changed = |name: &str, tag: u8| {
         if field == name {
             digest(tag + 128)
@@ -111,7 +111,7 @@ fn run_identity_with_mutation(field: &str) -> RunIdentityV1 {
     } else {
         "graph-v1"
     };
-    RunIdentityV1::new(
+    RunIdentity::new(
         session,
         changed("scenario", 1),
         changed("prelude-declarations", 2),
@@ -134,8 +134,8 @@ fn run_identity_with_mutation(field: &str) -> RunIdentityV1 {
     .unwrap()
 }
 
-fn sample(tick: u64, first_tag: u8, aggregate: f64) -> SfsSampleV1 {
-    SfsSampleV1::new(
+fn sample(tick: u64, first_tag: u8, aggregate: f64) -> SfsSample {
+    SfsSample::new(
         tick,
         digest(first_tag),
         digest(first_tag + 1),
@@ -146,7 +146,7 @@ fn sample(tick: u64, first_tag: u8, aggregate: f64) -> SfsSampleV1 {
 }
 
 #[allow(clippy::needless_range_loop)] // The seven-sample ceiling is part of the vector contract.
-fn trace() -> SfsTraceV1 {
+fn trace() -> SfsTrace {
     let masses = [0.0, 1.0, 2.0, 5.0, 8.0, 10.0, 11.0];
     let mut samples = Vec::with_capacity(7);
     for index in 0..7 {
@@ -156,22 +156,22 @@ fn trace() -> SfsTraceV1 {
             masses[index],
         ));
     }
-    SfsTraceV1::new(digest(24), digest(25), 26, 100, 2, samples).unwrap()
+    SfsTrace::new(digest(24), digest(25), 26, 100, 2, samples).unwrap()
 }
 
-fn candidates() -> Vec<PracticeCandidateRowV1> {
+fn candidates() -> Vec<PracticeCandidateRow> {
     vec![
-        PracticeCandidateRowV1::new(201, digest(70), digest(71)),
-        PracticeCandidateRowV1::new(200, digest(72), digest(73)),
+        PracticeCandidateRow::new(201, digest(70), digest(71)),
+        PracticeCandidateRow::new(200, digest(72), digest(73)),
     ]
 }
 
-fn candidate_schedule() -> PracticeCandidateScheduleV1 {
-    PracticeCandidateScheduleV1::new(candidates()).unwrap()
+fn candidate_schedule() -> PracticeCandidateSchedule {
+    PracticeCandidateSchedule::new(candidates()).unwrap()
 }
 
-fn preregistration() -> SfsPreregistrationV1 {
-    SfsPreregistrationV1::new(
+fn preregistration() -> SfsPreregistration {
+    SfsPreregistration::new(
         299,
         digest(80),
         digest(81),
@@ -182,24 +182,24 @@ fn preregistration() -> SfsPreregistrationV1 {
         310,
         3,
         4,
-        PracticeIdV1::Agitate,
+        PracticeId::Agitate,
         digest(86),
-        87,
+        digest(87),
         digest(88),
     )
     .unwrap()
 }
 
-fn attempt_ledger() -> PracticeAttemptLedgerV1 {
+fn attempt_ledger() -> PracticeAttemptLedger {
     let schedule = candidate_schedule();
     let rows = schedule.rows();
     let attempts = vec![
-        PracticeAttemptRowV1::new(rows[0].clone(), PracticeDispositionV1::Accepted, digest(91))
+        PracticeAttemptRow::new(rows[0].clone(), PracticeDisposition::Accepted, digest(91))
             .unwrap(),
-        PracticeAttemptRowV1::new(rows[1].clone(), PracticeDispositionV1::Rejected, digest(92))
+        PracticeAttemptRow::new(rows[1].clone(), PracticeDisposition::Rejected, digest(92))
             .unwrap(),
     ];
-    PracticeAttemptLedgerV1::new(digest(90), attempts).unwrap()
+    PracticeAttemptLedger::new(digest(90), attempts).unwrap()
 }
 
 fn profile_set(field: &'static str, values: &[&str]) -> CanonicalProfileSet {
@@ -214,10 +214,10 @@ fn profile_set(field: &'static str, values: &[&str]) -> CanonicalProfileSet {
     CanonicalProfileSet::new(field, entries).unwrap()
 }
 
-fn component_profile() -> SfsComponentProofProfileV1 {
-    SfsComponentProofProfileV1::new(
+fn component_profile() -> SfsComponentProofProfile {
+    SfsComponentProofProfile::new(
         "component-Ā",
-        ComponentKindV1::RustBoundary,
+        ComponentKind::RustBoundary,
         digest(100),
         profile_set("field_reads", &["field-a", "مساعدة"]),
         profile_set("edge_reads", &["edge-a"]),
@@ -231,8 +231,8 @@ fn component_profile() -> SfsComponentProofProfileV1 {
     .unwrap()
 }
 
-fn proof_profile() -> SfsProofProfileV1 {
-    SfsProofProfileV1::new(
+fn proof_profile() -> SfsProofProfile {
+    SfsProofProfile::new(
         digest(110),
         digest(111),
         "babylon.sfs.audit.v1",
@@ -243,8 +243,8 @@ fn proof_profile() -> SfsProofProfileV1 {
     .unwrap()
 }
 
-fn causal_cone() -> CausalConeV1 {
-    CausalConeV1::new(
+fn causal_cone() -> CausalCone {
+    CausalCone::new(
         vec!["z".to_owned(), "aa".to_owned(), "\u{10000}".to_owned()],
         vec!["café".to_owned()],
         vec!["Ā".to_owned(), "互助".to_owned()],
@@ -252,34 +252,34 @@ fn causal_cone() -> CausalConeV1 {
     .unwrap()
 }
 
-fn intervention_delta() -> InterventionDeltaV1 {
+fn intervention_delta() -> InterventionDelta {
     let zero = Digest32::from_bytes([0; 32]);
     let rows = vec![
-        InterventionDeltaRowV1::new(InterventionOperationV1::Add, digest(120), zero, digest(121))
+        InterventionDeltaRow::new(InterventionOperation::Add, digest(120), zero, digest(121))
             .unwrap(),
-        InterventionDeltaRowV1::new(
-            InterventionOperationV1::Remove,
+        InterventionDeltaRow::new(
+            InterventionOperation::Remove,
             digest(122),
             digest(123),
             zero,
         )
         .unwrap(),
-        InterventionDeltaRowV1::new(
-            InterventionOperationV1::Replace,
+        InterventionDeltaRow::new(
+            InterventionOperation::Replace,
             digest(124),
             digest(125),
             digest(126),
         )
         .unwrap(),
     ];
-    InterventionDeltaV1::new(DifferingLedgerKindV1::PracticeAttempt, rows).unwrap()
+    InterventionDelta::new(DifferingLedgerKind::PracticeAttempt, rows).unwrap()
 }
 
-fn persistence_comparison() -> PersistenceComparisonV1 {
-    PersistenceComparisonV1::new(
+fn persistence_comparison() -> PersistenceComparison {
+    PersistenceComparison::new(
         digest(130),
         digest(131),
-        DifferingLedgerKindV1::PracticeAttempt,
+        DifferingLedgerKind::PracticeAttempt,
         digest(132),
         digest(133),
         digest(134),

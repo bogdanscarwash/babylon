@@ -8,7 +8,7 @@ use super::{
     run::{BASELINE, FREIGHT, PACKAGING},
     Result,
 };
-use babylon_persistence::michigan_material::MichiganMaterialPathV2;
+use babylon_persistence::michigan_material::MichiganMaterialPath;
 use std::collections::{BTreeMap, VecDeque};
 
 type Reachable = BTreeMap<String, Vec<String>>;
@@ -115,7 +115,7 @@ fn freight(report: &Report) -> Result<Option<FreightWitness>> {
             .routes
             .iter()
             .filter_map(|(key, route)| {
-                let MichiganMaterialPathV2::Routed { capacity_keys, .. } = &route.path else {
+                let MichiganMaterialPath::Routed { capacity_keys, .. } = &route.path else {
                     return None;
                 };
                 if !capacity_keys.contains(&report.candidate.capacity_key) {

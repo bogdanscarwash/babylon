@@ -3,24 +3,24 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use super::{
-    StaffingErrorV2, StaffingPoolStateV2, StaffingReceiptV2, StaffingStateV2, StaffingTransitionV2,
-    StaffingWorkRequestV2,
+    StaffingError, StaffingPoolState, StaffingReceipt, StaffingState, StaffingTransition,
+    StaffingWorkRequest,
 };
-use crate::{LaborCapacityRowV1, MAX_MATERIAL_CIRCUIT_ROWS_V1};
+use crate::{LaborCapacityRow, MAX_MATERIAL_CIRCUIT_ROWS};
 
-fn reserved_vec<T>(count: usize) -> Result<Vec<T>, StaffingErrorV2> {
+fn reserved_vec<T>(count: usize) -> Result<Vec<T>, StaffingError> {
     let mut rows = Vec::new();
     rows.try_reserve_exact(count)
-        .map_err(|_| StaffingErrorV2::Allocation)?;
+        .map_err(|_| StaffingError::Allocation)?;
     Ok(rows)
 }
 
 fn pool_requests(
-    opening: &StaffingStateV2,
-    requests: &[StaffingWorkRequestV2],
-) -> Result<Vec<u64>, StaffingErrorV2> {
-    if requests.len() > MAX_MATERIAL_CIRCUIT_ROWS_V1 {
-        return Err(StaffingErrorV2::RowLimit);
+    opening: &StaffingState,
+    requests: &[StaffingWorkRequest],
+) -> Result<Vec<u64>, StaffingError> {
+    if requests.len() > MAX_MATERIAL_CIRCUIT_ROWS {
+        return Err(StaffingError::RowLimit);
     }
     let mut owners = BTreeMap::new();
     for (index, pool) in opening.pools().iter().enumerate() {
@@ -33,42 +33,42 @@ fn pool_requests(
     let mut seen = BTreeSet::new();
     for request in requests {
         if request.period() != opening.period() {
-            return Err(StaffingErrorV2::PeriodInvariant);
+            return Err(StaffingError::PeriodInvariant);
         }
         let (index, binding) = owners
             .get(&request.work_source())
-            .ok_or(StaffingErrorV2::UnknownRequest)?;
+            .ok_or(StaffingError::UnknownRequest)?;
         if request.pool_id() != binding.pool_id()
             || request.site_id() != binding.site_id()
             || request.unit_id() != binding.unit_id()
         {
-            return Err(StaffingErrorV2::RequestBinding);
+            return Err(StaffingError::RequestBinding);
         }
         if !seen.insert(request.work_source()) {
-            return Err(StaffingErrorV2::DuplicateRequest);
+            return Err(StaffingError::DuplicateRequest);
         }
         totals[*index] = totals[*index]
             .checked_add(request.hours())
-            .ok_or(StaffingErrorV2::Arithmetic)?;
+            .ok_or(StaffingError::Arithmetic)?;
     }
     if seen.len() != owners.len() {
-        return Err(StaffingErrorV2::MissingRequest);
+        return Err(StaffingError::MissingRequest);
     }
     Ok(totals)
 }
 
 fn advance_pool(
-    opening: &StaffingPoolStateV2,
+    opening: &StaffingPoolState,
     current_request: u64,
     period: u64,
     next_period: u64,
-) -> Result<(StaffingPoolStateV2, StaffingReceiptV2, LaborCapacityRowV1), StaffingErrorV2> {
+) -> Result<(StaffingPoolState, StaffingReceipt, LaborCapacityRow), StaffingError> {
     let binding = opening.binding();
     let schedule = binding.policy().hours_per_person();
     let retained = current_request.max(opening.previous_unretained_hours());
     let requested_people = (retained / schedule)
         .checked_add(u64::from(!retained.is_multiple_of(schedule)))
-        .ok_or(StaffingErrorV2::Arithmetic)?;
+        .ok_or(StaffingError::Arithmetic)?;
     let target = requested_people.min(binding.labor_force());
     let (employed, reserve) = if target >= opening.employed() {
         let hires = target - opening.employed();
@@ -76,11 +76,11 @@ fn advance_pool(
             opening
                 .employed()
                 .checked_add(hires)
-                .ok_or(StaffingErrorV2::Arithmetic)?,
+                .ok_or(StaffingError::Arithmetic)?,
             opening
                 .reserve()
                 .checked_sub(hires)
-                .ok_or(StaffingErrorV2::Arithmetic)?,
+                .ok_or(StaffingError::Arithmetic)?,
         )
     } else {
         let separations = opening.employed() - target;
@@ -88,19 +88,18 @@ fn advance_pool(
             opening
                 .employed()
                 .checked_sub(separations)
-                .ok_or(StaffingErrorV2::Arithmetic)?,
+                .ok_or(StaffingError::Arithmetic)?,
             opening
                 .reserve()
                 .checked_add(separations)
-                .ok_or(StaffingErrorV2::Arithmetic)?,
+                .ok_or(StaffingError::Arithmetic)?,
         )
     };
     let hours = employed
         .checked_mul(schedule)
-        .ok_or(StaffingErrorV2::Arithmetic)?;
-    let closing =
-        StaffingPoolStateV2::try_new(binding.clone(), employed, reserve, current_request)?;
-    let receipt = StaffingReceiptV2::from_transition(
+        .ok_or(StaffingError::Arithmetic)?;
+    let closing = StaffingPoolState::try_new(binding.clone(), employed, reserve, current_request)?;
+    let receipt = StaffingReceipt::from_transition(
         period,
         opening,
         &closing,
@@ -109,7 +108,7 @@ fn advance_pool(
         target,
         hours,
     );
-    let labor = LaborCapacityRowV1 {
+    let labor = LaborCapacityRow {
         site_id: binding.site_id(),
         unit_id: binding.unit_id(),
         period: next_period,
@@ -128,14 +127,14 @@ fn advance_pool(
 /// # Errors
 /// Refuses incomplete/foreign/duplicate requests, bounds or checked arithmetic.
 /// Every error leaves the opening state unchanged and returns no partial result.
-pub fn advance_staffing_v2(
-    opening: &StaffingStateV2,
-    requests: &[StaffingWorkRequestV2],
-) -> Result<StaffingTransitionV2, StaffingErrorV2> {
+pub fn advance_staffing(
+    opening: &StaffingState,
+    requests: &[StaffingWorkRequest],
+) -> Result<StaffingTransition, StaffingError> {
     let next_period = opening
         .period()
         .checked_add(1)
-        .ok_or(StaffingErrorV2::Arithmetic)?;
+        .ok_or(StaffingError::Arithmetic)?;
     let requests = pool_requests(opening, requests)?;
     let count = opening.pools().len();
     let mut pools = reserved_vec(count)?;
@@ -149,8 +148,8 @@ pub fn advance_staffing_v2(
         labor.push(capacity);
     }
     labor.sort_unstable_by_key(|row| (row.site_id, row.unit_id));
-    Ok(StaffingTransitionV2::new(
-        StaffingStateV2::try_new(next_period, pools)?,
+    Ok(StaffingTransition::new(
+        StaffingState::try_new(next_period, pools)?,
         receipts,
         labor,
     ))

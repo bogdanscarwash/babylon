@@ -1,12 +1,12 @@
 use babylon_evidence::{
-    bind_synthetic_driver, parse_synthetic_driver_contract, Digest32, SfsPreregistrationV1,
+    bind_synthetic_driver, parse_synthetic_driver_contract, Digest32, SfsPreregistration,
     SyntheticDriverContractError,
 };
-use babylon_kernel::sha256_of;
-use babylon_practice_contract::PracticeIdV1;
+use babylon_kernel::content_digest::sha256_of;
+use babylon_practice_contract::PracticeId;
 
-const DRIVER: &[u8] = include_bytes!("fixtures/sfs_synthetic_driver_contract_v1.txt");
-const DRIVER_VECTORS: &str = include_str!("fixtures/sfs_synthetic_driver_v1.txt");
+const DRIVER: &[u8] = include_bytes!("fixtures/sfs_synthetic_driver_contract.txt");
+const DRIVER_VECTORS: &str = include_str!("fixtures/sfs_synthetic_driver.txt");
 const DRIVER_SOURCE: &[u8] = include_bytes!("../src/driver.rs");
 
 fn digest(tag: u8) -> Digest32 {
@@ -15,8 +15,8 @@ fn digest(tag: u8) -> Digest32 {
     Digest32::from_bytes(bytes)
 }
 
-fn preregistration(driver: Digest32) -> SfsPreregistrationV1 {
-    SfsPreregistrationV1::new(
+fn preregistration(driver: Digest32) -> SfsPreregistration {
+    SfsPreregistration::new(
         1,
         digest(1),
         digest(2),
@@ -27,9 +27,9 @@ fn preregistration(driver: Digest32) -> SfsPreregistrationV1 {
         10,
         2,
         3,
-        PracticeIdV1::Organize,
+        PracticeId::Organize,
         digest(6),
-        3,
+        digest(3),
         digest(7),
     )
     .unwrap()
@@ -47,7 +47,7 @@ fn source_predicate_and_preregistration_mutations_refuse() {
     let contract = parse_synthetic_driver_contract(DRIVER).unwrap();
     let changed_predicate = String::from_utf8(DRIVER.to_vec())
         .unwrap()
-        .replace("candidate-projection|1", "candidate-projection|2");
+        .replace("candidate-projection|2", "candidate-projection|3");
     assert!(matches!(
         parse_synthetic_driver_contract(changed_predicate.as_bytes()),
         Err(SyntheticDriverContractError::ManifestMalformed { row: 2 })

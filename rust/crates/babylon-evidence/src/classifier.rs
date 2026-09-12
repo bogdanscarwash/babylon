@@ -19,13 +19,13 @@ pub enum SfsClass {
 }
 
 impl SfsClass {
-    /// Returns the exact V1 wire code.
+    /// Returns the exact current wire code.
     #[must_use]
     pub const fn code(self) -> u8 {
         self as u8
     }
 
-    /// Maps one closed V1 wire code without a fallback class.
+    /// Maps one closed current wire code without a fallback class.
     #[must_use]
     pub const fn from_code(value: u8) -> Option<Self> {
         match value {
@@ -55,13 +55,13 @@ pub enum PersistenceClass {
 }
 
 impl PersistenceClass {
-    /// Returns the exact V1 wire code.
+    /// Returns the exact current wire code.
     #[must_use]
     pub const fn code(self) -> u8 {
         self as u8
     }
 
-    /// Maps one closed V1 wire code without a fallback class.
+    /// Maps one closed current wire code without a fallback class.
     #[must_use]
     pub const fn from_code(value: u8) -> Option<Self> {
         match value {

@@ -7,28 +7,27 @@ use babylon_bsl::evaluator::Value;
 use babylon_bsl::exemptions::IntensiveAggregationExemption;
 use babylon_bsl::fuel::IntrinsicCosts;
 use babylon_bsl::identity_codec::{
-    decode_option_presence_v1, encode_bsl_type_v1, encode_const_value_v1,
-    encode_effect_signature_v1, encode_enum_kind_v1, encode_evidence_class_v1,
-    encode_field_kind_v1, encode_rule_role_v1, encode_shape_verb_v1, encode_value_v1,
-    IdentityCodecError,
+    decode_option_presence, encode_bsl_type, encode_const_value, encode_effect_signature,
+    encode_enum_kind, encode_evidence_class, encode_field_kind, encode_rule_role,
+    encode_runtime_value, encode_shape_verb, IdentityCodecError,
 };
 use babylon_bsl::identity_sections::{
-    encode_prepared_bsl_sections_v1, encode_tick_payload_sections_v1, PreparedBslSectionsV1,
+    encode_prepared_bsl_sections, encode_tick_payload_sections, PreparedBslSections,
 };
 use babylon_bsl::query::EdgeKey;
 use babylon_bsl::typecheck::TypeEnv;
 use babylon_bsl::types::{BslType, EnumRegistry, EnumTypeId, FieldDecl, FieldKind};
 use babylon_bsl::vocabulary::{ClosedVocabulary, EnumKind};
 use babylon_graph::memory::MemoryGraph;
-use babylon_graph::stable_element::StableElementResolverV1;
+use babylon_graph::stable_element::StableElementResolver;
 use babylon_graph::substrate::{GraphSubstrate, HyperedgeId, NodeId};
-use babylon_kernel::{Currency, Ratio};
+use babylon_kernel::{currency::Currency, scalars::Ratio};
 
 struct GraphFixture {
     owners: NodeId,
     workers: NodeId,
     coalition: HyperedgeId,
-    resolver: StableElementResolverV1,
+    resolver: StableElementResolver,
 }
 
 fn graph_fixture() -> GraphFixture {
@@ -39,7 +38,7 @@ fn graph_fixture() -> GraphFixture {
     let coalition = graph
         .add_hyperedge("coalition", &[workers, owners])
         .unwrap();
-    let resolver = StableElementResolverV1::seal(
+    let resolver = StableElementResolver::seal(
         &graph,
         "demo/world",
         &HashMap::from([
@@ -57,9 +56,9 @@ fn graph_fixture() -> GraphFixture {
     }
 }
 
-fn encoded_value(value: &Value, resolver: &StableElementResolverV1) -> Vec<u8> {
+fn encoded_value(value: &Value, resolver: &StableElementResolver) -> Vec<u8> {
     let mut output = Vec::new();
-    encode_value_v1(value, resolver, &mut output).unwrap();
+    encode_runtime_value(value, resolver, &mut output).unwrap();
     output
 }
 
@@ -225,20 +224,20 @@ fn governed_type_and_contract_discriminants_are_exact() {
     ];
     for (value, expected) in type_cases {
         let mut output = Vec::new();
-        encode_bsl_type_v1(&value, &enums, &mut output).unwrap();
+        encode_bsl_type(&value, &enums, &mut output).unwrap();
         assert_eq!(output, expected);
     }
-    assert_eq!(encode_field_kind_v1(FieldKind::Intensive), 0x01);
-    assert_eq!(encode_field_kind_v1(FieldKind::Extensive), 0x02);
-    assert_eq!(encode_field_kind_v1(FieldKind::NotApplicable), 0x03);
-    assert_eq!(encode_rule_role_v1(RuleRole::Mechanic), 0x01);
-    assert_eq!(encode_rule_role_v1(RuleRole::Recognizer), 0x02);
-    assert_eq!(encode_rule_role_v1(RuleRole::ExternalEvent), 0x03);
-    assert_eq!(encode_rule_role_v1(RuleRole::Intent), 0x04);
-    assert_eq!(encode_evidence_class_v1(EvidenceClass::Observed), 0x01);
-    assert_eq!(encode_evidence_class_v1(EvidenceClass::Derived), 0x02);
-    assert_eq!(encode_evidence_class_v1(EvidenceClass::Calibrated), 0x03);
-    assert_eq!(encode_evidence_class_v1(EvidenceClass::Designed), 0x04);
+    assert_eq!(encode_field_kind(FieldKind::Intensive), 0x01);
+    assert_eq!(encode_field_kind(FieldKind::Extensive), 0x02);
+    assert_eq!(encode_field_kind(FieldKind::NotApplicable), 0x03);
+    assert_eq!(encode_rule_role(RuleRole::Mechanic), 0x01);
+    assert_eq!(encode_rule_role(RuleRole::Recognizer), 0x02);
+    assert_eq!(encode_rule_role(RuleRole::ExternalEvent), 0x03);
+    assert_eq!(encode_rule_role(RuleRole::Intent), 0x04);
+    assert_eq!(encode_evidence_class(EvidenceClass::Observed), 0x01);
+    assert_eq!(encode_evidence_class(EvidenceClass::Derived), 0x02);
+    assert_eq!(encode_evidence_class(EvidenceClass::Calibrated), 0x03);
+    assert_eq!(encode_evidence_class(EvidenceClass::Designed), 0x04);
     for (verb, tag) in [
         (ShapeVerb::AddNode, 0x01),
         (ShapeVerb::RemoveNode, 0x02),
@@ -247,7 +246,7 @@ fn governed_type_and_contract_discriminants_are_exact() {
         (ShapeVerb::AddHyperedge, 0x05),
         (ShapeVerb::RemoveHyperedge, 0x06),
     ] {
-        assert_eq!(encode_shape_verb_v1(verb), tag);
+        assert_eq!(encode_shape_verb(verb), tag);
     }
     for (kind, tag) in [
         (EnumKind::NodeType, 0x01),
@@ -255,13 +254,13 @@ fn governed_type_and_contract_discriminants_are_exact() {
         (EnumKind::HyperedgeType, 0x03),
         (EnumKind::EventType, 0x04),
     ] {
-        assert_eq!(encode_enum_kind_v1(kind), tag);
+        assert_eq!(encode_enum_kind(kind), tag);
     }
     let mut effect = Vec::new();
-    encode_effect_signature_v1(&EffectSignature::Event("RUPTURE".to_owned()), &mut effect).unwrap();
+    encode_effect_signature(&EffectSignature::Event("RUPTURE".to_owned()), &mut effect).unwrap();
     assert_eq!(effect, [vec![0x04], str32("EventType/RUPTURE")].concat());
     effect.clear();
-    encode_effect_signature_v1(
+    encode_effect_signature(
         &EffectSignature::Shape(ShapeVerb::RemoveHyperedge),
         &mut effect,
     )
@@ -285,7 +284,7 @@ fn governed_type_and_contract_discriminants_are_exact() {
         ),
     ] {
         effect.clear();
-        encode_effect_signature_v1(&signature, &mut effect).unwrap();
+        encode_effect_signature(&signature, &mut effect).unwrap();
         assert_eq!(effect, [vec![tag], str32(name)].concat());
     }
 }
@@ -293,17 +292,17 @@ fn governed_type_and_contract_discriminants_are_exact() {
 #[test]
 fn options_constants_and_invalid_identity_values_refuse_loudly() {
     let fixture = graph_fixture();
-    assert_eq!(decode_option_presence_v1(0), Ok(false));
-    assert_eq!(decode_option_presence_v1(1), Ok(true));
+    assert_eq!(decode_option_presence(0), Ok(false));
+    assert_eq!(decode_option_presence(1), Ok(true));
     assert_eq!(
-        decode_option_presence_v1(2),
+        decode_option_presence(2),
         Err(IdentityCodecError::InvalidOptionByte { value: 2 })
     );
     let mut output = Vec::new();
-    encode_const_value_v1(&Value::Bool(true), &mut output).unwrap();
+    encode_const_value(&Value::Bool(true), &mut output).unwrap();
     assert_eq!(output, vec![0x05, 1]);
     assert!(matches!(
-        encode_const_value_v1(
+        encode_const_value(
             &Value::Enum {
                 enum_type: "OrgKind".to_owned(),
                 member: "BUSINESS".to_owned()
@@ -313,11 +312,11 @@ fn options_constants_and_invalid_identity_values_refuse_loudly() {
         Err(IdentityCodecError::InvalidConstantKind)
     ));
     assert!(matches!(
-        encode_const_value_v1(&Value::NodeRef(fixture.owners), &mut Vec::new()),
+        encode_const_value(&Value::NodeRef(fixture.owners), &mut Vec::new()),
         Err(IdentityCodecError::InvalidConstantKind)
     ));
     assert!(matches!(
-        encode_bsl_type_v1(
+        encode_bsl_type(
             &BslType::Enum(EnumTypeId(99)),
             &EnumRegistry::default(),
             &mut Vec::new()
@@ -325,7 +324,7 @@ fn options_constants_and_invalid_identity_values_refuse_loudly() {
         Err(IdentityCodecError::UnknownEnumType { .. })
     ));
     assert!(matches!(
-        encode_value_v1(
+        encode_runtime_value(
             &Value::NodeRef(NodeId(999)),
             &fixture.resolver,
             &mut Vec::new()
@@ -333,7 +332,7 @@ fn options_constants_and_invalid_identity_values_refuse_loudly() {
         Err(IdentityCodecError::StableIdentity(_))
     ));
     assert!(matches!(
-        encode_value_v1(&Value::Real(f64::NAN), &fixture.resolver, &mut Vec::new()),
+        encode_runtime_value(&Value::Real(f64::NAN), &fixture.resolver, &mut Vec::new()),
         Err(IdentityCodecError::NonFiniteValue)
     ));
 }
@@ -345,7 +344,7 @@ static EXEMPTIONS: &[IntensiveAggregationExemption] = &[IntensiveAggregationExem
     date: "2026-08-26",
 }];
 
-fn prepared_sections() -> (PreparedBslSectionsV1, PreparedBslSectionsV1) {
+fn prepared_sections() -> (PreparedBslSections, PreparedBslSections) {
     let mut enums = EnumRegistry::default();
     enums
         .declare("Zed", &["SECOND".to_owned(), "FIRST".to_owned()])
@@ -386,10 +385,9 @@ fn prepared_sections() -> (PreparedBslSectionsV1, PreparedBslSectionsV1) {
     ])
     .unwrap();
     let present =
-        encode_prepared_bsl_sections_v1(&types, &intrinsics, &consts, &enums, Some(&vocabulary))
+        encode_prepared_bsl_sections(&types, &intrinsics, &consts, &enums, Some(&vocabulary))
             .unwrap();
-    let absent =
-        encode_prepared_bsl_sections_v1(&types, &intrinsics, &consts, &enums, None).unwrap();
+    let absent = encode_prepared_bsl_sections(&types, &intrinsics, &consts, &enums, None).unwrap();
     (present, absent)
 }
 
@@ -424,9 +422,9 @@ fn prepared_intrinsic_identity_accepts_96_bytes_and_refuses_97() {
     let constants = HashMap::new();
     let enums = EnumRegistry::default();
 
-    assert!(encode_prepared_bsl_sections_v1(&types, &maximum, &constants, &enums, None,).is_ok());
+    assert!(encode_prepared_bsl_sections(&types, &maximum, &constants, &enums, None,).is_ok());
     assert_eq!(
-        encode_prepared_bsl_sections_v1(&types, &oversized, &constants, &enums, None,),
+        encode_prepared_bsl_sections(&types, &oversized, &constants, &enums, None,),
         Err(IdentityCodecError::InvalidString {
             field: "intrinsic name",
             index: 97,
@@ -523,15 +521,15 @@ fn payload_sections_preserve_governed_and_live_vector_order() {
         },
     ];
     let sections =
-        encode_tick_payload_sections_v1(&outcomes, &events, &receipts, &fixture.resolver).unwrap();
-    let reversed_events = encode_tick_payload_sections_v1(
+        encode_tick_payload_sections(&outcomes, &events, &receipts, &fixture.resolver).unwrap();
+    let reversed_events = encode_tick_payload_sections(
         &outcomes,
         &events.iter().cloned().rev().collect::<Vec<_>>(),
         &receipts,
         &fixture.resolver,
     )
     .unwrap();
-    let reversed_receipts = encode_tick_payload_sections_v1(
+    let reversed_receipts = encode_tick_payload_sections(
         &outcomes,
         &events,
         &receipts.iter().cloned().rev().collect::<Vec<_>>(),

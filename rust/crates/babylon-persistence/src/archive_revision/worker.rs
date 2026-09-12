@@ -1,89 +1,87 @@
-//! Bounded ordered receipt draining followed by exact adoption validation.
+//! Bounded ordered receipt draining with coherent committed progress.
 
-use super::{
-    publication::{self, Work},
-    tick_knowledge,
-};
+use super::{publication, tick_knowledge, ArchiveReadScope};
 use crate::archive::{database, decode};
 use crate::{
-    ArchiveDossierProducerV1, ArchiveMaterializeDispositionV1, ArchiveMaterializeModeV1,
-    ArchiveReceiptDispositionV1, ArchiveWorkerCancellationV1, ArchiveWorkerSweepReportV1,
-    CampaignId, SemanticArchiveErrorV1, SemanticArchiveStoreV1,
+    identity::CampaignId, ArchiveDossierProducer, ArchiveMaterializeDisposition,
+    ArchiveMaterializeMode, ArchiveReceiptDisposition, ArchiveWorkerCancellation,
+    ArchiveWorkerSweepReport, SemanticArchiveError, SemanticArchiveStore,
 };
 use postgres::{Client, IsolationLevel};
 
 pub(crate) fn sweep(
-    store: &SemanticArchiveStoreV1,
+    store: &SemanticArchiveStore,
     campaign: CampaignId,
-    producer: &dyn ArchiveDossierProducerV1,
-    cancellation: &ArchiveWorkerCancellationV1,
-) -> Result<ArchiveWorkerSweepReportV1, SemanticArchiveErrorV1> {
+    producer: &dyn ArchiveDossierProducer,
+    cancellation: &ArchiveWorkerCancellation,
+) -> Result<ArchiveWorkerSweepReport, SemanticArchiveError> {
     cancellation.check()?;
     let mut client = store.connect("connect ordered Archive worker")?;
     publication::with_campaign_lock(&mut client, campaign, |client| {
-        sweep_locked(client, campaign, producer, cancellation)
+        sweep_locked(
+            client,
+            campaign,
+            producer,
+            cancellation,
+            crate::ARCHIVE_SWEEP_MAX_RECEIPTS,
+        )
     })
 }
 
 fn sweep_locked(
     client: &mut Client,
     campaign: CampaignId,
-    producer: &dyn ArchiveDossierProducerV1,
-    cancellation: &ArchiveWorkerCancellationV1,
-) -> Result<ArchiveWorkerSweepReportV1, SemanticArchiveErrorV1> {
+    producer: &dyn ArchiveDossierProducer,
+    cancellation: &ArchiveWorkerCancellation,
+    receipt_budget: i64,
+) -> Result<ArchiveWorkerSweepReport, SemanticArchiveError> {
     let mut dispositions = Vec::new();
-    for _ in 0..crate::ARCHIVE_SWEEP_MAX_RECEIPTS_V1 {
+    for _ in 0..receipt_budget {
         cancellation.check()?;
         let mut tx = client
             .build_transaction()
             .isolation_level(IsolationLevel::Serializable)
+            .read_only(false)
             .start()
             .map_err(|error| database("begin ordered Archive producer transaction", &error))?;
-        let Some(work) = publication::next_work(&mut tx, campaign)? else {
+        crate::current_schema::require_current_schema(&mut tx)
+            .map_err(SemanticArchiveError::CurrentSchema)?;
+        let Some(receipt) = publication::next_receipt(&mut tx, campaign)? else {
             break;
         };
-        let known = tick_knowledge::pin(&mut tx, &work.scope(campaign)?)?;
+        let scope = ArchiveReadScope::committed(
+            campaign,
+            receipt.resolve_tick(),
+            *receipt.tick_content_hash(),
+        )?;
+        let known = tick_knowledge::pin(&mut tx, &scope)?;
         let outcome = producer.produce(
             *campaign.as_uuid(),
-            work.receipt(),
+            &receipt,
             &known,
-            crate::ArchiveDirtyBatchV1::MAX_PAGES,
+            crate::ArchiveDirtyBatch::MAX_PAGES,
         )?;
-        let coverage = if matches!(work, Work::Cutover(_)) {
-            Some(producer.cutover_subjects(*campaign.as_uuid(), work.receipt(), &known)?)
-        } else {
-            None
-        };
         let mode = if outcome.remaining() == 0 {
-            ArchiveMaterializeModeV1::Consume
+            ArchiveMaterializeMode::Consume
         } else {
-            ArchiveMaterializeModeV1::Stage
+            ArchiveMaterializeMode::Stage
         };
         cancellation.check()?;
-        let report = publication::publish(
-            &mut tx,
-            campaign,
-            &work,
-            outcome.batch(),
-            mode,
-            &known,
-            coverage.as_deref(),
-        )?;
+        let report =
+            publication::publish(&mut tx, campaign, &receipt, outcome.batch(), mode, &known)?;
         cancellation.check()?;
         tx.commit()
             .map_err(|error| database("commit ordered Archive producer transaction", &error))?;
-        if let Work::Receipt(receipt) = work {
-            let disposition = match (mode, report.disposition()) {
-                (_, ArchiveMaterializeDispositionV1::AlreadyConsumed) => {
-                    ArchiveReceiptDispositionV1::AlreadyConsumed
-                }
-                (ArchiveMaterializeModeV1::Stage, _) => ArchiveReceiptDispositionV1::Paged,
-                (ArchiveMaterializeModeV1::Consume, _) => ArchiveReceiptDispositionV1::Applied,
-            };
-            dispositions.push((receipt.resolve_tick(), disposition));
-        }
+        let disposition = match (mode, report.disposition()) {
+            (_, ArchiveMaterializeDisposition::AlreadyConsumed) => {
+                ArchiveReceiptDisposition::AlreadyConsumed
+            }
+            (ArchiveMaterializeMode::Stage, _) => ArchiveReceiptDisposition::Paged,
+            (ArchiveMaterializeMode::Consume, _) => ArchiveReceiptDisposition::Applied,
+        };
+        dispositions.push((receipt.resolve_tick(), disposition));
         // Never evaluate a later quiet receipt against an incomplete earlier head.
-        if mode == ArchiveMaterializeModeV1::Stage {
+        if mode == ArchiveMaterializeMode::Stage {
             break;
         }
     }
@@ -93,32 +91,32 @@ fn sweep_locked(
 fn read_progress(
     client: &mut Client,
     campaign: CampaignId,
-    dispositions: Vec<(u64, ArchiveReceiptDispositionV1)>,
-) -> Result<ArchiveWorkerSweepReportV1, SemanticArchiveErrorV1> {
+    dispositions: Vec<(u64, ArchiveReceiptDisposition)>,
+) -> Result<ArchiveWorkerSweepReport, SemanticArchiveError> {
     let mut tx = client
         .build_transaction()
         .isolation_level(IsolationLevel::RepeatableRead)
         .start()
         .map_err(|error| database("begin coherent Archive progress", &error))?;
-    // Admit the exact seal and pending receipt identities in this same snapshot.
-    let pending = publication::next_work(&mut tx, campaign)?.is_some();
-    let row=tx.query_one("SELECT COALESCE(v.durable_tick,0),COALESCE(v.processed_tick,0),r.sealed \
-        FROM public.v_archive_retention_v2 r LEFT JOIN public.v_archive_verification_v1 v USING(campaign_id) \
-        WHERE r.campaign_id=$1",&[campaign.as_uuid()])
-        .map_err(|error|database("read ordered Archive maintenance progress",&error))?;
+    // Admit pending receipt identities in this same committed snapshot.
+    let pending = publication::next_receipt(&mut tx, campaign)?.is_some();
+    let row = tx
+        .query_one(
+            "SELECT durable_tick,processed_tick \
+        FROM public.v_archive_verification_v1 WHERE campaign_id=$1",
+            &[campaign.as_uuid()],
+        )
+        .map_err(|error| database("read ordered Archive maintenance progress", &error))?;
     let durable = super::storage::unsigned(decode(&row, 0)?)?;
     let processed = super::storage::unsigned(decode(&row, 1)?)?;
     if processed > durable {
-        return Err(SemanticArchiveErrorV1::StoredPageMismatch);
+        return Err(SemanticArchiveError::StoredPageMismatch);
     }
-    let report = ArchiveWorkerSweepReportV1::new(
-        dispositions,
-        durable,
-        processed,
-        decode(&row, 2)?,
-        pending,
-    );
+    let report = ArchiveWorkerSweepReport::new(dispositions, durable, processed, pending);
     tx.commit()
         .map_err(|error| database("finish coherent Archive progress", &error))?;
     Ok(report)
 }
+
+#[cfg(test)]
+mod live_tests;

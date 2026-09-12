@@ -1,14 +1,14 @@
 //! Live `PostgreSQL` contracts for the Michigan H3 reference-bundle installer.
 
 use super::{assert_lock_released, database_user, ScratchDatabase};
-use babylon_kernel::tick_content_hash::RefDigestV1;
+use babylon_kernel::tick_content_hash::RefDigest;
 use babylon_persistence::{
-    compiled_schema_migrations, install_michigan_h3_reference_bundle_v1,
-    michigan_dynamic_hex_foundation_v1, migrate_schema_epoch,
-    representative_h3_reference_cohort_v1, CatalogError, H3ReferenceCohort,
+    h3_reference_cohort::representative_h3_reference_cohort,
+    h3_reference_cohort::H3ReferenceCohort, install_current_schema,
+    install_michigan_h3_reference_bundle, michigan_dynamic_hex_foundation,
+    postgres_catalog::CatalogError, CurrentSchemaDisposition, CurrentSchemaError,
     H3ReferenceInstallConflict, H3ReferenceInstallDisposition, H3ReferenceInstallError,
-    H3ReferenceInstallOperation, H3ReferenceInstallReport, SchemaEpochError, SchemaEpochOrigin,
-    SCHEMA_ADVISORY_LOCK_KEY,
+    H3ReferenceInstallOperation, H3ReferenceInstallReport, SCHEMA_ADVISORY_LOCK_KEY,
 };
 use postgres::{Config, NoTls};
 
@@ -108,7 +108,7 @@ fn verify_connection_failure_redacts_credentials(cohort: &H3ReferenceCohort) {
             diagnostic: Some(diagnostic),
         } => assert_eq!(
             diagnostic.classification(),
-            babylon_persistence::PostgresFailureClassV1::Reachability
+            babylon_persistence::PostgresFailureClass::Reachability
         ),
         _ => panic!("connection refusal must remain a redacted typed database error"),
     }
@@ -120,18 +120,10 @@ fn verify_fresh_refusal(base: &Config, cohort: &H3ReferenceCohort) {
     let database = ScratchDatabase::empty(base, "h3_installer_fresh", database_user(base));
     let config = database.config(base);
     let before = babylon_catalog_snapshot(&config);
-    match install_reference_bundle(&config, cohort) {
-        Err(H3ReferenceInstallError::ExactSchemaEpochRequired {
-            expected,
-            actual,
-            origin,
-        }) => {
-            assert_eq!(expected, current_schema_epoch());
-            assert_eq!(actual, 0);
-            assert_eq!(origin, SchemaEpochOrigin::Fresh);
-        }
-        _ => panic!("fresh database must refuse without migration"),
-    }
+    assert!(matches!(
+        install_reference_bundle(&config, cohort),
+        Err(H3ReferenceInstallError::CurrentSchema(_))
+    ));
     assert_eq!(babylon_catalog_snapshot(&config), before);
     assert_lock_released(&config);
     database.cleanup();
@@ -176,15 +168,15 @@ fn verify_non_owner_refusal(
     let database = ScratchDatabase::empty(base, "h3_installer_non_owner", owner);
     let owner_config = database.config_as(base, owner, owner_password);
     let report =
-        migrate_schema_epoch(&owner_config).expect("database owner must establish current epoch");
-    assert_eq!(report.final_applied, current_schema_epoch());
+        install_current_schema(&owner_config).expect("database owner must establish current epoch");
+    assert_eq!(report.disposition, CurrentSchemaDisposition::Installed);
 
     let admin_config = database.config(base);
     let before = reference_snapshot(&admin_config);
     assert_eq!(
         install_reference_bundle(&admin_config, cohort),
-        Err(H3ReferenceInstallError::SchemaEpoch(
-            SchemaEpochError::CurrentUserIsNotDatabaseOwner,
+        Err(H3ReferenceInstallError::CurrentSchema(
+            CurrentSchemaError::CurrentUserIsNotDatabaseOwner,
         )),
         "non-owner installer call must refuse through the exact owner check"
     );
@@ -481,21 +473,9 @@ fn exact_epoch_database(base: &Config, label: &str) -> (ScratchDatabase, Config)
     let database = ScratchDatabase::empty(base, label, database_user(base));
     let config = database.config(base);
     let report =
-        migrate_schema_epoch(&config).expect("fresh database must reach the exact current epoch");
-    assert_eq!(report.origin, SchemaEpochOrigin::Fresh);
-    let current_epoch = current_schema_epoch();
-    assert_eq!(
-        (report.prior_applied, report.final_applied),
-        (0, current_epoch)
-    );
-    assert_eq!(report.applied_versions.len(), current_epoch);
+        install_current_schema(&config).expect("fresh database must reach the exact current epoch");
+    assert_eq!(report.disposition, CurrentSchemaDisposition::Installed);
     (database, config)
-}
-
-fn current_schema_epoch() -> usize {
-    compiled_schema_migrations()
-        .expect("compiled migration registry must validate")
-        .len()
 }
 
 fn seed_conflicting_artifact_identity(config: &Config) {
@@ -680,7 +660,7 @@ fn babylon_catalog_snapshot(config: &Config) -> Vec<(String, String)> {
 }
 
 pub(super) fn representative_cohort() -> H3ReferenceCohort {
-    representative_h3_reference_cohort_v1()
+    representative_h3_reference_cohort()
         .expect("the sole checked-in source fixture must validate")
         .clone()
 }
@@ -689,17 +669,17 @@ pub(super) fn install_reference_bundle(
     config: &Config,
     cohort: &H3ReferenceCohort,
 ) -> Result<H3ReferenceInstallReport, H3ReferenceInstallError> {
-    let foundation = michigan_dynamic_hex_foundation_v1()
+    let foundation = michigan_dynamic_hex_foundation()
         .expect("the sole checked Michigan foundation fixture must validate");
-    install_michigan_h3_reference_bundle_v1(config, cohort, foundation)
+    install_michigan_h3_reference_bundle(config, cohort, foundation)
 }
 
-fn digest(text: &str) -> RefDigestV1 {
+fn digest(text: &str) -> RefDigest {
     assert_eq!(text.len(), 64);
     let mut bytes = [0_u8; 32];
     for (index, byte) in bytes.iter_mut().enumerate().take(32) {
         let offset = index * 2;
         *byte = u8::from_str_radix(&text[offset..offset + 2], 16).unwrap();
     }
-    RefDigestV1::from_bytes(bytes)
+    RefDigest::from_bytes(bytes)
 }

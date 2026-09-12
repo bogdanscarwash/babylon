@@ -8,48 +8,47 @@
 #[path = "../../babylon-persistence/src/michigan_dynamic_hex_foundation.rs"]
 mod michigan_dynamic_hex_foundation;
 
+use babylon_bsl::canonical_ast::rules_hash_of;
 use babylon_bsl::causal_contract::{EffectSignature, EvidenceClass, RuleRole};
 use babylon_bsl::evaluator::Value;
-use babylon_bsl::identity_codec::StableBslValueV1;
+use babylon_bsl::identity_codec::StableBslValue;
 use babylon_bsl::rule_pipeline::split_content;
-use babylon_bsl::rules_hash_of;
 use babylon_bsl::structural_verbs::CollectingSink;
 use babylon_graph::hypergraph_store::HypergraphStore;
-use babylon_graph::stable_element::StableElementKeyV1;
+use babylon_graph::stable_element::StableElementKey;
 use babylon_graph::state_hash::CanonicalState;
 use babylon_graph::substrate::GraphSubstrate;
-use babylon_kernel::replay::{ReplaySeed, ReplaySessionIdV1};
-use babylon_kernel::tick_content_hash::RefDigestV1;
-use babylon_kernel::{sha256_of, ContentDigest};
+use babylon_kernel::replay::{ReplaySeed, ReplaySessionId};
+use babylon_kernel::tick_content_hash::RefDigest;
+use babylon_kernel::{content_digest::sha256_of, content_digest::ContentDigest};
 use babylon_material_circuit::{
-    BacklogRowV1, CapacityRowV1, CorridorCapacityV3, CorridorIdV2, FreightMassCoefficientV3,
-    GoodIdV1, InputOutputCoefficientV1, InventoryRowV1, LaborCapacityRowV1, LaborCoefficientV1,
-    LogisticsNodeIdV2, MaterialCircuitStateV3, OrderAccessModeV1, OrderIdV1, OrderRowV2,
-    ProcessIdV1, ProcessOutputV1, RouteIdV2, RouteStageCapacityV3, RouteStageV3, SiteIdV1,
-    SiteLogisticsNodeV2, StaffingPolicyV1, StaffingPoolBindingV2, StaffingPoolIdV1,
-    StaffingWorkSourceV2, SupplierRouteV3, SupplierTransportV3, UnitIdV1,
+    BacklogRow, CapacityRow, CorridorCapacity, CorridorId, FreightMassCoefficient, GoodId,
+    InputOutputCoefficient, InventoryRow, LaborCapacityRow, LaborCoefficient, LogisticsNodeId,
+    MaterialCircuitState, OrderAccessMode, OrderId, OrderRow, ProcessId, ProcessOutput, RouteId,
+    RouteStage, RouteStageCapacity, SiteId, SiteLogisticsNode, StaffingPolicy, StaffingPoolBinding,
+    StaffingPoolId, StaffingWorkSource, SupplierRoute, SupplierTransport, UnitId,
 };
-use babylon_practice_contract::ordered_action_v1::OrderedPracticeActionBatchV1;
-use babylon_tick::h3_runtime::MichiganDynamicHexValueBitsV1;
+use babylon_practice_contract::OrderedPracticeActionBatch;
+use babylon_tick::h3_runtime::MichiganDynamicHexValueBits;
 use babylon_tick::material_replay::{
-    IdentifiedMaterialTickV3, MaterialBaseErrorV1, MaterialCommitErrorV3, MaterialLaborV1,
-    MaterialReplayErrorV3, MaterialReplaySessionV3, PreparedMaterialTickV3,
+    IdentifiedMaterialTick, MaterialBaseError, MaterialCommitError, MaterialReplayError,
+    MaterialReplaySession, PreparedMaterialTick,
 };
 use babylon_tick::material_staffing::{
-    StaffingCompositionV1, StaffingNodeBindingV1, EMPLOYED_POPULATION, PREVIOUS_UNRETAINED_HOURS,
-    RESERVE_POPULATION, STAFFING_COMPOSITION_ID_V1, STAFFING_FIELDS_V1,
+    StaffingComposition, StaffingNodeBinding, EMPLOYED_POPULATION, PREVIOUS_UNRETAINED_HOURS,
+    RESERVE_POPULATION, STAFFING_COMPOSITION_ID, STAFFING_FIELDS,
 };
 use babylon_tick::material_state::{
-    DynamicHexStateRowV1, MaterialStateRowsInputV1, MaterialStateRowsV1, MaterialStateV1,
-    OrganizationStateRowV1, TerritoryStateRowV1, WorldRegisterRowV1,
+    DynamicHexStateRow, MaterialState, MaterialStateRows, MaterialStateRowsInput,
+    OrganizationStateRow, TerritoryStateRow, WorldRegisterRow,
 };
 use babylon_tick::material_world::{
-    decode_material_receipts_v4, MaterialTickReceiptsV4, MaterialWorldRegisterV3,
+    decode_material_receipts, MaterialTickReceipts, MaterialWorldRegister,
 };
-use babylon_tick::replay_session::{ReplayCommitDispositionV1, ReplayTickError, ReplayTickSession};
+use babylon_tick::replay_session::{ReplayCommitDisposition, ReplayTickError, ReplayTickSession};
 
-type Session = MaterialReplaySessionV3<HypergraphStore>;
-type Candidate = PreparedMaterialTickV3<HypergraphStore>;
+type Session = MaterialReplaySession<HypergraphStore>;
+type Candidate = PreparedMaterialTick<HypergraphStore>;
 
 const SCENARIO: &str = r"
 (scenario staffing/replay
@@ -96,31 +95,31 @@ const FAILURE: &str = r#"
     (update-node self social-class/probability (add 0.4i))))
 "#;
 
-fn subject() -> StableElementKeyV1 {
-    StableElementKeyV1::Node {
+fn subject() -> StableElementKey {
+    StableElementKey::Node {
         scenario: "staffing/replay".to_owned(),
         local_name: "workers".to_owned(),
     }
 }
 
-fn site(value: u8) -> SiteIdV1 {
-    SiteIdV1::from_bytes([value; 32])
+fn site(value: u8) -> SiteId {
+    SiteId::from_bytes([value; 32])
 }
 
-fn good(value: u8) -> GoodIdV1 {
-    GoodIdV1::from_bytes([value; 32])
+fn good(value: u8) -> GoodId {
+    GoodId::from_bytes([value; 32])
 }
 
-fn unit(value: u8) -> UnitIdV1 {
-    UnitIdV1::from_bytes([value; 32])
+fn unit(value: u8) -> UnitId {
+    UnitId::from_bytes([value; 32])
 }
 
-fn process() -> ProcessIdV1 {
-    ProcessIdV1::from_bytes([1; 32])
+fn process() -> ProcessId {
+    ProcessId::from_bytes([1; 32])
 }
 
-fn labor(period: u64, available: u64) -> LaborCapacityRowV1 {
-    LaborCapacityRowV1 {
+fn labor(period: u64, available: u64) -> LaborCapacityRow {
+    LaborCapacityRow {
         site_id: site(1),
         unit_id: unit(1),
         period,
@@ -128,29 +127,29 @@ fn labor(period: u64, available: u64) -> LaborCapacityRowV1 {
     }
 }
 
-fn opening() -> MaterialCircuitStateV3 {
-    let mut state = MaterialCircuitStateV3 {
+fn opening() -> MaterialCircuitState {
+    let mut state = MaterialCircuitState {
         period: 1,
         site_logistics_nodes: [1, 2]
-            .map(|id| SiteLogisticsNodeV2 {
+            .map(|id| SiteLogisticsNode {
                 site_id: site(id),
-                node_id: LogisticsNodeIdV2::from_bytes([id; 32]),
+                node_id: LogisticsNodeId::from_bytes([id; 32]),
             })
             .to_vec(),
-        process_outputs: vec![ProcessOutputV1 {
+        process_outputs: vec![ProcessOutput {
             process_id: process(),
             site_id: site(1),
             good_id: good(2),
             unit_id: unit(2),
             quantity_per_batch: 5,
         }],
-        input_coefficients: vec![InputOutputCoefficientV1 {
+        input_coefficients: vec![InputOutputCoefficient {
             process_id: process(),
             good_id: good(1),
             unit_id: unit(2),
             quantity_per_batch: 2,
         }],
-        labor_coefficients: vec![LaborCoefficientV1 {
+        labor_coefficients: vec![LaborCoefficient {
             process_id: process(),
             unit_id: unit(1),
             quantity_per_batch: 40,
@@ -159,13 +158,13 @@ fn opening() -> MaterialCircuitStateV3 {
         route_stages: Vec::new(),
         route_stage_capacities: Vec::new(),
         freight_mass_coefficients: [1, 2]
-            .map(|id| FreightMassCoefficientV3 {
+            .map(|id| FreightMassCoefficient {
                 good_id: good(id),
                 unit_id: unit(2),
                 grams_per_unit: 1000,
             })
             .to_vec(),
-        inventory: vec![InventoryRowV1 {
+        inventory: vec![InventoryRow {
             site_id: site(2),
             good_id: good(1),
             unit_id: unit(2),
@@ -176,7 +175,7 @@ fn opening() -> MaterialCircuitStateV3 {
         freight: Vec::new(),
         corridor_capacities: Vec::new(),
         capacities: (1..=8)
-            .map(|period| CapacityRowV1 {
+            .map(|period| CapacityRow {
                 process_id: process(),
                 site_id: site(1),
                 period,
@@ -194,34 +193,34 @@ fn opening() -> MaterialCircuitStateV3 {
     state
 }
 
-fn install_freight(state: &mut MaterialCircuitStateV3) {
-    let route = RouteIdV2::from_bytes([1; 32]);
-    let corridor = CorridorIdV2::from_bytes([1; 32]);
-    let order = OrderIdV1::from_bytes([1; 32]);
-    state.supplier_routes.push(SupplierRouteV3 {
-        transport_kind: SupplierTransportV3::Staged,
+fn install_freight(state: &mut MaterialCircuitState) {
+    let route = RouteId::from_bytes([1; 32]);
+    let corridor = CorridorId::from_bytes([1; 32]);
+    let order = OrderId::from_bytes([1; 32]);
+    state.supplier_routes.push(SupplierRoute {
+        transport_kind: SupplierTransport::Staged,
         buyer_site_id: site(1),
         supplier_site_id: site(2),
         good_id: good(1),
         unit_id: unit(2),
         route_id: route,
     });
-    state.route_stages.push(RouteStageV3 {
+    state.route_stages.push(RouteStage {
         route_id: route,
         stage_index: 0,
-        from_node_id: LogisticsNodeIdV2::from_bytes([2; 32]),
-        to_node_id: LogisticsNodeIdV2::from_bytes([1; 32]),
+        from_node_id: LogisticsNodeId::from_bytes([2; 32]),
+        to_node_id: LogisticsNodeId::from_bytes([1; 32]),
         travel_periods: 2,
         loss_ppm: 0,
     });
-    state.route_stage_capacities.push(RouteStageCapacityV3 {
+    state.route_stage_capacities.push(RouteStageCapacity {
         route_id: route,
         stage_index: 0,
         corridor_id: corridor,
     });
-    state.orders.push(OrderRowV2 {
+    state.orders.push(OrderRow {
         order_id: order,
-        access_mode: OrderAccessModeV1::CommoditySale,
+        access_mode: OrderAccessMode::CommoditySale,
         buyer_site_id: site(1),
         supplier_site_id: site(2),
         good_id: good(1),
@@ -232,37 +231,33 @@ fn install_freight(state: &mut MaterialCircuitStateV3) {
         delivered: 0,
         realized: 0,
     });
-    state.backlog.push(BacklogRowV1 {
+    state.backlog.push(BacklogRow {
         order_id: order,
         quantity: 4,
     });
-    state.corridor_capacities.push(CorridorCapacityV3 {
+    state.corridor_capacities.push(CorridorCapacity {
         corridor_id: corridor,
         period: 1,
         available_grams: 4000,
     });
 }
 
-fn staffed_labor() -> MaterialLaborV1 {
-    let pool = StaffingPoolBindingV2::try_new(
-        StaffingPoolIdV1::from_bytes([1; 32]),
+fn staffed_labor() -> StaffingComposition {
+    let pool = StaffingPoolBinding::try_new(
+        StaffingPoolId::from_bytes([1; 32]),
         site(1),
         unit(1),
         1,
-        StaffingPolicyV1::one_period(160).unwrap(),
-        vec![StaffingWorkSourceV2::Production(process())],
+        StaffingPolicy::one_period(160).unwrap(),
+        vec![StaffingWorkSource::Production(process())],
     )
     .unwrap();
-    let composition =
-        StaffingCompositionV1::try_new(vec![
-            StaffingNodeBindingV1::try_new(subject(), pool).unwrap()
-        ])
-        .unwrap();
-    MaterialLaborV1::Staffed(composition)
+    StaffingComposition::try_new(vec![StaffingNodeBinding::try_new(subject(), pool).unwrap()])
+        .unwrap()
 }
 
-fn try_session(rules: &str, labor: MaterialLaborV1) -> Result<Session, MaterialReplayErrorV3> {
-    let foundation = michigan_dynamic_hex_foundation::michigan_dynamic_hex_foundation_v1().unwrap();
+fn try_session(rules: &str, labor: StaffingComposition) -> Result<Session, MaterialReplayError> {
+    let foundation = michigan_dynamic_hex_foundation::michigan_dynamic_hex_foundation().unwrap();
     let (_, parsed) = split_content(rules).unwrap();
     let forms = parsed.into_iter().map(|rule| rule.form).collect::<Vec<_>>();
     let graph = ReplayTickSession::new(
@@ -270,19 +265,19 @@ fn try_session(rules: &str, labor: MaterialLaborV1) -> Result<Session, MaterialR
         None,
         rules,
         HypergraphStore::new(),
-        ReplaySessionIdV1::try_from("staffing/replay-session").unwrap(),
+        ReplaySessionId::try_from("staffing/replay-session").unwrap(),
         ReplaySeed::new(40),
         ContentDigest {
             defines_hash: [40; 32],
             rules_hash: rules_hash_of(&forms).unwrap(),
         },
-        RefDigestV1::from_bytes(foundation.reference_bundle_digest()),
-        MaterialStateV1::try_new(foundation).unwrap(),
+        RefDigest::from_bytes(foundation.reference_bundle_digest()),
+        MaterialState::try_new(foundation).unwrap(),
     )
-    .map_err(MaterialReplayErrorV3::Graph)?;
-    MaterialReplaySessionV3::new(
+    .map_err(MaterialReplayError::Graph)?;
+    MaterialReplaySession::new(
         graph,
-        MaterialWorldRegisterV3::try_new(0, opening()).unwrap(),
+        MaterialWorldRegister::try_new(0, opening()).unwrap(),
         sha256_of(b"staffed-replay-fixture-foundation"),
         7,
         labor,
@@ -294,7 +289,7 @@ fn session(rules: &str) -> Session {
 }
 
 fn prepare(session: &Session) -> Candidate {
-    let actions = OrderedPracticeActionBatchV1::empty(
+    let actions = OrderedPracticeActionBatch::empty(
         session.graph_session().session_identity().clone(),
         session.completed_tick() + 1,
     )
@@ -306,18 +301,18 @@ fn commit(
     session: &mut Session,
     sink: &mut CollectingSink,
     candidate: Candidate,
-) -> IdentifiedMaterialTickV3 {
+) -> IdentifiedMaterialTick {
     session
         .commit_prepared_and_publish(sink, candidate, |_| {
-            Ok::<_, &'static str>(ReplayCommitDispositionV1::Committed)
+            Ok::<_, &'static str>(ReplayCommitDisposition::Committed)
         })
         .unwrap()
         .0
 }
 
-fn advance(session: &mut Session, sink: &mut CollectingSink) -> MaterialTickReceiptsV4 {
+fn advance(session: &mut Session, sink: &mut CollectingSink) -> MaterialTickReceipts {
     let candidate = prepare(session);
-    let receipts = decode_material_receipts_v4(candidate.material().receipt_bytes()).unwrap();
+    let receipts = decode_material_receipts(candidate.material().receipt_bytes()).unwrap();
     commit(session, sink, candidate);
     receipts
 }
@@ -344,14 +339,14 @@ fn staffing_field(candidate: &Candidate, name: &str) -> i64 {
     let events = candidate.graph_report().successful_event_batch().events();
     let event = events
         .iter()
-        .find(|event| event.emitting_rule() == STAFFING_COMPOSITION_ID_V1)
+        .find(|event| event.emitting_rule() == STAFFING_COMPOSITION_ID)
         .unwrap();
     let (_, value) = event
         .fields()
         .iter()
         .find(|(field, _)| field == name)
         .unwrap();
-    let StableBslValueV1::Int(value) = value else {
+    let StableBslValue::Int(value) = value else {
         panic!("staffing receipt field {name} must be exact int");
     };
     *value
@@ -360,7 +355,7 @@ fn staffing_field(candidate: &Candidate, name: &str) -> i64 {
 #[derive(Debug, PartialEq)]
 struct LiveState {
     graph: Vec<u8>,
-    graph_material: MaterialStateV1,
+    graph_material: MaterialState,
     registers: Vec<u8>,
     physical: Vec<u8>,
     world_hash: [u8; 32],
@@ -373,8 +368,8 @@ fn live(session: &Session, sink: &CollectingSink) -> LiveState {
     // These fixture rules change only social-class attributes. Compare the
     // complete live H3 owner to a separately constructed checked foundation;
     // it deliberately offers no unchecked Clone or arbitrary-state constructor.
-    let foundation = michigan_dynamic_hex_foundation::michigan_dynamic_hex_foundation_v1().unwrap();
-    let graph_material = MaterialStateV1::try_new(foundation).unwrap();
+    let foundation = michigan_dynamic_hex_foundation::michigan_dynamic_hex_foundation().unwrap();
+    let graph_material = MaterialState::try_new(foundation).unwrap();
     assert_eq!(graph.material_state(), &graph_material);
     LiveState {
         graph: graph.graph().encode_state().unwrap().as_bytes().to_vec(),
@@ -387,24 +382,24 @@ fn live(session: &Session, sink: &CollectingSink) -> LiveState {
     }
 }
 
-fn owned_checkpoint_rows(rows: &MaterialStateRowsV1) -> MaterialStateRowsV1 {
-    let owned = MaterialStateRowsV1::try_from_rows(MaterialStateRowsInputV1 {
+fn owned_checkpoint_rows(rows: &MaterialStateRows) -> MaterialStateRows {
+    let owned = MaterialStateRows::try_from_rows(MaterialStateRowsInput {
         world_registers: rows.world_registers().rows().iter().map(|row| {
-            WorldRegisterRowV1::try_new(row.qname().to_owned(), row.value().clone()).unwrap()
+            WorldRegisterRow::try_new(row.qname().to_owned(), row.value().clone()).unwrap()
         }).collect(),
         territories: rows.territories().rows().iter().map(|row| {
-            TerritoryStateRowV1::try_new(row.territory_id().clone(), row.ordered_fields().to_vec()).unwrap()
+            TerritoryStateRow::try_new(row.territory_id().clone(), row.ordered_fields().to_vec()).unwrap()
         }).collect(),
         dynamic_hexes: rows.dynamic_hexes().rows().iter().map(|row| {
             let [c, v, s, k, biocapacity_stock, energy_stock, raw_material_stock,
                 internet_access_pct, surveillance_coupling] = row.value_bits();
-            DynamicHexStateRowV1::try_new(row.cell_id(), MichiganDynamicHexValueBitsV1 {
+            DynamicHexStateRow::try_new(row.cell_id(), MichiganDynamicHexValueBits {
                 c, v, s, k, biocapacity_stock, energy_stock, raw_material_stock,
                 internet_access_pct, surveillance_coupling,
             }).unwrap()
         }).collect(),
         organizations: rows.organizations().rows().iter().map(|row| {
-            OrganizationStateRowV1::try_new(
+            OrganizationStateRow::try_new(
                 row.organization_id().clone(), row.organization_kind().clone(),
                 row.ordered_territory_ids().to_vec(), row.ordered_fields().to_vec(),
             ).unwrap()
@@ -422,7 +417,7 @@ fn one_empty_period_holds_then_releases_and_real_arrival_rehires_for_next_period
     assert_eq!(staffing_field(&first, "current-unretained-hours"), 0);
     assert_eq!(staffing_field(&first, "retained-hours"), 160);
     assert_eq!(staffing_field(&first, "separations"), 0);
-    let receipts = decode_material_receipts_v4(first.material().receipt_bytes()).unwrap();
+    let receipts = decode_material_receipts(first.material().receipt_bytes()).unwrap();
     assert_eq!(
         (
             receipts.dispatches[0].quantity,
@@ -445,7 +440,7 @@ fn one_empty_period_holds_then_releases_and_real_arrival_rehires_for_next_period
     let arrival = prepare(&session);
     assert_eq!(staffing_field(&arrival, "current-unretained-hours"), 40);
     assert_eq!(staffing_field(&arrival, "hires"), 1);
-    let receipts = decode_material_receipts_v4(arrival.material().receipt_bytes()).unwrap();
+    let receipts = decode_material_receipts(arrival.material().receipt_bytes()).unwrap();
     assert_eq!(receipts.arrivals.len(), 1);
     assert_eq!(receipts.arrivals[0].quantity, 4);
     assert!(receipts.production.is_empty());
@@ -464,19 +459,19 @@ fn one_empty_period_holds_then_releases_and_real_arrival_rehires_for_next_period
     assert_eq!(
         session.material().state().inventory,
         vec![
-            InventoryRowV1 {
+            InventoryRow {
                 site_id: site(1),
                 good_id: good(1),
                 unit_id: unit(2),
                 quantity: 0
             },
-            InventoryRowV1 {
+            InventoryRow {
                 site_id: site(1),
                 good_id: good(2),
                 unit_id: unit(2),
                 quantity: 10
             },
-            InventoryRowV1 {
+            InventoryRow {
                 site_id: site(2),
                 good_id: good(1),
                 unit_id: unit(2),
@@ -492,8 +487,8 @@ fn one_empty_period_holds_then_releases_and_real_arrival_rehires_for_next_period
     assert!(session.material().state().freight.is_empty());
     assert_eq!(
         session.material().state().backlog,
-        vec![BacklogRowV1 {
-            order_id: OrderIdV1::from_bytes([1; 32]),
+        vec![BacklogRow {
+            order_id: OrderId::from_bytes([1; 32]),
             quantity: 0,
         }]
     );
@@ -517,11 +512,11 @@ fn prepared_and_failed_commit_publish_nothing_and_retry_has_identical_joint_iden
     let expected_physical = candidate.material().register().clone();
     let error = session.commit_prepared_and_publish(&mut sink, candidate, |identity| {
         assert_eq!(identity, &expected);
-        Err::<ReplayCommitDispositionV1, _>("durable commit refused")
+        Err::<ReplayCommitDisposition, _>("durable commit refused")
     });
     assert!(matches!(
         error,
-        Err(MaterialCommitErrorV3::Commit("durable commit refused"))
+        Err(MaterialCommitError::Commit("durable commit refused"))
     ));
     assert_eq!(live(&session, &sink), before);
 
@@ -553,11 +548,11 @@ fn successful_acknowledgement_publishes_stable_staffing_and_identity_free_audit_
     let events = report.successful_event_batch().events();
     assert_eq!(events.len(), 1);
     assert_eq!(events[0].event_type(), "WORKFORCE_STAFFING");
-    assert_eq!(events[0].emitting_rule(), STAFFING_COMPOSITION_ID_V1);
+    assert_eq!(events[0].emitting_rule(), STAFFING_COMPOSITION_ID);
     assert_eq!(events[0].choice_receipt(), None);
     assert!(events[0]
         .fields()
-        .contains(&("subject".to_owned(), StableBslValueV1::Node(subject()))));
+        .contains(&("subject".to_owned(), StableBslValue::Node(subject()))));
     for (name, expected) in [
         ("period", 2),
         ("opening-employed", 1),
@@ -574,7 +569,7 @@ fn successful_acknowledgement_publishes_stable_staffing_and_identity_free_audit_
     assert_eq!(audit.len(), 4);
     assert!(audit
         .iter()
-        .all(|row| row.rule_id == STAFFING_COMPOSITION_ID_V1
+        .all(|row| row.rule_id == STAFFING_COMPOSITION_ID
             && row.role == RuleRole::Mechanic
             && row.evidence == EvidenceClass::Designed));
     assert_eq!(
@@ -627,11 +622,11 @@ fn later_anchored_rule_reads_this_candidates_staffing_before_graph_finalization(
             .iter()
             .map(|event| event.emitting_rule())
             .collect::<Vec<_>>(),
-        [STAFFING_COMPOSITION_ID_V1, "zz-staffing/witness"]
+        [STAFFING_COMPOSITION_ID, "zz-staffing/witness"]
     );
     assert!(events[1].fields().contains(&(
         "employed".to_owned(),
-        StableBslValueV1::RealBits(0.0_f64.to_bits()),
+        StableBslValue::RealBits(0.0_f64.to_bits()),
     )));
     // Preparation has exposed the changed stock only to the detached later rule.
     assert_stock(&session, "social-class/seen-employed", 1.0);
@@ -651,12 +646,11 @@ fn failing_later_rule_aborts_staffing_physical_close_events_and_both_clocks() {
     assert_eq!(session.material().state().freight[0].quantity, 4);
     let before = live(&session, &sink);
     let actions =
-        OrderedPracticeActionBatchV1::empty(session.graph_session().session_identity().clone(), 3)
+        OrderedPracticeActionBatch::empty(session.graph_session().session_identity().clone(), 3)
             .unwrap();
     for _ in 0..2 {
         let result = session.prepare_advance(&actions);
-        let Err(MaterialReplayErrorV3::Graph(ReplayTickError::Execution { message })) = result
-        else {
+        let Err(MaterialReplayError::Graph(ReplayTickError::Execution { message })) = result else {
             panic!("the later domain-invalid write must abort replay execution");
         };
         assert!(message.contains("zzz-staffing/failure"), "{message}");
@@ -726,7 +720,7 @@ fn same_version_checkpoint_restores_retention_and_replays_arrival_with_identical
 
 #[test]
 fn staffed_admission_refuses_every_native_field_in_early_late_and_untaken_writes() {
-    for field in STAFFING_FIELDS_V1 {
+    for field in STAFFING_FIELDS {
         for (anchor, guard) in [
             ("before vitality", "#t"),
             ("after metabolism", "#t"),
@@ -749,8 +743,8 @@ fn staffed_admission_refuses_every_native_field_in_early_late_and_untaken_writes
                 .unwrap_or_else(|| {
                     panic!("Staffed accepted {anchor} write to {field}, guard {guard}")
                 });
-            let MaterialReplayErrorV3::Graph(ReplayTickError::MaterialBase(
-                MaterialBaseErrorV1::StaffingFieldOwner {
+            let MaterialReplayError::Graph(ReplayTickError::MaterialBase(
+                MaterialBaseError::StaffingFieldOwner {
                     rule_id,
                     field: actual,
                 },
@@ -760,23 +754,6 @@ fn staffed_admission_refuses_every_native_field_in_early_late_and_untaken_writes
             };
             assert_eq!(rule_id, "zz-staffing/foreign-writer");
             assert_eq!(actual, field);
-            // Ownership is specific to Staffed admission, not a new global BSL ban.
-            let mut scheduled = try_session(&source, MaterialLaborV1::Scheduled).unwrap();
-            let mut sink = CollectingSink::default();
-            advance(&mut scheduled, &mut sink);
-            let original = if field == EMPLOYED_POPULATION {
-                1.0
-            } else if field == RESERVE_POPULATION {
-                0.0
-            } else {
-                160.0
-            };
-            assert_stock(
-                &scheduled,
-                field,
-                if guard == "#t" { 9.0 } else { original },
-            );
-            assert!(sink.events.is_empty());
         }
     }
 }
@@ -793,9 +770,10 @@ fn removing_the_staffed_subject_is_refused_by_the_existing_shape_verb_loader() {
   (when #t)
   (effects (remove-node self)))
 "#;
-    for labor in [staffed_labor(), MaterialLaborV1::Scheduled] {
+    {
+        let labor = staffed_labor();
         let result = try_session(source, labor);
-        let Err(MaterialReplayErrorV3::Graph(ReplayTickError::Preparation { message })) = result
+        let Err(MaterialReplayError::Graph(ReplayTickError::Preparation { message })) = result
         else {
             panic!("the existing shape-verb gate must refuse before a session is created");
         };

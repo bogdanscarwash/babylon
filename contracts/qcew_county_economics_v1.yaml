@@ -55,8 +55,8 @@ consumer_mapping:
   evidence_class: Observed
   time_policy: fixed-2024-observed-baseline
   consumers:
-    - ObserverEconomyReaderV1
-    - CountyDossierProducerV1
+    - babylon_persistence::observer_reader::ObserverEconomyReader
+    - babylon_persistence::CountyDossierProducer
   mechanics_consumers: []
   fields:
     - source_statistic: annual_avg_estabs_count

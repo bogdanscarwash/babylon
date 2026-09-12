@@ -7,7 +7,10 @@
 use std::ffi::OsString;
 use std::fmt;
 
-use babylon_persistence::{CampaignId, RuntimeSessionPresetV3, RuntimeSessionTargetV3};
+use babylon_persistence::{
+    identity::CampaignId, runtime_session::RuntimeSessionPreset,
+    runtime_session::RuntimeSessionTarget,
+};
 use uuid::Uuid;
 
 /// The `--headless` flag: run exactly one dossier command against the
@@ -205,7 +208,7 @@ pub enum CliRequest {
     /// Open one persistent observer window with an explicit initial target.
     Windowed {
         /// Submitted through the normal lifecycle Switch path after Hello.
-        initial_target: RuntimeSessionTargetV3,
+        initial_target: RuntimeSessionTarget,
     },
     /// Run exactly one headless dossier command.
     Headless {
@@ -278,7 +281,7 @@ pub fn parse(args: impl IntoIterator<Item = OsString>) -> Result<CliRequest, Cli
     if !headless {
         if !rest.is_empty() {
             return Err(CliError::at(concat!(file!(), ":", line!()),
-                format!("windowed mode observes one durable campaign; use {HEADLESS_FLAG} for commands; demo stories are conformance-only")));
+                format!("windowed mode observes one durable campaign; use {HEADLESS_FLAG} for commands; demo stories are retired")));
         }
         return Ok(CliRequest::Windowed {
             initial_target: windowed_target(campaign, new_campaign, preset)?,
@@ -293,7 +296,7 @@ pub fn parse(args: impl IntoIterator<Item = OsString>) -> Result<CliRequest, Cli
     if rest.iter().any(|word| word == STORY_FLAG) {
         return Err(CliError::at(
             concat!(file!(), ":", line!()),
-            format!("{STORY_FLAG} is conformance-only; the client observes a durable campaign"),
+            format!("{STORY_FLAG} is retired; the client observes a durable campaign"),
         ));
     }
     if rest.first().is_some_and(|word| word == "help") {
@@ -331,7 +334,7 @@ fn windowed_target(
     campaign: Option<String>,
     new_campaign: Option<String>,
     preset: Option<String>,
-) -> Result<RuntimeSessionTargetV3, CliError> {
+) -> Result<RuntimeSessionTarget, CliError> {
     if let Some(raw) = new_campaign {
         if campaign.is_some() {
             return Err(CliError::at(
@@ -340,14 +343,14 @@ fn windowed_target(
             ));
         }
         let preset = match preset.as_deref() {
-            None | Some("standard") => RuntimeSessionPresetV3::Standard,
-            Some("delayed") => RuntimeSessionPresetV3::Delayed,
-            Some("statewide-baseline") => RuntimeSessionPresetV3::StatewideBaseline,
-            Some("statewide-freight-constraint") => RuntimeSessionPresetV3::StatewideFreightConstraint,
-            Some("statewide-packaging-shortage") => RuntimeSessionPresetV3::StatewidePackagingShortage,
-            Some("statewide-both") => RuntimeSessionPresetV3::StatewideBoth,
-            Some("shared-freight-ample") => RuntimeSessionPresetV3::SharedFreightAmple,
-            Some("shared-freight-constrained") => RuntimeSessionPresetV3::SharedFreightConstrained,
+            None | Some("standard") => RuntimeSessionPreset::Standard,
+            Some("delayed") => RuntimeSessionPreset::Delayed,
+            Some("statewide-baseline") => RuntimeSessionPreset::StatewideBaseline,
+            Some("statewide-freight-constraint") => RuntimeSessionPreset::StatewideFreightConstraint,
+            Some("statewide-packaging-shortage") => RuntimeSessionPreset::StatewidePackagingShortage,
+            Some("statewide-both") => RuntimeSessionPreset::StatewideBoth,
+            Some("shared-freight-ample") => RuntimeSessionPreset::SharedFreightAmple,
+            Some("shared-freight-constrained") => RuntimeSessionPreset::SharedFreightConstrained,
             Some(_) => {
                 return Err(CliError::at(
                     concat!(file!(), ":", line!()),
@@ -355,7 +358,7 @@ fn windowed_target(
                 ))
             }
         };
-        return Ok(RuntimeSessionTargetV3::New {
+        return Ok(RuntimeSessionTarget::New {
             campaign_id: resolve_campaign(Some(raw))?.as_uuid().to_string(),
             preset,
         });
@@ -366,7 +369,7 @@ fn windowed_target(
             "--preset applies only to --new-campaign".into(),
         ));
     }
-    Ok(RuntimeSessionTargetV3::Open {
+    Ok(RuntimeSessionTarget::Open {
         campaign_id: resolve_campaign(campaign)?.as_uuid().to_string(),
     })
 }
@@ -579,7 +582,7 @@ mod tests {
     fn campaign_flag_opens_the_durable_window() {
         let request = parse(os(&[CAMPAIGN_FLAG, CAMPAIGN])).expect("campaign admits");
         assert!(
-            matches!(request, CliRequest::Windowed { initial_target: RuntimeSessionTargetV3::Open { campaign_id } } if campaign_id == CAMPAIGN),
+            matches!(request, CliRequest::Windowed { initial_target: RuntimeSessionTarget::Open { campaign_id } } if campaign_id == CAMPAIGN),
             "the window explicitly opens the existing campaign"
         );
     }
@@ -589,11 +592,11 @@ mod tests {
         for (flags, expected) in [
             (
                 vec!["--new-campaign", CAMPAIGN],
-                RuntimeSessionPresetV3::Standard,
+                RuntimeSessionPreset::Standard,
             ),
             (
                 vec!["--preset", "delayed", "--new-campaign", CAMPAIGN],
-                RuntimeSessionPresetV3::Delayed,
+                RuntimeSessionPreset::Delayed,
             ),
             (
                 vec![
@@ -602,7 +605,7 @@ mod tests {
                     "--preset",
                     "shared-freight-ample",
                 ],
-                RuntimeSessionPresetV3::SharedFreightAmple,
+                RuntimeSessionPreset::SharedFreightAmple,
             ),
             (
                 vec![
@@ -611,12 +614,12 @@ mod tests {
                     "--preset",
                     "shared-freight-constrained",
                 ],
-                RuntimeSessionPresetV3::SharedFreightConstrained,
+                RuntimeSessionPreset::SharedFreightConstrained,
             ),
         ] {
             let request = parse(os(&flags)).expect("explicit New target admits");
             assert!(matches!(request,
-                CliRequest::Windowed { initial_target: RuntimeSessionTargetV3::New { campaign_id, preset } }
+                CliRequest::Windowed { initial_target: RuntimeSessionTarget::New { campaign_id, preset } }
                 if campaign_id == CAMPAIGN && preset == expected
             ));
         }
@@ -743,7 +746,7 @@ mod tests {
     }
 
     #[test]
-    fn story_flag_in_headless_mode_refuses_as_conformance_only() {
+    fn retired_story_flag_is_refused_in_headless_mode() {
         let error = parse(os(&[
             HEADLESS_FLAG,
             STORY_FLAG,
@@ -754,8 +757,8 @@ mod tests {
         .expect_err("a story flag in headless mode refuses");
         let message = error.to_string();
         assert!(
-            message.contains(STORY_FLAG) && message.contains("conformance-only"),
-            "the refusal names the flag and its conformance-only scope, got {error}"
+            message.contains(STORY_FLAG) && message.contains("retired"),
+            "the refusal identifies the retired flag, got {error}"
         );
     }
 

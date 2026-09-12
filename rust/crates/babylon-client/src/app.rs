@@ -21,7 +21,7 @@ pub enum AppMode {
     /// The persistent observer with one initial lifecycle destination.
     Windowed {
         /// Explicit New or existing-only Open, submitted after runtime Hello.
-        initial_target: babylon_persistence::RuntimeSessionTargetV3,
+        initial_target: babylon_persistence::runtime_session::RuntimeSessionTarget,
     },
     /// One headless dossier command: JSONL on stdout, logs on stderr,
     /// process exit after the first update.
@@ -29,7 +29,7 @@ pub enum AppMode {
         /// The parsed dossier command.
         command: CliCommand,
         /// The canonical campaign identity.
-        campaign_id: babylon_persistence::CampaignId,
+        campaign_id: babylon_persistence::identity::CampaignId,
     },
 }
 
@@ -81,14 +81,8 @@ pub fn build_app(mode: AppMode) -> Result<App, String> {
                 .add_plugins(crate::campaign_browser::CampaignBrowserPlugin)
                 .add_plugins(crate::observer_history::ObserverHistoryPlugin)
                 .add_plugins(crate::observer_performance::ObserverPerformancePlugin)
-                // PER-23 Slice 4 (ADR249 R9): the county dossier card — the
-                // first Gameplay-role surface. Its resource family must exist
-                // identically in windowed and headless compositions, so it
-                // rides its own plugin rather than TickLoopPlugin's wiring.
+                // The card and telemetry consume the same scoped Archive resources.
                 .add_plugins(ui::dossier_card::DossierCardPlugin)
-                // Session observers ride the same resource family (every
-                // observer tolerates its absence), so the session log sees
-                // exactly what the card renderer saw.
                 .add_plugins(session_log::SessionLogPlugin)
                 .insert_resource(crate::production::PrimaryView::Map)
                 .insert_resource(session)
@@ -125,7 +119,7 @@ mod tests {
     #[test]
     fn invalid_initial_target_refuses_before_window_construction() {
         let result = build_app(AppMode::Windowed {
-            initial_target: babylon_persistence::RuntimeSessionTargetV3::Open {
+            initial_target: babylon_persistence::runtime_session::RuntimeSessionTarget::Open {
                 campaign_id: "not-a-campaign".into(),
             },
         });
@@ -138,11 +132,11 @@ mod tests {
         // make the command succeed and defeat the exit-code assertion. The
         // guard serializes against other env-mutating tests and restores
         // the ambient value on drop.
-        let env = crate::test_support::EnvVarGuard::lock(babylon_persistence::READER_DSN_ENV_V1);
+        let env = crate::test_support::EnvVarGuard::lock(babylon_persistence::READER_DSN_ENV);
         env.remove();
         let mut app = build_app(AppMode::Headless {
             command: CliCommand::TickStatus,
-            campaign_id: babylon_persistence::CampaignId::from_uuid(Uuid::nil()),
+            campaign_id: babylon_persistence::identity::CampaignId::from_uuid(Uuid::nil()),
         })
         .expect("headless mode needs no initial lifecycle target");
         assert!(!app.is_plugin_added::<ObserverFocusPlugin>());

@@ -3,19 +3,20 @@ use std::fmt::Write;
 
 use babylon_bsl::scenario::{compose_declaration_preludes, load_scenario_with_prelude};
 use babylon_bsl::{
-    read, typecheck_aggregation, FieldKind, TypeCode, TypeEnv, EXTENSIVE_INTENSIVE_EXEMPTIONS,
+    exemptions::EXTENSIVE_INTENSIVE_EXEMPTIONS, reader::read, typecheck::typecheck_aggregation,
+    typecheck::TypeCode, typecheck::TypeEnv, types::FieldKind,
 };
 use babylon_graph::memory::MemoryGraph;
 use babylon_graph::substrate::GraphSubstrate;
-use babylon_kernel::sha256_of;
-use babylon_practice_contract::{practice_machine_verb, PracticeIdV1, VerbModeV1, VerbStemV1};
+use babylon_kernel::content_digest::sha256_of;
+use babylon_practice_contract::{practice_machine_verb, PracticeId, VerbMode, VerbStem};
 
 const PRACTICE_PRELUDE: &str = include_str!("../content/declarations/organization-practice.bscn");
 const PRACTICE_SCENARIO: &str =
     include_str!("../content/scenarios/organization-practice-contract.bscn");
-const PRACTICE_SCHEMA: &str = include_str!("../../../../contracts/practice_contract_v1.yaml");
+const PRACTICE_SCHEMA: &str = include_str!("../../../../contracts/practice_budget_topology.yaml");
 const VECTOR_CORPUS: &str =
-    include_str!("../../../../contracts/practice_contract_v1_vectors.jsonl");
+    include_str!("../../../../contracts/practice_budget_topology_vectors.jsonl");
 
 const PROMOTED_FIELDS: [&str; 6] = [
     "organization/kind",
@@ -95,27 +96,31 @@ fn declaration_ordinals_match_contract() {
 #[test]
 fn practice_machine_verbs_match_declared_modes() {
     let loaded = load_contract(PRACTICE_PRELUDE, PRACTICE_SCENARIO);
-    let organize = practice_machine_verb(PracticeIdV1::Organize);
-    let agitate = practice_machine_verb(PracticeIdV1::Agitate);
-    let mutual_aid = practice_machine_verb(PracticeIdV1::MutualAid);
+    let organize = practice_machine_verb(PracticeId::Organize).expect("declared practice mapping");
+    let agitate = practice_machine_verb(PracticeId::Agitate).expect("declared practice mapping");
+    let mutual_aid =
+        practice_machine_verb(PracticeId::MutualAid).expect("declared practice mapping");
     assert_eq!(
         (organize.stem, organize.mode),
-        (VerbStemV1::Mobilize, Some(VerbModeV1::Canvass))
+        (VerbStem::Mobilize, Some(VerbMode::Canvass))
     );
     assert_eq!(
         (agitate.stem, agitate.mode),
-        (VerbStemV1::Mobilize, Some(VerbModeV1::Agitate))
+        (VerbStem::Mobilize, Some(VerbMode::Agitate))
     );
-    assert_eq!((mutual_aid.stem, mutual_aid.mode), (VerbStemV1::Aid, None));
+    assert_eq!((mutual_aid.stem, mutual_aid.mode), (VerbStem::Aid, None));
     for (practice, expected_member) in [
-        (PracticeIdV1::Organize, Some("CANVASS")),
-        (PracticeIdV1::Agitate, Some("AGITATE")),
-        (PracticeIdV1::MutualAid, None),
+        (PracticeId::Organize, Some("CANVASS")),
+        (PracticeId::Agitate, Some("AGITATE")),
+        (PracticeId::MutualAid, None),
     ] {
-        let machine_member = practice_machine_verb(practice).mode.map(|mode| match mode {
-            VerbModeV1::Canvass => "CANVASS",
-            VerbModeV1::Agitate => "AGITATE",
-        });
+        let machine_member = practice_machine_verb(practice)
+            .expect("declared practice mapping")
+            .mode
+            .map(|mode| match mode {
+                VerbMode::Canvass => "CANVASS",
+                VerbMode::Agitate => "AGITATE",
+            });
         assert_eq!(machine_member, expected_member);
         if let Some(member) = machine_member {
             let verb_mode = loaded.enums.resolve("VerbMode").unwrap();
@@ -126,11 +131,11 @@ fn practice_machine_verbs_match_declared_modes() {
 
 #[test]
 fn wire_discriminants_are_stable() {
-    assert_eq!(PracticeIdV1::Organize as u8, 1);
-    assert_eq!(PracticeIdV1::Agitate as u8, 2);
-    assert_eq!(PracticeIdV1::MutualAid as u8, 3);
-    assert_eq!(VerbModeV1::Canvass as u8, 1);
-    assert_eq!(VerbModeV1::Agitate as u8, 2);
+    assert_eq!(PracticeId::Organize as u8, 1);
+    assert_eq!(PracticeId::Agitate as u8, 2);
+    assert_eq!(PracticeId::MutualAid as u8, 3);
+    assert_eq!(VerbMode::Canvass as u8, 1);
+    assert_eq!(VerbMode::Agitate as u8, 2);
 }
 
 #[test]

@@ -2,38 +2,37 @@
 
 use std::collections::TryReserveError;
 
-use babylon_bsl::identity_codec::{project_stable_value_v1, IdentityCodecError, StableBslValueV1};
+use babylon_bsl::identity_codec::{project_stable_value, IdentityCodecError, StableBslValue};
 use babylon_bsl::structural_verbs::CollectingSink;
 use babylon_graph::allocator_state::AllocatorState;
 use babylon_graph::hypergraph_store::HypergraphStore;
-use babylon_graph::stable_element::{StableElementResolverV1, StableIdentityError};
+use babylon_graph::stable_element::{StableElementResolver, StableIdentityError};
 use babylon_graph::stable_state::{
-    encode_stable_graph_state_v1, StableGraphStateHashV1, StableGraphStateV1,
+    encode_stable_graph_state, StableGraphState, StableGraphStateHash,
 };
 use babylon_graph::state_hash::CanonicalState;
 use babylon_graph::substrate::GraphSubstrate;
 use babylon_graph::working_copy::DetachedCopy;
-use babylon_kernel::replay::{ReplayIdentityError, ReplaySeed, ReplaySessionIdV1};
+use babylon_kernel::content_digest::ContentDigest;
+use babylon_kernel::replay::{ReplayIdentityError, ReplaySeed, ReplaySessionId};
 use babylon_kernel::tick_content_hash::{
-    OrderedPracticeActionBatchDigestV1, PreparedEnvironmentDigestV1, RefDigestV1,
-    TickContentHashError, TickContentHashV1, TickContentPartsV1, TickContentPreimageV1,
+    OrderedPracticeActionBatchDigest, PreparedEnvironmentDigest, RefDigest, TickContentHash,
+    TickContentHashError, TickContentParts, TickContentPreimage,
 };
-use babylon_kernel::ContentDigest;
-use babylon_practice_contract::ordered_action_v1::{
-    OrderedPracticeActionBatchV1, ORDERED_PRACTICE_ACTION_BATCH_V1_LAYOUT_VERSION,
+use babylon_practice_contract::{
+    OrderedPracticeActionBatch, ORDERED_PRACTICE_ACTION_BATCH_LAYOUT_VERSION,
 };
 
-use crate::choice_receipt::ChoiceReceiptRefV1;
-use crate::committed_event::CommittedEventV2;
+use crate::choice_receipt::ChoiceReceiptRef;
+use crate::committed_event::CommittedEvent;
 use crate::material_state::{
-    MaterialAllocationGate, MaterialProjectionContextV1, MaterialStateErrorV1, MaterialStateRowsV1,
-    MaterialStateV1, ProductionMaterialAllocationGate,
+    MaterialAllocationGate, MaterialProjectionContext, MaterialState, MaterialStateError,
+    MaterialStateRows, ProductionMaterialAllocationGate,
 };
 use crate::replay_identity::{
-    encode_prepared_environment_v1, encode_stable_world_v1, encode_tick_payload_for_prepared_v2,
-    encode_world_register_set_v1, world_register_manifest_v1, PreparedEnvironmentV1,
-    ReplayTickIdentityError, StableWorldV1, TickPayloadV2, WorldRegisterManifestV1,
-    WorldRegisterSetV1,
+    encode_prepared_environment, encode_stable_world, encode_tick_payload_for_prepared,
+    encode_world_register_set, world_register_manifest, PreparedEnvironment,
+    ReplayTickIdentityError, StableWorld, TickPayload, WorldRegisterManifest, WorldRegisterSet,
 };
 use crate::{prepare_rules, EventRecord, PreparedRules, TickReport};
 
@@ -80,9 +79,9 @@ pub enum ReplayTickError {
         field: String,
     },
     /// Tick-owned material source identity or projection refused publication.
-    MaterialState(MaterialStateErrorV1),
+    MaterialState(MaterialStateError),
     /// Coupled physical closing or graph-owned staffing refused before publication.
-    MaterialBase(crate::material_replay::MaterialBaseErrorV1),
+    MaterialBase(crate::material_replay::MaterialBaseError),
     /// Stable graph or resolver identity refused the graph.
     Stable(StableIdentityError),
     /// The fixed outer preimage could not be composed.
@@ -221,7 +220,7 @@ impl std::error::Error for ReplayTickError {}
 
 /// Closed durable dispositions that may publish one prepared replay tick.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ReplayCommitDispositionV1 {
+pub enum ReplayCommitDisposition {
     /// The commit operation returned success directly.
     Committed,
     /// An ambiguous commit was reconnected and proven byte-exact.
@@ -230,7 +229,7 @@ pub enum ReplayCommitDispositionV1 {
 
 /// A prepared replay tick refused before durability or its commit operation failed.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum PreparedReplayCommitErrorV1<E> {
+pub enum PreparedReplayCommitError<E> {
     /// Candidate validation or event-publication capacity refused before the commit operation ran.
     Preflight(ReplayTickError),
     /// The caller-owned durable commit operation failed before publication.
@@ -239,19 +238,19 @@ pub enum PreparedReplayCommitErrorV1<E> {
 
 /// Exact durable identity supplied before a prepared replay tick may publish.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct ReplayCommitAcknowledgementV1 {
-    disposition: ReplayCommitDispositionV1,
+pub struct ReplayCommitAcknowledgement {
+    disposition: ReplayCommitDisposition,
     resolve_tick: u64,
-    tick_content_hash: TickContentHashV1,
+    tick_content_hash: TickContentHash,
 }
 
-impl ReplayCommitAcknowledgementV1 {
+impl ReplayCommitAcknowledgement {
     /// Construct one typed acknowledgement from a durable commit outcome.
     #[must_use]
     pub const fn new(
-        disposition: ReplayCommitDispositionV1,
+        disposition: ReplayCommitDisposition,
         resolve_tick: u64,
-        tick_content_hash: TickContentHashV1,
+        tick_content_hash: TickContentHash,
     ) -> Self {
         Self {
             disposition,
@@ -262,7 +261,7 @@ impl ReplayCommitAcknowledgementV1 {
 
     /// Return the exact durable disposition.
     #[must_use]
-    pub const fn disposition(self) -> ReplayCommitDispositionV1 {
+    pub const fn disposition(self) -> ReplayCommitDisposition {
         self.disposition
     }
 
@@ -274,21 +273,21 @@ impl ReplayCommitAcknowledgementV1 {
 
     /// Return the acknowledged tick-content identity.
     #[must_use]
-    pub const fn tick_content_hash(self) -> TickContentHashV1 {
+    pub const fn tick_content_hash(self) -> TickContentHash {
         self.tick_content_hash
     }
 }
 
 /// One typed event retained from a successfully published replay tick.
 #[derive(Debug, Clone, PartialEq)]
-pub struct SuccessfulEventV2 {
+pub struct SuccessfulEvent {
     emitting_rule: String,
-    choice_receipt: Option<ChoiceReceiptRefV1>,
+    choice_receipt: Option<ChoiceReceiptRef>,
     event_type: String,
-    fields: Vec<(String, StableBslValueV1)>,
+    fields: Vec<(String, StableBslValue)>,
 }
 
-impl SuccessfulEventV2 {
+impl SuccessfulEvent {
     /// Borrow the rule that emitted this observation.
     #[must_use]
     pub fn emitting_rule(&self) -> &str {
@@ -297,7 +296,7 @@ impl SuccessfulEventV2 {
 
     /// Return the adjacent realized-choice reference, when present.
     #[must_use]
-    pub const fn choice_receipt(&self) -> Option<ChoiceReceiptRefV1> {
+    pub const fn choice_receipt(&self) -> Option<ChoiceReceiptRef> {
         self.choice_receipt
     }
 
@@ -313,15 +312,15 @@ impl SuccessfulEventV2 {
     /// persistence projection is canonicalized, and duplicate names refuse the
     /// replay tick before publication.
     #[must_use]
-    pub fn fields(&self) -> &[(String, StableBslValueV1)] {
+    pub fn fields(&self) -> &[(String, StableBslValue)] {
         &self.fields
     }
 }
 
 /// Exact typed events from one successfully published replay tick.
 #[derive(Debug, Clone, PartialEq)]
-pub struct SuccessfulEventBatchV2 {
-    events: Vec<SuccessfulEventV2>,
+pub struct SuccessfulEventBatch {
+    events: Vec<SuccessfulEvent>,
     source_digest: [u8; 32],
 }
 
@@ -331,8 +330,8 @@ trait SuccessfulEventRetention {
     fn project_value(
         &self,
         value: &babylon_bsl::evaluator::Value,
-        resolver: &StableElementResolverV1,
-    ) -> Result<StableBslValueV1, ReplayTickError>;
+        resolver: &StableElementResolver,
+    ) -> Result<StableBslValue, ReplayTickError>;
 }
 
 struct ProductionSuccessfulEventRetention;
@@ -353,16 +352,16 @@ impl SuccessfulEventRetention for ProductionSuccessfulEventRetention {
     fn project_value(
         &self,
         value: &babylon_bsl::evaluator::Value,
-        resolver: &StableElementResolverV1,
-    ) -> Result<StableBslValueV1, ReplayTickError> {
-        Ok(project_stable_value_v1(value, resolver)?)
+        resolver: &StableElementResolver,
+    ) -> Result<StableBslValue, ReplayTickError> {
+        Ok(project_stable_value(value, resolver)?)
     }
 }
 
-impl SuccessfulEventBatchV2 {
+impl SuccessfulEventBatch {
     /// Borrow retained events in executable order.
     #[must_use]
-    pub fn events(&self) -> &[SuccessfulEventV2] {
+    pub fn events(&self) -> &[SuccessfulEvent] {
         &self.events
     }
 
@@ -373,8 +372,8 @@ impl SuccessfulEventBatchV2 {
     }
 
     fn try_from_committed_events<R: SuccessfulEventRetention>(
-        source: &[CommittedEventV2],
-        resolver: &StableElementResolverV1,
+        source: &[CommittedEvent],
+        resolver: &StableElementResolver,
         retention: &R,
         source_digest: [u8; 32],
     ) -> Result<Self, ReplayTickError> {
@@ -415,7 +414,7 @@ impl SuccessfulEventBatchV2 {
                     field,
                 });
             }
-            events.push(SuccessfulEventV2 {
+            events.push(SuccessfulEvent {
                 emitting_rule,
                 choice_receipt: event.choice_receipt(),
                 event_type: retained_event_type,
@@ -431,34 +430,34 @@ impl SuccessfulEventBatchV2 {
 
 /// Non-durable evidence returned by one successful identified replay tick.
 #[derive(Debug)]
-pub struct IdentifiedTickReportV2 {
+pub struct IdentifiedTickReport {
     report: TickReport,
     action_batch_bytes: Vec<u8>,
     action_batch_layout_version: u32,
-    action_batch_digest: OrderedPracticeActionBatchDigestV1,
-    prior_registers: WorldRegisterSetV1,
-    prior_world: StableWorldV1,
-    result_registers: WorldRegisterSetV1,
-    result_world: StableWorldV1,
-    result_stable_graph: StableGraphStateV1,
-    successful_event_batch: SuccessfulEventBatchV2,
-    material_state_rows: MaterialStateRowsV1,
+    action_batch_digest: OrderedPracticeActionBatchDigest,
+    prior_registers: WorldRegisterSet,
+    prior_world: StableWorld,
+    result_registers: WorldRegisterSet,
+    result_world: StableWorld,
+    result_stable_graph: StableGraphState,
+    successful_event_batch: SuccessfulEventBatch,
+    material_state_rows: MaterialStateRows,
     resolver_manifest_bytes: Vec<u8>,
     prepared_environment_bytes: Vec<u8>,
-    replay_session_identity: ReplaySessionIdV1,
+    replay_session_identity: ReplaySessionId,
     rng_seed: ReplaySeed,
     content_digest: ContentDigest,
-    reference_digest: RefDigestV1,
-    payload: TickPayloadV2,
-    outer_preimage: TickContentPreimageV1,
+    reference_digest: RefDigest,
+    payload: TickPayload,
+    outer_preimage: TickContentPreimage,
     resolver_manifest_digest: [u8; 32],
-    prepared_environment_digest: PreparedEnvironmentDigestV1,
-    prior_stable_graph_digest: StableGraphStateHashV1,
-    result_stable_graph_digest: StableGraphStateHashV1,
-    tick_content_hash: TickContentHashV1,
+    prepared_environment_digest: PreparedEnvironmentDigest,
+    prior_stable_graph_digest: StableGraphStateHash,
+    result_stable_graph_digest: StableGraphStateHash,
+    tick_content_hash: TickContentHash,
 }
 
-impl IdentifiedTickReportV2 {
+impl IdentifiedTickReport {
     /// Borrow the existing administrative tick evidence.
     #[must_use]
     pub const fn report(&self) -> &TickReport {
@@ -488,43 +487,43 @@ impl IdentifiedTickReportV2 {
 
     /// Return the accepted-action batch digest.
     #[must_use]
-    pub const fn action_batch_digest(&self) -> OrderedPracticeActionBatchDigestV1 {
+    pub const fn action_batch_digest(&self) -> OrderedPracticeActionBatchDigest {
         self.action_batch_digest
     }
 
     /// Borrow the exact prior register set.
     #[must_use]
-    pub const fn prior_registers(&self) -> &WorldRegisterSetV1 {
+    pub const fn prior_registers(&self) -> &WorldRegisterSet {
         &self.prior_registers
     }
 
     /// Borrow the exact prior stable world.
     #[must_use]
-    pub const fn prior_world(&self) -> &StableWorldV1 {
+    pub const fn prior_world(&self) -> &StableWorld {
         &self.prior_world
     }
 
     /// Borrow the exact result register set.
     #[must_use]
-    pub const fn result_registers(&self) -> &WorldRegisterSetV1 {
+    pub const fn result_registers(&self) -> &WorldRegisterSet {
         &self.result_registers
     }
 
     /// Borrow the exact result stable world.
     #[must_use]
-    pub const fn result_world(&self) -> &StableWorldV1 {
+    pub const fn result_world(&self) -> &StableWorld {
         &self.result_world
     }
 
     /// Borrow the exact typed result graph and its canonical identity bytes.
     #[must_use]
-    pub const fn result_stable_graph(&self) -> &StableGraphStateV1 {
+    pub const fn result_stable_graph(&self) -> &StableGraphState {
         &self.result_stable_graph
     }
 
     /// Borrow the exact typed events from the successful tick.
     #[must_use]
-    pub const fn successful_event_batch(&self) -> &SuccessfulEventBatchV2 {
+    pub const fn successful_event_batch(&self) -> &SuccessfulEventBatch {
         &self.successful_event_batch
     }
 
@@ -536,7 +535,7 @@ impl IdentifiedTickReportV2 {
 
     /// Borrow the detached typed material projection for this completed tick.
     #[must_use]
-    pub const fn material_state_rows(&self) -> &MaterialStateRowsV1 {
+    pub const fn material_state_rows(&self) -> &MaterialStateRows {
         &self.material_state_rows
     }
 
@@ -554,7 +553,7 @@ impl IdentifiedTickReportV2 {
 
     /// Borrow the exact replay-session namespace used by this tick.
     #[must_use]
-    pub const fn replay_session_identity(&self) -> &ReplaySessionIdV1 {
+    pub const fn replay_session_identity(&self) -> &ReplaySessionId {
         &self.replay_session_identity
     }
 
@@ -572,19 +571,19 @@ impl IdentifiedTickReportV2 {
 
     /// Return the immutable reference-data digest used by this tick.
     #[must_use]
-    pub const fn reference_digest(&self) -> RefDigestV1 {
+    pub const fn reference_digest(&self) -> RefDigest {
         self.reference_digest
     }
 
     /// Borrow the exact governed tick payload.
     #[must_use]
-    pub const fn payload(&self) -> &TickPayloadV2 {
+    pub const fn payload(&self) -> &TickPayload {
         &self.payload
     }
 
     /// Borrow the exact fixed outer preimage.
     #[must_use]
-    pub const fn outer_preimage(&self) -> &TickContentPreimageV1 {
+    pub const fn outer_preimage(&self) -> &TickContentPreimage {
         &self.outer_preimage
     }
 
@@ -596,25 +595,25 @@ impl IdentifiedTickReportV2 {
 
     /// Return the prepared-environment digest.
     #[must_use]
-    pub const fn prepared_environment_digest(&self) -> PreparedEnvironmentDigestV1 {
+    pub const fn prepared_environment_digest(&self) -> PreparedEnvironmentDigest {
         self.prepared_environment_digest
     }
 
     /// Return the prior stable-graph digest.
     #[must_use]
-    pub const fn prior_stable_graph_digest(&self) -> StableGraphStateHashV1 {
+    pub const fn prior_stable_graph_digest(&self) -> StableGraphStateHash {
         self.prior_stable_graph_digest
     }
 
     /// Return the result stable-graph digest.
     #[must_use]
-    pub const fn result_stable_graph_digest(&self) -> StableGraphStateHashV1 {
+    pub const fn result_stable_graph_digest(&self) -> StableGraphStateHash {
         self.result_stable_graph_digest
     }
 
     /// Return the authoritative tick-content identity.
     #[must_use]
-    pub const fn tick_content_hash(&self) -> TickContentHashV1 {
+    pub const fn tick_content_hash(&self) -> TickContentHash {
         self.tick_content_hash
     }
 }
@@ -624,14 +623,14 @@ pub struct ReplayTickSession<G> {
     graph: G,
     prepared: PreparedRules,
     completed_tick: i64,
-    session: ReplaySessionIdV1,
+    session: ReplaySessionId,
     seed: ReplaySeed,
     content: ContentDigest,
-    reference: RefDigestV1,
-    resolver: StableElementResolverV1,
-    register_manifest: WorldRegisterManifestV1,
-    prepared_environment: PreparedEnvironmentV1,
-    material_state: MaterialStateV1,
+    reference: RefDigest,
+    resolver: StableElementResolver,
+    register_manifest: WorldRegisterManifest,
+    prepared_environment: PreparedEnvironment,
+    material_state: MaterialState,
 }
 
 /// One fully adjudicated replay tick held outside every live session owner.
@@ -639,14 +638,14 @@ pub struct ReplayTickSession<G> {
 /// Dropping this value abandons the candidate. Only [`ReplayTickSession::acknowledge_prepared`]
 /// or [`ReplayTickSession::commit_prepared_and_publish`] may move its graph, material state, event
 /// batch, and tick counter into the live session.
-pub struct PreparedReplayTickV1<G> {
-    source_session: ReplaySessionIdV1,
+pub struct PreparedReplayTick<G> {
+    source_session: ReplaySessionId,
     prepared_after: i64,
     resolve_tick: i64,
     graph: G,
-    material_state: MaterialStateV1,
+    material_state: MaterialState,
     events: Vec<EventRecord>,
-    report: IdentifiedTickReportV2,
+    report: IdentifiedTickReport,
 }
 
 trait ReplayPublicationAllocationGate {
@@ -666,10 +665,10 @@ impl ReplayPublicationAllocationGate for ProductionReplayPublicationAllocationGa
     }
 }
 
-impl<G> PreparedReplayTickV1<G> {
+impl<G> PreparedReplayTick<G> {
     /// Borrow the sole identified report from which persistence rows derive.
     #[must_use]
-    pub const fn report(&self) -> &IdentifiedTickReportV2 {
+    pub const fn report(&self) -> &IdentifiedTickReport {
         &self.report
     }
 }
@@ -689,17 +688,17 @@ impl<G: GraphSubstrate + CanonicalState + AllocatorState + DetachedCopy> ReplayT
         prelude_src: Option<&str>,
         rule_src: &str,
         mut graph: G,
-        session: ReplaySessionIdV1,
+        session: ReplaySessionId,
         seed: ReplaySeed,
         content: ContentDigest,
-        reference: RefDigestV1,
-        material_state: MaterialStateV1,
+        reference: RefDigest,
+        material_state: MaterialState,
     ) -> Result<Self, ReplayTickError> {
         let expected_reference = material_state.reference_bundle_digest();
         let actual_reference = *reference.as_bytes();
         if actual_reference != expected_reference {
             return Err(ReplayTickError::MaterialState(
-                MaterialStateErrorV1::ReferenceBundleMismatch {
+                MaterialStateError::ReferenceBundleMismatch {
                     expected: expected_reference,
                     actual: actual_reference,
                 },
@@ -711,15 +710,15 @@ impl<G: GraphSubstrate + CanonicalState + AllocatorState + DetachedCopy> ReplayT
                     message: error.to_string(),
                 }
             })?;
-        let resolver = StableElementResolverV1::seal(
+        let resolver = StableElementResolver::seal(
             &graph,
             &prepared.scenario_scope,
             &prepared.node_content_ids,
             &prepared.hyperedge_content_ids,
         )?;
-        let register_manifest = world_register_manifest_v1()?;
+        let register_manifest = world_register_manifest()?;
         let prepared_environment =
-            encode_prepared_environment_v1(&content, &prepared, &resolver, &register_manifest)?;
+            encode_prepared_environment(&content, &prepared, &resolver, &register_manifest)?;
         Ok(Self {
             graph,
             prepared,
@@ -739,22 +738,22 @@ impl<G: GraphSubstrate + CanonicalState + AllocatorState + DetachedCopy> ReplayT
     /// The normal effect scanner includes every possible guarded/loop write;
     /// scheduled labor does not call this additional composition check.
     pub(crate) fn validate_staffing_ownership(&self) -> Result<(), ReplayTickError> {
-        use crate::material_replay::MaterialBaseErrorV1;
-        use crate::material_staffing::STAFFING_FIELDS_V1;
+        use crate::material_replay::MaterialBaseError;
+        use crate::material_staffing::STAFFING_FIELDS;
         use babylon_bsl::causal_contract::{effect_footprint, EffectSignature};
 
         for (rule_id, loaded) in &self.prepared.rules {
             let effects = effect_footprint(&loaded.rule).map_err(|error| {
-                ReplayTickError::MaterialBase(MaterialBaseErrorV1::StaffingEffectAnalysis {
+                ReplayTickError::MaterialBase(MaterialBaseError::StaffingEffectAnalysis {
                     rule_id: rule_id.clone(),
                     error,
                 })
             })?;
             for effect in effects {
                 if let EffectSignature::NodeField(field) = effect {
-                    if STAFFING_FIELDS_V1.contains(&field.as_str()) {
+                    if STAFFING_FIELDS.contains(&field.as_str()) {
                         return Err(ReplayTickError::MaterialBase(
-                            MaterialBaseErrorV1::StaffingFieldOwner {
+                            MaterialBaseError::StaffingFieldOwner {
                                 rule_id: rule_id.clone(),
                                 field,
                             },
@@ -774,8 +773,8 @@ impl<G: GraphSubstrate + CanonicalState + AllocatorState + DetachedCopy> ReplayT
     pub fn advance(
         &mut self,
         sink: &mut CollectingSink,
-        actions: &OrderedPracticeActionBatchV1,
-    ) -> Result<IdentifiedTickReportV2, ReplayTickError> {
+        actions: &OrderedPracticeActionBatch,
+    ) -> Result<IdentifiedTickReport, ReplayTickError> {
         self.advance_with_boundaries(
             sink,
             actions,
@@ -792,38 +791,38 @@ impl<G: GraphSubstrate + CanonicalState + AllocatorState + DetachedCopy> ReplayT
     /// caller-owned event sink remain untouched on both success and failure.
     pub fn prepare_advance(
         &self,
-        actions: &OrderedPracticeActionBatchV1,
-    ) -> Result<PreparedReplayTickV1<G>, ReplayTickError> {
+        actions: &OrderedPracticeActionBatch,
+    ) -> Result<PreparedReplayTick<G>, ReplayTickError> {
         self.prepare_with_material(actions, None)
             .map(|(graph, _)| graph)
     }
 
     pub(crate) fn prepare_material_advance(
         &self,
-        actions: &OrderedPracticeActionBatchV1,
+        actions: &OrderedPracticeActionBatch,
         material: crate::material_replay::MaterialBaseInputs<'_>,
     ) -> Result<
         (
-            PreparedReplayTickV1<G>,
-            crate::material_world::PreparedMaterialWorldV4,
+            PreparedReplayTick<G>,
+            crate::material_world::PreparedMaterialWorld,
         ),
         ReplayTickError,
     > {
         let (graph, material) = self.prepare_with_material(actions, Some(material))?;
         let material = material.ok_or(ReplayTickError::MaterialBase(
-            crate::material_replay::MaterialBaseErrorV1::MissingCandidate,
+            crate::material_replay::MaterialBaseError::MissingCandidate,
         ))?;
         Ok((graph, material))
     }
 
     fn prepare_with_material(
         &self,
-        actions: &OrderedPracticeActionBatchV1,
+        actions: &OrderedPracticeActionBatch,
         material: Option<crate::material_replay::MaterialBaseInputs<'_>>,
     ) -> Result<
         (
-            PreparedReplayTickV1<G>,
-            Option<crate::material_world::PreparedMaterialWorldV4>,
+            PreparedReplayTick<G>,
+            Option<crate::material_world::PreparedMaterialWorld>,
         ),
         ReplayTickError,
     > {
@@ -860,7 +859,7 @@ impl<G: GraphSubstrate + CanonicalState + AllocatorState + DetachedCopy> ReplayT
             material,
         )?;
         Ok((
-            PreparedReplayTickV1 {
+            PreparedReplayTick {
                 source_session: self.session.clone(),
                 prepared_after: self.completed_tick,
                 resolve_tick: next_tick,
@@ -882,9 +881,9 @@ impl<G: GraphSubstrate + CanonicalState + AllocatorState + DetachedCopy> ReplayT
     pub fn acknowledge_prepared(
         &mut self,
         sink: &mut CollectingSink,
-        prepared: PreparedReplayTickV1<G>,
-        acknowledgement: ReplayCommitAcknowledgementV1,
-    ) -> Result<IdentifiedTickReportV2, ReplayTickError> {
+        prepared: PreparedReplayTick<G>,
+        acknowledgement: ReplayCommitAcknowledgement,
+    ) -> Result<IdentifiedTickReport, ReplayTickError> {
         let resolve_tick = self.validate_prepared_publication(&prepared)?;
         if acknowledgement.resolve_tick != resolve_tick {
             return Err(ReplayTickError::CommitAcknowledgementTickMismatch {
@@ -911,17 +910,17 @@ impl<G: GraphSubstrate + CanonicalState + AllocatorState + DetachedCopy> ReplayT
     /// already-reserved live owners, so durable success has no fallible acknowledgement tail.
     ///
     /// # Errors
-    /// Returns [`PreparedReplayCommitErrorV1::Preflight`] without invoking `commit` when candidate
-    /// validation or event reservation refuses. Returns [`PreparedReplayCommitErrorV1::Commit`]
+    /// Returns [`PreparedReplayCommitError::Preflight`] without invoking `commit` when candidate
+    /// validation or event reservation refuses. Returns [`PreparedReplayCommitError::Commit`]
     /// without publishing when the caller-owned durable operation refuses.
     pub fn commit_prepared_and_publish<E, F>(
         &mut self,
         sink: &mut CollectingSink,
-        prepared: PreparedReplayTickV1<G>,
+        prepared: PreparedReplayTick<G>,
         commit: F,
-    ) -> Result<(IdentifiedTickReportV2, ReplayCommitDispositionV1), PreparedReplayCommitErrorV1<E>>
+    ) -> Result<(IdentifiedTickReport, ReplayCommitDisposition), PreparedReplayCommitError<E>>
     where
-        F: FnOnce(&IdentifiedTickReportV2) -> Result<ReplayCommitDispositionV1, E>,
+        F: FnOnce(&IdentifiedTickReport) -> Result<ReplayCommitDisposition, E>,
     {
         self.commit_prepared_and_publish_with_allocation(
             sink,
@@ -934,27 +933,27 @@ impl<G: GraphSubstrate + CanonicalState + AllocatorState + DetachedCopy> ReplayT
     fn commit_prepared_and_publish_with_allocation<E, F, A>(
         &mut self,
         sink: &mut CollectingSink,
-        prepared: PreparedReplayTickV1<G>,
+        prepared: PreparedReplayTick<G>,
         commit: F,
         allocation: &A,
-    ) -> Result<(IdentifiedTickReportV2, ReplayCommitDispositionV1), PreparedReplayCommitErrorV1<E>>
+    ) -> Result<(IdentifiedTickReport, ReplayCommitDisposition), PreparedReplayCommitError<E>>
     where
-        F: FnOnce(&IdentifiedTickReportV2) -> Result<ReplayCommitDispositionV1, E>,
+        F: FnOnce(&IdentifiedTickReport) -> Result<ReplayCommitDisposition, E>,
         A: ReplayPublicationAllocationGate,
     {
         self.validate_prepared_publication(&prepared)
-            .map_err(PreparedReplayCommitErrorV1::Preflight)?;
+            .map_err(PreparedReplayCommitError::Preflight)?;
         allocation
             .reserve(sink, prepared.events.len())
-            .map_err(PreparedReplayCommitErrorV1::Preflight)?;
-        let disposition = commit(&prepared.report).map_err(PreparedReplayCommitErrorV1::Commit)?;
+            .map_err(PreparedReplayCommitError::Preflight)?;
+        let disposition = commit(&prepared.report).map_err(PreparedReplayCommitError::Commit)?;
         let report = self.publish_prepared_infallibly(sink, prepared);
         Ok((report, disposition))
     }
 
     fn validate_prepared_publication(
         &self,
-        prepared: &PreparedReplayTickV1<G>,
+        prepared: &PreparedReplayTick<G>,
     ) -> Result<u64, ReplayTickError> {
         if self.session != prepared.source_session {
             return Err(ReplayTickError::PreparedSessionMismatch);
@@ -971,8 +970,8 @@ impl<G: GraphSubstrate + CanonicalState + AllocatorState + DetachedCopy> ReplayT
     fn publish_prepared_infallibly(
         &mut self,
         sink: &mut CollectingSink,
-        prepared: PreparedReplayTickV1<G>,
-    ) -> IdentifiedTickReportV2 {
+        prepared: PreparedReplayTick<G>,
+    ) -> IdentifiedTickReport {
         self.graph = prepared.graph;
         self.material_state = prepared.material_state;
         self.completed_tick = prepared.resolve_tick;
@@ -984,9 +983,9 @@ impl<G: GraphSubstrate + CanonicalState + AllocatorState + DetachedCopy> ReplayT
     fn advance_with_composer<C: ReplayIdentityComposer>(
         &mut self,
         sink: &mut CollectingSink,
-        actions: &OrderedPracticeActionBatchV1,
+        actions: &OrderedPracticeActionBatch,
         composer: &C,
-    ) -> Result<IdentifiedTickReportV2, ReplayTickError> {
+    ) -> Result<IdentifiedTickReport, ReplayTickError> {
         self.advance_with_boundaries(sink, actions, composer, &ProductionMaterialAllocationGate)
     }
 
@@ -994,9 +993,9 @@ impl<G: GraphSubstrate + CanonicalState + AllocatorState + DetachedCopy> ReplayT
     fn advance_with_material_allocation(
         &mut self,
         sink: &mut CollectingSink,
-        actions: &OrderedPracticeActionBatchV1,
+        actions: &OrderedPracticeActionBatch,
         material_allocation: &dyn MaterialAllocationGate,
-    ) -> Result<IdentifiedTickReportV2, ReplayTickError> {
+    ) -> Result<IdentifiedTickReport, ReplayTickError> {
         self.advance_with_boundaries(
             sink,
             actions,
@@ -1008,10 +1007,10 @@ impl<G: GraphSubstrate + CanonicalState + AllocatorState + DetachedCopy> ReplayT
     fn advance_with_boundaries<C: ReplayIdentityComposer>(
         &mut self,
         sink: &mut CollectingSink,
-        actions: &OrderedPracticeActionBatchV1,
+        actions: &OrderedPracticeActionBatch,
         composer: &C,
         material_allocation: &dyn MaterialAllocationGate,
-    ) -> Result<IdentifiedTickReportV2, ReplayTickError> {
+    ) -> Result<IdentifiedTickReport, ReplayTickError> {
         let next_tick = self
             .completed_tick
             .checked_add(1)
@@ -1061,7 +1060,7 @@ impl<G: GraphSubstrate + CanonicalState + AllocatorState + DetachedCopy> ReplayT
 
     /// Borrow the session-owned material sources.
     #[must_use]
-    pub const fn material_state(&self) -> &MaterialStateV1 {
+    pub const fn material_state(&self) -> &MaterialState {
         &self.material_state
     }
 
@@ -1070,8 +1069,8 @@ impl<G: GraphSubstrate + CanonicalState + AllocatorState + DetachedCopy> ReplayT
     /// # Errors
     /// Returns the first stable identity, topology, bound, or allocation
     /// refusal without mutating the replay session.
-    pub fn stable_graph_state(&self) -> Result<StableGraphStateV1, ReplayTickError> {
-        encode_stable_graph_state_v1(&self.graph, &self.resolver).map_err(Into::into)
+    pub fn stable_graph_state(&self) -> Result<StableGraphState, ReplayTickError> {
+        encode_stable_graph_state(&self.graph, &self.resolver).map_err(Into::into)
     }
 
     /// Recompose the current completed-tick world-register set.
@@ -1079,14 +1078,13 @@ impl<G: GraphSubstrate + CanonicalState + AllocatorState + DetachedCopy> ReplayT
     /// # Errors
     /// Returns the first completed-tick, bound, or allocation refusal without
     /// mutating the replay session.
-    pub fn world_registers(&self) -> Result<WorldRegisterSetV1, ReplayTickError> {
-        encode_world_register_set_v1(&self.register_manifest, self.completed_tick)
-            .map_err(Into::into)
+    pub fn world_registers(&self) -> Result<WorldRegisterSet, ReplayTickError> {
+        encode_world_register_set(&self.register_manifest, self.completed_tick).map_err(Into::into)
     }
 
     /// Borrow the exact replay-session namespace.
     #[must_use]
-    pub const fn session_identity(&self) -> &ReplaySessionIdV1 {
+    pub const fn session_identity(&self) -> &ReplaySessionId {
         &self.session
     }
 
@@ -1104,7 +1102,7 @@ impl<G: GraphSubstrate + CanonicalState + AllocatorState + DetachedCopy> ReplayT
 
     /// Return the immutable reference-data digest.
     #[must_use]
-    pub const fn reference_digest(&self) -> RefDigestV1 {
+    pub const fn reference_digest(&self) -> RefDigest {
         self.reference
     }
 
@@ -1141,22 +1139,22 @@ impl ReplayTickSession<HypergraphStore> {
     pub fn restore_full_checkpoint(
         &mut self,
         completed_tick: i64,
-        graph_state: &StableGraphStateV1,
-        material_rows: &MaterialStateRowsV1,
+        graph_state: &StableGraphState,
+        material_rows: &MaterialStateRows,
         expected_world_registers: &[u8],
     ) -> Result<(), ReplayTickError> {
         if completed_tick <= 0 {
             return Err(ReplayTickError::TickCounterOverflow);
         }
         let mut graph = self.graph.detached_copy();
-        graph.restore_stable_state_v1(&self.resolver, graph_state)?;
-        let restored_graph = encode_stable_graph_state_v1(&graph, &self.resolver)?;
+        graph.restore_stable_state(&self.resolver, graph_state)?;
+        let restored_graph = encode_stable_graph_state(&graph, &self.resolver)?;
         if restored_graph.canonical_bytes() != graph_state.canonical_bytes() {
             return Err(ReplayTickError::CheckpointMismatch {
                 section: "stable graph",
             });
         }
-        let registers = encode_world_register_set_v1(&self.register_manifest, completed_tick)?;
+        let registers = encode_world_register_set(&self.register_manifest, completed_tick)?;
         if registers.canonical_bytes() != expected_world_registers {
             return Err(ReplayTickError::CheckpointMismatch {
                 section: "world registers",
@@ -1169,7 +1167,7 @@ impl ReplayTickSession<HypergraphStore> {
         let projected_material = material_state
             .project_rows(
                 completed_tick,
-                &MaterialProjectionContextV1::new(
+                &MaterialProjectionContext::new(
                     &restored_graph,
                     &self.prepared.scenario_scope,
                     &self.prepared.types,
@@ -1191,30 +1189,30 @@ impl ReplayTickSession<HypergraphStore> {
     }
 }
 
-pub(crate) struct ReplayPriorIdentityV1 {
-    registers: WorldRegisterSetV1,
-    world: StableWorldV1,
-    stable_graph_digest: StableGraphStateHashV1,
+pub(crate) struct ReplayPriorIdentity {
+    registers: WorldRegisterSet,
+    world: StableWorld,
+    stable_graph_digest: StableGraphStateHash,
 }
 
 pub(crate) struct ReplayExecutionInputs<'a, C> {
-    pub(crate) session: &'a ReplaySessionIdV1,
+    pub(crate) session: &'a ReplaySessionId,
     pub(crate) seed: ReplaySeed,
     pub(crate) content: &'a ContentDigest,
-    pub(crate) reference: RefDigestV1,
-    pub(crate) resolver: &'a StableElementResolverV1,
-    pub(crate) register_manifest: &'a WorldRegisterManifestV1,
-    pub(crate) prepared_environment: &'a PreparedEnvironmentV1,
-    pub(crate) actions: &'a OrderedPracticeActionBatchV1,
+    pub(crate) reference: RefDigest,
+    pub(crate) resolver: &'a StableElementResolver,
+    pub(crate) register_manifest: &'a WorldRegisterManifest,
+    pub(crate) prepared_environment: &'a PreparedEnvironment,
+    pub(crate) actions: &'a OrderedPracticeActionBatch,
     pub(crate) composer: &'a C,
-    pub(crate) material_state: &'a MaterialStateV1,
+    pub(crate) material_state: &'a MaterialState,
     pub(crate) material_allocation: &'a dyn MaterialAllocationGate,
 }
 
 pub(crate) struct ReplayIdentityInputs<'a, G, C> {
     pub(crate) execution: &'a ReplayExecutionInputs<'a, C>,
     pub(crate) prepared: &'a PreparedRules,
-    pub(crate) prior: ReplayPriorIdentityV1,
+    pub(crate) prior: ReplayPriorIdentity,
     pub(crate) result_graph: &'a G,
     pub(crate) report: &'a TickReport,
     pub(crate) events: &'a [EventRecord],
@@ -1225,7 +1223,7 @@ pub(crate) trait ReplayIdentityComposer {
     fn compose<G: CanonicalState>(
         &self,
         inputs: ReplayIdentityInputs<'_, G, Self>,
-    ) -> Result<ReplayIdentityArtifactsV2, ReplayTickError>
+    ) -> Result<ReplayIdentityArtifacts, ReplayTickError>
     where
         Self: Sized;
 }
@@ -1236,35 +1234,35 @@ impl ReplayIdentityComposer for ProductionReplayIdentityComposer {
     fn compose<G: CanonicalState>(
         &self,
         inputs: ReplayIdentityInputs<'_, G, Self>,
-    ) -> Result<ReplayIdentityArtifactsV2, ReplayTickError> {
+    ) -> Result<ReplayIdentityArtifacts, ReplayTickError> {
         compose_replay_identity_with_retention(inputs, &ProductionSuccessfulEventRetention)
     }
 }
 
-pub(crate) struct ReplayIdentityArtifactsV2 {
+pub(crate) struct ReplayIdentityArtifacts {
     action_batch_bytes: Vec<u8>,
     action_batch_layout_version: u32,
-    action_batch_digest: OrderedPracticeActionBatchDigestV1,
-    prior_registers: WorldRegisterSetV1,
-    prior_world: StableWorldV1,
-    result_registers: WorldRegisterSetV1,
-    result_world: StableWorldV1,
-    result_stable_graph: StableGraphStateV1,
-    successful_event_batch: SuccessfulEventBatchV2,
-    material_state_rows: MaterialStateRowsV1,
+    action_batch_digest: OrderedPracticeActionBatchDigest,
+    prior_registers: WorldRegisterSet,
+    prior_world: StableWorld,
+    result_registers: WorldRegisterSet,
+    result_world: StableWorld,
+    result_stable_graph: StableGraphState,
+    successful_event_batch: SuccessfulEventBatch,
+    material_state_rows: MaterialStateRows,
     resolver_manifest_bytes: Vec<u8>,
     prepared_environment_bytes: Vec<u8>,
-    replay_session_identity: ReplaySessionIdV1,
+    replay_session_identity: ReplaySessionId,
     rng_seed: ReplaySeed,
     content_digest: ContentDigest,
-    reference_digest: RefDigestV1,
-    payload: TickPayloadV2,
-    outer_preimage: TickContentPreimageV1,
+    reference_digest: RefDigest,
+    payload: TickPayload,
+    outer_preimage: TickContentPreimage,
     resolver_manifest_digest: [u8; 32],
-    prepared_environment_digest: PreparedEnvironmentDigestV1,
-    prior_stable_graph_digest: StableGraphStateHashV1,
-    result_stable_graph_digest: StableGraphStateHashV1,
-    tick_content_hash: TickContentHashV1,
+    prepared_environment_digest: PreparedEnvironmentDigest,
+    prior_stable_graph_digest: StableGraphStateHash,
+    result_stable_graph_digest: StableGraphStateHash,
+    tick_content_hash: TickContentHash,
 }
 
 pub(crate) fn validate_replay_actions<C>(
@@ -1275,8 +1273,8 @@ pub(crate) fn validate_replay_actions<C>(
 }
 
 fn validate_replay_action_batch(
-    session: &ReplaySessionIdV1,
-    actions: &OrderedPracticeActionBatchV1,
+    session: &ReplaySessionId,
+    actions: &OrderedPracticeActionBatch,
     resolve_tick: i64,
 ) -> Result<u64, ReplayTickError> {
     let resolve_tick =
@@ -1302,13 +1300,13 @@ pub(crate) fn compose_replay_prior<G: CanonicalState, C>(
     graph: &G,
     execution: &ReplayExecutionInputs<'_, C>,
     completed_tick: i64,
-) -> Result<ReplayPriorIdentityV1, ReplayTickError> {
-    let stable_graph = encode_stable_graph_state_v1(graph, execution.resolver)?;
+) -> Result<ReplayPriorIdentity, ReplayTickError> {
+    let stable_graph = encode_stable_graph_state(graph, execution.resolver)?;
     let stable_graph_digest = stable_graph.digest();
-    let registers = encode_world_register_set_v1(execution.register_manifest, completed_tick)?;
-    let world = encode_stable_world_v1(&stable_graph, &registers)?;
+    let registers = encode_world_register_set(execution.register_manifest, completed_tick)?;
+    let world = encode_stable_world(&stable_graph, &registers)?;
     drop(stable_graph);
-    Ok(ReplayPriorIdentityV1 {
+    Ok(ReplayPriorIdentity {
         registers,
         world,
         stable_graph_digest,
@@ -1318,15 +1316,14 @@ pub(crate) fn compose_replay_prior<G: CanonicalState, C>(
 fn compose_replay_identity_with_retention<G: CanonicalState, C, R: SuccessfulEventRetention>(
     inputs: ReplayIdentityInputs<'_, G, C>,
     retention: &R,
-) -> Result<ReplayIdentityArtifactsV2, ReplayTickError> {
-    let result_graph =
-        encode_stable_graph_state_v1(inputs.result_graph, inputs.execution.resolver)?;
+) -> Result<ReplayIdentityArtifacts, ReplayTickError> {
+    let result_graph = encode_stable_graph_state(inputs.result_graph, inputs.execution.resolver)?;
     let result_stable_graph_digest = result_graph.digest();
     let result_registers =
-        encode_world_register_set_v1(inputs.execution.register_manifest, inputs.resolve_tick)?;
-    let result_world = encode_stable_world_v1(&result_graph, &result_registers)?;
+        encode_world_register_set(inputs.execution.register_manifest, inputs.resolve_tick)?;
+    let result_world = encode_stable_world(&result_graph, &result_registers)?;
     validate_committed_event_sink(inputs.report, inputs.events)?;
-    let payload = encode_tick_payload_for_prepared_v2(
+    let payload = encode_tick_payload_for_prepared(
         inputs.prepared,
         &inputs.report.per_rule_fired,
         inputs.report.fired,
@@ -1335,7 +1332,7 @@ fn compose_replay_identity_with_retention<G: CanonicalState, C, R: SuccessfulEve
         &inputs.report.audit_receipts,
         inputs.execution.resolver,
     )?;
-    let successful_event_batch = SuccessfulEventBatchV2::try_from_committed_events(
+    let successful_event_batch = SuccessfulEventBatch::try_from_committed_events(
         &inputs.report.committed_events,
         inputs.execution.resolver,
         retention,
@@ -1346,7 +1343,7 @@ fn compose_replay_identity_with_retention<G: CanonicalState, C, R: SuccessfulEve
         .material_state
         .project_rows(
             inputs.resolve_tick,
-            &MaterialProjectionContextV1::new(
+            &MaterialProjectionContext::new(
                 &result_graph,
                 &inputs.prepared.scenario_scope,
                 &inputs.prepared.types,
@@ -1367,11 +1364,11 @@ fn compose_replay_identity_with_retention<G: CanonicalState, C, R: SuccessfulEve
         inputs.execution.prepared_environment.canonical_bytes(),
         "identified prepared environment bytes",
     )?;
-    let replay_session_identity = ReplaySessionIdV1::try_from(inputs.execution.session.as_bytes())
+    let replay_session_identity = ReplaySessionId::try_from(inputs.execution.session.as_bytes())
         .map_err(ReplayTickError::ReplaySessionIdentity)?;
-    Ok(ReplayIdentityArtifactsV2 {
+    Ok(ReplayIdentityArtifacts {
         action_batch_bytes,
-        action_batch_layout_version: ORDERED_PRACTICE_ACTION_BATCH_V1_LAYOUT_VERSION,
+        action_batch_layout_version: ORDERED_PRACTICE_ACTION_BATCH_LAYOUT_VERSION,
         action_batch_digest: inputs.execution.actions.digest(),
         prior_registers: inputs.prior.registers,
         prior_world: inputs.prior.world,
@@ -1417,12 +1414,12 @@ fn validate_committed_event_sink(
 
 fn compose_outer_preimage<G, C>(
     inputs: &ReplayIdentityInputs<'_, G, C>,
-    result_world: &StableWorldV1,
-    payload: &TickPayloadV2,
-) -> Result<TickContentPreimageV1, ReplayTickError> {
+    result_world: &StableWorld,
+    payload: &TickPayload,
+) -> Result<TickContentPreimage, ReplayTickError> {
     let resolve_tick =
         u64::try_from(inputs.resolve_tick).map_err(|_| ReplayTickError::TickCounterOverflow)?;
-    Ok(TickContentPreimageV1::compose(&TickContentPartsV1 {
+    Ok(TickContentPreimage::compose(&TickContentParts {
         session: inputs.execution.session,
         resolve_tick,
         seed: inputs.execution.seed,
@@ -1462,9 +1459,9 @@ fn copy_report_bytes(source: &[u8], field: &'static str) -> Result<Vec<u8>, Repl
 
 pub(crate) fn identified_report(
     report: TickReport,
-    artifacts: ReplayIdentityArtifactsV2,
-) -> IdentifiedTickReportV2 {
-    IdentifiedTickReportV2 {
+    artifacts: ReplayIdentityArtifacts,
+) -> IdentifiedTickReport {
+    IdentifiedTickReport {
         report,
         action_batch_bytes: artifacts.action_batch_bytes,
         action_batch_layout_version: artifacts.action_batch_layout_version,
@@ -1492,9 +1489,9 @@ pub(crate) fn identified_report(
     }
 }
 
-fn replay_material_error(error: MaterialStateErrorV1) -> ReplayTickError {
+fn replay_material_error(error: MaterialStateError) -> ReplayTickError {
     match error {
-        MaterialStateErrorV1::Allocation { field, requested } => {
+        MaterialStateError::Allocation { field, requested } => {
             ReplayTickError::Allocation { field, requested }
         }
         other => ReplayTickError::MaterialState(other),
@@ -1505,37 +1502,35 @@ fn replay_material_error(error: MaterialStateErrorV1) -> ReplayTickError {
 mod tests {
     use std::cell::Cell;
 
+    use babylon_bsl::canonical_ast::rules_hash_of;
     use babylon_bsl::rule_pipeline::split_content;
-    use babylon_bsl::rules_hash_of;
     use babylon_graph::allocator_state::AllocatorState;
     use babylon_graph::memory::MemoryGraph;
     use babylon_graph::state_hash::CanonicalState;
     use babylon_graph::substrate::GraphSubstrate;
-    use babylon_kernel::replay::{ReplaySeed, ReplaySessionIdV1};
-    use babylon_kernel::tick_content_hash::RefDigestV1;
-    use babylon_kernel::{ContentDigest, H3CellId};
-    use babylon_practice_contract::actor_v2::ActorOrganizationIdV2;
-    use babylon_practice_contract::ordered_action_v1::OrderedPracticeActionBatchV1;
+    use babylon_kernel::replay::{ReplaySeed, ReplaySessionId};
+    use babylon_kernel::tick_content_hash::RefDigest;
+    use babylon_kernel::{content_digest::ContentDigest, H3CellId};
+    use babylon_practice_contract::ActorOrganizationId;
+    use babylon_practice_contract::OrderedPracticeActionBatch;
     use babylon_practice_contract::{
-        input_authority_ledger_v2_digest, CampaignIdV2, InputAuthorityIdV2,
-        PracticeAuthorityKindV2, PracticeIdV2, PracticeInputAuthorityLedgerV2,
-        PracticeInputAuthorityV2, PracticeIntentV2, PracticeTargetIdentityV2, PracticeTargetTagV2,
-        ProposalNonceV2, ResolvedPracticeBatchItemV2, ResolvedPracticeBatchV2,
-        TaggedPracticeTargetV2,
+        input_authority_ledger_digest, CampaignId, InputAuthorityId, PracticeAuthorityKind,
+        PracticeId, PracticeInputAuthority, PracticeInputAuthorityLedger, PracticeIntent,
+        PracticeTargetIdentity, PracticeTargetTag, ProposalNonce, ResolvedPracticeBatch,
+        ResolvedPracticeBatchItem, TaggedPracticeTarget,
     };
 
     use super::{
-        PreparedReplayCommitErrorV1, ProductionSuccessfulEventRetention, ReplayCommitDispositionV1,
-        ReplayExecutionInputs, ReplayIdentityArtifactsV2, ReplayIdentityComposer,
+        PreparedReplayCommitError, ProductionSuccessfulEventRetention, ReplayCommitDisposition,
+        ReplayExecutionInputs, ReplayIdentityArtifacts, ReplayIdentityComposer,
         ReplayIdentityInputs, ReplayPublicationAllocationGate, ReplayTickError, ReplayTickSession,
         SuccessfulEventRetention,
     };
     use crate::h3_runtime::{
-        MichiganDynamicHexValueBitsV1, MICHIGAN_DYNAMIC_HEX_REFERENCE_BUNDLE_DIGEST_V1,
+        MichiganDynamicHexValueBits, MICHIGAN_DYNAMIC_HEX_REFERENCE_BUNDLE_DIGEST,
     };
     use crate::material_state::{
-        MaterialAllocationGate, MaterialStateErrorV1, MaterialStateV1,
-        ProductionMaterialAllocationGate,
+        MaterialAllocationGate, MaterialState, MaterialStateError, ProductionMaterialAllocationGate,
     };
     use crate::{EventRecord, PreparedEventBatchSink};
 
@@ -1576,7 +1571,7 @@ mod tests {
     }
 
     fn session_for_rule(rule: &str) -> ReplayTickSession<MemoryGraph> {
-        let replay = ReplaySessionIdV1::try_from("per60/atomic").unwrap();
+        let replay = ReplaySessionId::try_from("per60/atomic").unwrap();
         let (_, rules) = split_content(rule).unwrap();
         let forms = rules.into_iter().map(|rule| rule.form).collect::<Vec<_>>();
         ReplayTickSession::new(
@@ -1590,24 +1585,24 @@ mod tests {
                 defines_hash: [0x31; 32],
                 rules_hash: rules_hash_of(&forms).unwrap(),
             },
-            RefDigestV1::from_bytes(MICHIGAN_DYNAMIC_HEX_REFERENCE_BUNDLE_DIGEST_V1),
+            RefDigest::from_bytes(MICHIGAN_DYNAMIC_HEX_REFERENCE_BUNDLE_DIGEST),
             dynamic_fixture_material_state(),
         )
         .unwrap()
     }
 
-    fn dynamic_fixture_material_state() -> MaterialStateV1 {
+    fn dynamic_fixture_material_state() -> MaterialState {
         dynamic_allocation_material_state()
     }
 
-    fn material_state() -> MaterialStateV1 {
+    fn material_state() -> MaterialState {
         dynamic_allocation_material_state()
     }
 
-    fn dynamic_allocation_material_state() -> MaterialStateV1 {
-        MaterialStateV1::try_dynamic_runtime_fixture_for_test(vec![(
+    fn dynamic_allocation_material_state() -> MaterialState {
+        MaterialState::try_dynamic_runtime_fixture_for_test(vec![(
             H3CellId::try_from(0x0872_6648_00ff_ffff_u64).unwrap(),
-            MichiganDynamicHexValueBitsV1 {
+            MichiganDynamicHexValueBits {
                 c: 1.0_f64.to_bits(),
                 v: 2.0_f64.to_bits(),
                 s: 3.0_f64.to_bits(),
@@ -1623,7 +1618,7 @@ mod tests {
     }
 
     fn dynamic_allocation_session() -> ReplayTickSession<MemoryGraph> {
-        let replay = ReplaySessionIdV1::try_from("per281/dynamic-allocation").unwrap();
+        let replay = ReplaySessionId::try_from("per281/dynamic-allocation").unwrap();
         let (_, rules) = split_content(EVENT_RULE).unwrap();
         let forms = rules.into_iter().map(|rule| rule.form).collect::<Vec<_>>();
         ReplayTickSession::new(
@@ -1637,7 +1632,7 @@ mod tests {
                 defines_hash: [0x51; 32],
                 rules_hash: rules_hash_of(&forms).unwrap(),
             },
-            RefDigestV1::from_bytes(MICHIGAN_DYNAMIC_HEX_REFERENCE_BUNDLE_DIGEST_V1),
+            RefDigest::from_bytes(MICHIGAN_DYNAMIC_HEX_REFERENCE_BUNDLE_DIGEST),
             dynamic_allocation_material_state(),
         )
         .unwrap()
@@ -1648,7 +1643,7 @@ mod tests {
     }
 
     fn material_session_for_scenario(scenario: &str) -> ReplayTickSession<MemoryGraph> {
-        let replay = ReplaySessionIdV1::try_from("per281/material-allocation").unwrap();
+        let replay = ReplaySessionId::try_from("per281/material-allocation").unwrap();
         let (_, rules) = split_content(EVENT_RULE).unwrap();
         let forms = rules.into_iter().map(|rule| rule.form).collect::<Vec<_>>();
         ReplayTickSession::new(
@@ -1662,7 +1657,7 @@ mod tests {
                 defines_hash: [0x51; 32],
                 rules_hash: rules_hash_of(&forms).unwrap(),
             },
-            RefDigestV1::from_bytes(MICHIGAN_DYNAMIC_HEX_REFERENCE_BUNDLE_DIGEST_V1),
+            RefDigest::from_bytes(MICHIGAN_DYNAMIC_HEX_REFERENCE_BUNDLE_DIGEST),
             material_state(),
         )
         .unwrap()
@@ -1689,7 +1684,7 @@ mod tests {
         fn compose<G: CanonicalState>(
             &self,
             _inputs: ReplayIdentityInputs<'_, G, Self>,
-        ) -> Result<ReplayIdentityArtifactsV2, ReplayTickError> {
+        ) -> Result<ReplayIdentityArtifacts, ReplayTickError> {
             Err(ReplayTickError::Composer {
                 message: "injected identity reservation refusal".to_owned(),
             })
@@ -1710,8 +1705,8 @@ mod tests {
         fn project_value(
             &self,
             value: &babylon_bsl::evaluator::Value,
-            resolver: &babylon_graph::stable_element::StableElementResolverV1,
-        ) -> Result<babylon_bsl::identity_codec::StableBslValueV1, ReplayTickError> {
+            resolver: &babylon_graph::stable_element::StableElementResolver,
+        ) -> Result<babylon_bsl::identity_codec::StableBslValue, ReplayTickError> {
             if matches!(value, babylon_bsl::evaluator::Value::NodeRef(_)) {
                 return Err(ReplayTickError::Allocation {
                     field: "injected stable event value retention",
@@ -1728,7 +1723,7 @@ mod tests {
         fn compose<G: CanonicalState>(
             &self,
             inputs: ReplayIdentityInputs<'_, G, Self>,
-        ) -> Result<ReplayIdentityArtifactsV2, ReplayTickError> {
+        ) -> Result<ReplayIdentityArtifacts, ReplayTickError> {
             super::compose_replay_identity_with_retention(inputs, &RefusingEventRetention)
         }
     }
@@ -1744,12 +1739,12 @@ mod tests {
             &self,
             field: &'static str,
             requested: usize,
-        ) -> Result<(), MaterialStateErrorV1> {
+        ) -> Result<(), MaterialStateError> {
             if field == self.field {
                 let observed = self.observed.get() + 1;
                 self.observed.set(observed);
                 if observed == self.refuse_on_occurrence {
-                    return Err(MaterialStateErrorV1::Allocation { field, requested });
+                    return Err(MaterialStateError::Allocation { field, requested });
                 }
             }
             Ok(())
@@ -1767,48 +1762,48 @@ mod tests {
         }
     }
 
-    fn nonempty_action_batch(session: ReplaySessionIdV1) -> OrderedPracticeActionBatchV1 {
-        let authority = PracticeInputAuthorityV2 {
+    fn nonempty_action_batch(session: ReplaySessionId) -> OrderedPracticeActionBatch {
+        let authority = PracticeInputAuthority {
             schema_version: 2,
-            campaign_id: CampaignIdV2::from_bytes([0x10; 16]),
-            authority_kind: PracticeAuthorityKindV2::PlayerSeat,
-            input_authority_id: InputAuthorityIdV2::from_bytes([0x20; 16]),
-            actor_org_id: ActorOrganizationIdV2::from_bytes(7_u64.to_be_bytes()),
+            campaign_id: CampaignId::from_bytes([0x10; 16]),
+            authority_kind: PracticeAuthorityKind::PlayerSeat,
+            input_authority_id: InputAuthorityId::from_bytes([0x20; 16]),
+            actor_org_id: ActorOrganizationId::from_bytes(7_u64.to_be_bytes()),
             effective_from_tick: 10,
             effective_through_tick_exclusive: 20,
             decision_content_digest: [0x30; 32],
         };
-        let ledger = PracticeInputAuthorityLedgerV2 {
+        let ledger = PracticeInputAuthorityLedger {
             schema_version: 2,
             rows: vec![authority.clone()],
         };
-        let intent = PracticeIntentV2 {
+        let intent = PracticeIntent {
             schema_version: 2,
             submit_after_tick: 10,
             resolve_tick: 11,
-            input_authority_id: InputAuthorityIdV2::from_bytes([0x20; 16]),
-            actor_org_id: ActorOrganizationIdV2::from_bytes(7_u64.to_be_bytes()),
-            practice_id: PracticeIdV2::Strike,
-            target: TaggedPracticeTargetV2 {
-                tag: PracticeTargetTagV2::LaborProcess,
-                identity: PracticeTargetIdentityV2::from_bytes([0x50; 32]),
+            input_authority_id: InputAuthorityId::from_bytes([0x20; 16]),
+            actor_org_id: ActorOrganizationId::from_bytes(7_u64.to_be_bytes()),
+            practice_id: PracticeId::Strike,
+            target: TaggedPracticeTarget {
+                tag: PracticeTargetTag::LaborProcess,
+                identity: PracticeTargetIdentity::from_bytes([0x50; 32]),
             },
-            proposal_nonce: ProposalNonceV2::from_bytes([0x60; 16]),
+            proposal_nonce: ProposalNonce::from_bytes([0x60; 16]),
             quoted_content_digest: [0x30; 32],
             quoted_resource_contract_digest: [0x40; 32],
             parameters: Vec::new(),
             evidence_digests: vec![[0x70; 32]],
         };
-        let source = ResolvedPracticeBatchV2 {
+        let source = ResolvedPracticeBatch {
             schema_version: 2,
-            campaign_id: CampaignIdV2::from_bytes([0x10; 16]),
+            campaign_id: CampaignId::from_bytes([0x10; 16]),
             resolve_tick: 11,
-            authority_ledger_digest: input_authority_ledger_v2_digest(&ledger).unwrap(),
+            authority_ledger_digest: input_authority_ledger_digest(&ledger).unwrap(),
             resource_allocation_contract_digest: [0x40; 32],
             content_digest: [0x30; 32],
-            items: vec![ResolvedPracticeBatchItemV2 { authority, intent }],
+            items: vec![ResolvedPracticeBatchItem { authority, intent }],
         };
-        OrderedPracticeActionBatchV1::project(session, &source, &ledger).unwrap()
+        OrderedPracticeActionBatch::project(session, &source, &ledger).unwrap()
     }
 
     #[derive(Default)]
@@ -1833,7 +1828,7 @@ mod tests {
         let mut session = session();
         session.graph.add_node("DYNAMIC").unwrap();
         let before = session.graph.encode_state().unwrap().as_bytes().to_vec();
-        let actions = OrderedPracticeActionBatchV1::empty(session.session.clone(), 1).unwrap();
+        let actions = OrderedPracticeActionBatch::empty(session.session.clone(), 1).unwrap();
         let mut sink = babylon_bsl::structural_verbs::CollectingSink::default();
 
         assert!(matches!(
@@ -1849,7 +1844,7 @@ mod tests {
     fn composer_refusal_leaves_graph_events_and_counter_unpublished() {
         let mut session = session();
         let before = session.graph.encode_state().unwrap().as_bytes().to_vec();
-        let actions = OrderedPracticeActionBatchV1::empty(session.session.clone(), 1).unwrap();
+        let actions = OrderedPracticeActionBatch::empty(session.session.clone(), 1).unwrap();
         let mut sink = babylon_bsl::structural_verbs::CollectingSink::default();
         let execution = ReplayExecutionInputs {
             session: &session.session,
@@ -1886,7 +1881,7 @@ mod tests {
         let before = session.graph.encode_state().unwrap().as_bytes().to_vec();
         let before_cursors = session.graph.allocator_cursors();
         let before_completed_tick = session.completed_tick();
-        let actions = OrderedPracticeActionBatchV1::empty(session.session.clone(), 1).unwrap();
+        let actions = OrderedPracticeActionBatch::empty(session.session.clone(), 1).unwrap();
         let mut sink = babylon_bsl::structural_verbs::CollectingSink {
             events: vec![("EventType/PRIOR".to_owned(), Vec::new())],
         };
@@ -1911,7 +1906,7 @@ mod tests {
     #[test]
     fn durable_commit_never_runs_when_publication_allocation_preflight_refuses() {
         let mut session = dynamic_allocation_session();
-        let actions = OrderedPracticeActionBatchV1::empty(session.session.clone(), 1).unwrap();
+        let actions = OrderedPracticeActionBatch::empty(session.session.clone(), 1).unwrap();
         let prepared = session.prepare_advance(&actions).unwrap();
         assert!(!prepared.events.is_empty());
         let before_graph = session.graph.encode_state().unwrap().as_bytes().to_vec();
@@ -1928,7 +1923,7 @@ mod tests {
                 prepared,
                 |_report| {
                     commit_called.set(true);
-                    Ok::<ReplayCommitDispositionV1, ()>(ReplayCommitDispositionV1::Committed)
+                    Ok::<ReplayCommitDisposition, ()>(ReplayCommitDisposition::Committed)
                 },
                 &RefusingPublicationAllocation,
             )
@@ -1936,7 +1931,7 @@ mod tests {
 
         assert_eq!(
             error,
-            PreparedReplayCommitErrorV1::Preflight(ReplayTickError::Allocation {
+            PreparedReplayCommitError::Preflight(ReplayTickError::Allocation {
                 field: "injected acknowledged replay event publication",
                 requested: 1,
             })
@@ -1956,21 +1951,21 @@ mod tests {
         for (actions, expected) in [
             (
                 nonempty_action_batch(
-                    ReplaySessionIdV1::try_from("per281/material-allocation").unwrap(),
+                    ReplaySessionId::try_from("per281/material-allocation").unwrap(),
                 ),
                 ReplayTickError::NonEmptyActionBatch { count: 1 },
             ),
             (
-                OrderedPracticeActionBatchV1::empty(
-                    ReplaySessionIdV1::try_from("per281/material-allocation-other").unwrap(),
+                OrderedPracticeActionBatch::empty(
+                    ReplaySessionId::try_from("per281/material-allocation-other").unwrap(),
                     1,
                 )
                 .unwrap(),
                 ReplayTickError::ActionSessionMismatch,
             ),
             (
-                OrderedPracticeActionBatchV1::empty(
-                    ReplaySessionIdV1::try_from("per281/material-allocation").unwrap(),
+                OrderedPracticeActionBatch::empty(
+                    ReplaySessionId::try_from("per281/material-allocation").unwrap(),
                     2,
                 )
                 .unwrap(),
@@ -2010,7 +2005,7 @@ mod tests {
 
         let baseline = {
             let mut session = material_session();
-            let actions = OrderedPracticeActionBatchV1::empty(session.session.clone(), 1).unwrap();
+            let actions = OrderedPracticeActionBatch::empty(session.session.clone(), 1).unwrap();
             let mut sink = babylon_bsl::structural_verbs::CollectingSink::default();
             let report = session.advance(&mut sink, &actions).unwrap();
             (
@@ -2046,7 +2041,7 @@ mod tests {
             let before_cursors = session.graph.allocator_cursors();
             let before_material = material_state();
             let before_tick = session.completed_tick();
-            let actions = OrderedPracticeActionBatchV1::empty(session.session.clone(), 1).unwrap();
+            let actions = OrderedPracticeActionBatch::empty(session.session.clone(), 1).unwrap();
             let mut sink = babylon_bsl::structural_verbs::CollectingSink {
                 events: vec![("EventType/PRIOR".to_owned(), Vec::new())],
             };
@@ -2096,7 +2091,7 @@ mod tests {
     fn dynamic_runtime_detachment_and_projection_refusals_are_atomic_and_retry_identical() {
         let baseline = {
             let mut session = dynamic_allocation_session();
-            let actions = OrderedPracticeActionBatchV1::empty(session.session.clone(), 1).unwrap();
+            let actions = OrderedPracticeActionBatch::empty(session.session.clone(), 1).unwrap();
             let mut sink = babylon_bsl::structural_verbs::CollectingSink::default();
             let report = session.advance(&mut sink, &actions).unwrap();
             (
@@ -2119,7 +2114,7 @@ mod tests {
             let before_cursors = session.graph.allocator_cursors();
             let before_material = dynamic_allocation_material_state();
             let before_tick = session.completed_tick();
-            let actions = OrderedPracticeActionBatchV1::empty(session.session.clone(), 1).unwrap();
+            let actions = OrderedPracticeActionBatch::empty(session.session.clone(), 1).unwrap();
             let mut sink = babylon_bsl::structural_verbs::CollectingSink {
                 events: vec![("EventType/PRIOR".to_owned(), Vec::new())],
             };
@@ -2158,11 +2153,11 @@ mod tests {
         for (qname, expected) in [
             (
                 "social-class/wages",
-                MaterialStateErrorV1::TerritoryFieldOwner,
+                MaterialStateError::TerritoryFieldOwner,
             ),
             (
                 "territory/undeclared",
-                MaterialStateErrorV1::TerritoryFieldUndeclared,
+                MaterialStateError::TerritoryFieldUndeclared,
             ),
         ] {
             let mut session = material_session();
@@ -2172,7 +2167,7 @@ mod tests {
             let before_cursors = session.graph.allocator_cursors();
             let before_material = material_state();
             let before_tick = session.completed_tick();
-            let actions = OrderedPracticeActionBatchV1::empty(session.session.clone(), 1).unwrap();
+            let actions = OrderedPracticeActionBatch::empty(session.session.clone(), 1).unwrap();
             let mut sink = babylon_bsl::structural_verbs::CollectingSink {
                 events: vec![("EventType/PRIOR".to_owned(), Vec::new())],
             };
@@ -2198,11 +2193,11 @@ mod tests {
         for (qname, expected) in [
             (
                 "social-class/wages",
-                MaterialStateErrorV1::OrganizationFieldOwner,
+                MaterialStateError::OrganizationFieldOwner,
             ),
             (
                 "organization/undeclared",
-                MaterialStateErrorV1::OrganizationFieldUndeclared,
+                MaterialStateError::OrganizationFieldUndeclared,
             ),
         ] {
             let mut session = material_session();
@@ -2224,20 +2219,20 @@ mod tests {
             let mut session = material_session_for_scenario(&scenario);
             assert_material_refusal_rolls_back(
                 &mut session,
-                MaterialStateErrorV1::OrganizationTerritoryPresence,
+                MaterialStateError::OrganizationTerritoryPresence,
             );
         }
     }
 
     fn assert_material_refusal_rolls_back(
         session: &mut ReplayTickSession<MemoryGraph>,
-        expected: MaterialStateErrorV1,
+        expected: MaterialStateError,
     ) {
         let before_graph = session.graph.encode_state().unwrap().as_bytes().to_vec();
         let before_cursors = session.graph.allocator_cursors();
         let before_material = material_state();
         let before_tick = session.completed_tick();
-        let actions = OrderedPracticeActionBatchV1::empty(session.session.clone(), 1).unwrap();
+        let actions = OrderedPracticeActionBatch::empty(session.session.clone(), 1).unwrap();
         let mut sink = babylon_bsl::structural_verbs::CollectingSink {
             events: vec![("EventType/PRIOR".to_owned(), Vec::new())],
         };
@@ -2261,7 +2256,7 @@ mod tests {
     fn event_reservation_refuses_after_identity_and_before_graph_publication() {
         let mut session = session();
         let before = session.graph.encode_state().unwrap().as_bytes().to_vec();
-        let actions = OrderedPracticeActionBatchV1::empty(session.session.clone(), 1).unwrap();
+        let actions = OrderedPracticeActionBatch::empty(session.session.clone(), 1).unwrap();
         let composer = super::ProductionReplayIdentityComposer;
         let execution = ReplayExecutionInputs {
             session: &session.session,
@@ -2306,7 +2301,7 @@ mod tests {
                 f64::NAN,
             )
             .unwrap();
-        let actions = OrderedPracticeActionBatchV1::empty(session.session.clone(), 1).unwrap();
+        let actions = OrderedPracticeActionBatch::empty(session.session.clone(), 1).unwrap();
         let mut sink = babylon_bsl::structural_verbs::CollectingSink::default();
 
         assert!(matches!(

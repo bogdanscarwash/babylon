@@ -1,378 +1,693 @@
-//! Conformance session and Archive interaction telemetry through the shared
-//! Bevy tracing sink. These legacy observers cover the in-process viewer's
-//! resources; they do not describe the durable observer clock or camera.
-//!
-//! Observer composition uses the internal `observer_session_log` module: scoped
-//! requests, applied state, acknowledgements and bounded camera checkpoints.
-//! Neither stream records every input or proves that a person understood it.
-//! Value snapshots suppress repeated events from spurious change marks.
+//! Scoped observer telemetry through the existing Bevy tracing subscriber.
+//! Requests are intentions; applied state and durable progress are separate
+//! records. No raw transport errors, credentials, economic rows or stale IDs
+//! enter this stream. Camera checkpoints are bounded, never raw input events.
 
 use bevy::prelude::*;
 
 use crate::atlas::CountyAtlas;
-use crate::loop_ui::TickCounter;
+use crate::campaign_browser::CampaignBrowserCommand;
 use crate::map::SelectedCounty;
-use crate::story::SelectedStory;
-use crate::ui::beats::BeatLog;
+use crate::observer::{ObservationContext, ObserverSession, Perspective, SessionPhase};
+use crate::observer_audio::ObserverAudioSettings;
+use crate::observer_io::ObserverSet;
+use crate::observer_map3d::ObserverMapCamera;
+use crate::observer_ui::{
+    ObserverCommand, ObserverDisclosure, ObserverFeedback, ObserverFrame, ObserverUiState,
+};
+use crate::production::{PrimaryView, ProductionCamera, ProductionCommand, ProductionNavigation};
 use crate::ui::dossier_card::{
-    ActiveCountyDossier, DossierCampaignId, DossierFetchState, DossierPageView, InstalledDossier,
+    ActiveCountyDossier, DossierCampaignId, DossierFetchState, DossierPageView, DossierRefresh,
     SubjectPageRequest,
 };
-use crate::ui::time::{AutopauseMode, RunState, SPEEDS_PER_SECOND};
 
-/// The snapshot state every value-diffing observer keeps: nothing observed
-/// yet (the baseline pass), or the last logged value — which may itself be an
-/// absent selection or an empty projection slot.
-#[derive(Clone, PartialEq, Default)]
-enum Snapshot<T> {
-    #[default]
-    Unseen,
-    Seen(T),
+macro_rules! scoped_info {
+    ($session:expr, $($fields:tt)*) => {
+        bevy::log::info!(target: "session",
+            campaign = %$session.campaign.as_uuid(),
+            viewed_period = $session.viewed_tick,
+            durable_period = $session.durable_tick,
+            perspective = $session.perspective.label(),
+            generation = $session.generation,
+            $($fields)*)
+    };
 }
 
-/// Wires the session observers into an `App`. Added to the windowed build
-/// after [`crate::ui::dossier_card::DossierCardPlugin`] so its message
-/// registration exists; every observer tolerates a missing resource family so
-/// headless test compositions can add this plugin alone.
+/// Records scoped observer requests, installed state, and durable progress.
 pub struct SessionLogPlugin;
 
 impl Plugin for SessionLogPlugin {
     fn build(&self, app: &mut App) {
         app.add_message::<SubjectPageRequest>()
-            .init_resource::<SelectedCounty>()
-            .init_resource::<ActiveCountyDossier>()
-            .init_resource::<DossierPageView>()
-            .init_resource::<DossierFetchState>()
+            .add_message::<ObserverCommand>()
+            .add_message::<ProductionCommand>()
+            .add_message::<CampaignBrowserCommand>()
             .add_systems(
-                Startup,
-                log_session_start.run_if(not(resource_exists::<crate::observer::ObserverSession>)),
+                Update,
+                log_requests
+                    .after(ObserverSet::Input)
+                    .before(ObserverSet::Receive)
+                    .run_if(resource_exists::<ObserverSession>),
             )
             .add_systems(
                 Update,
                 (
-                    log_selection_changes,
-                    log_subject_page_requests,
-                    log_page_view_changes,
-                    log_dossier_projection_changes,
-                    log_fetch_state_changes,
-                    log_control_changes,
-                    log_story_changes,
-                    log_tick_and_beats,
+                    log_session,
+                    log_feedback,
+                    log_presentation,
+                    log_dossier,
+                    log_camera,
                 )
                     .chain()
-                    .run_if(not(resource_exists::<crate::observer::ObserverSession>)),
+                    .after(ObserverSet::Paint)
+                    .run_if(resource_exists::<ObserverSession>),
             );
-        crate::observer_session_log::register(app);
     }
 }
 
-/// `Startup`: the session's frame of reference — which campaign the dossier
-/// surfaces read under and which story the in-process world runs.
-fn log_session_start(campaign: Option<Res<DossierCampaignId>>, story: Option<Res<SelectedStory>>) {
-    match campaign {
-        Some(campaign) => {
-            bevy::log::info!(target: "session", "session start campaign={}", campaign.0.as_uuid());
+fn observer_command_name(command: ObserverCommand) -> &'static str {
+    match command {
+        ObserverCommand::TogglePlay => "toggle_play",
+        ObserverCommand::Step => "step",
+        ObserverCommand::Speed => "speed",
+        ObserverCommand::Perspective => "perspective",
+        ObserverCommand::PreviousPeriod => "previous_period",
+        ObserverCommand::NextPeriod => "next_period",
+        ObserverCommand::Live => "live",
+        ObserverCommand::Lens(_) => "lens",
+        ObserverCommand::Workforce(_) => "modeled_workforce_lens",
+        ObserverCommand::MaterialLens(_) => "material_lens",
+        ObserverCommand::CycleGood(_) => "cycle_good",
+        ObserverCommand::Archive => "archive",
+        ObserverCommand::Menu => "menu",
+        ObserverCommand::NewCampaign => "new_campaign",
+        ObserverCommand::NewStatewideBaselineCampaign => "new_statewide_baseline",
+        ObserverCommand::NewStatewideFreightConstraintCampaign => {
+            "new_statewide_freight_constraint"
         }
-        None => {
-            bevy::log::info!(target: "session", "session start campaign=<dossier surfaces absent>");
+        ObserverCommand::NewStatewidePackagingShortageCampaign => {
+            "new_statewide_packaging_shortage"
         }
-    }
-    if let Some(story) = story {
-        bevy::log::info!(
-            target: "session",
-            "session start story id={} title={:?}",
-            story.0.id,
-            story.0.title
-        );
+        ObserverCommand::NewStatewideBothCampaign => "new_statewide_both",
+        ObserverCommand::NewDelayedCampaign => "new_delayed_campaign",
+        ObserverCommand::NewSharedFreightAmpleCampaign => "new_shared_freight_ample_campaign",
+        ObserverCommand::NewSharedFreightConstrainedCampaign => {
+            "new_shared_freight_constrained_campaign"
+        }
+        ObserverCommand::ReopenCampaign => "reopen_campaign",
+        ObserverCommand::Quit => "quit",
+        ObserverCommand::UiScale => "ui_scale",
+        ObserverCommand::ReducedMotion => "reduced_motion",
+        ObserverCommand::MusicVolume => "music_volume",
+        ObserverCommand::EffectsVolume => "effects_volume",
+        ObserverCommand::MusicTrack => "music_track",
+        ObserverCommand::History => "history",
+        ObserverCommand::StopOnDelivery => "stop_on_delivery",
+        ObserverCommand::Disclosure(ObserverDisclosure::Time) => "time_controls",
+        ObserverCommand::Disclosure(ObserverDisclosure::Lens) => "lens_controls",
+        ObserverCommand::Evidence => "evidence",
+        ObserverCommand::EconomicDetails => "economic_details",
+        ObserverCommand::Relationships => "relationships",
+        ObserverCommand::NetworkSector(_) => "network_sector",
+        ObserverCommand::RoadLayer(crate::observer_ui::RoadLayer::EconomyNetwork) => {
+            "economy_network"
+        }
+        ObserverCommand::RoadLayer(crate::observer_ui::RoadLayer::SelectedPaths) => {
+            "selected_paths_layer"
+        }
+        ObserverCommand::RoadLayer(crate::observer_ui::RoadLayer::CapturedRoads) => {
+            "captured_roads_layer"
+        }
     }
 }
 
-/// `Update`: county selection changes — the player's map clicks. The initial
-/// empty selection is the baseline, not an event.
-fn log_selection_changes(
-    selected: Res<SelectedCounty>,
-    atlas: Option<Res<CountyAtlas>>,
-    mut last: Local<Snapshot<Option<usize>>>,
+fn log_requests(
+    session: Res<ObserverSession>,
+    mut observer: MessageReader<ObserverCommand>,
+    mut production: MessageReader<ProductionCommand>,
+    mut browser: MessageReader<CampaignBrowserCommand>,
+    mut subjects: MessageReader<SubjectPageRequest>,
 ) {
-    let current = selected.0;
-    if matches!(&*last, Snapshot::Seen(previous) if previous == &current) {
-        return;
-    }
-    let first = matches!(*last, Snapshot::Unseen);
-    *last = Snapshot::Seen(current);
-    if first {
-        return;
-    }
-    let Some(index) = current else {
-        bevy::log::info!(target: "session", "county selection cleared");
-        return;
-    };
-    if let Some(county) = atlas.as_deref().and_then(|atlas| atlas.county(index)) {
-        bevy::log::info!(
-            target: "session",
-            "county selected fips={} name={:?}",
-            county.fips,
-            county.name
-        );
-    } else {
-        bevy::log::info!(
-            target: "session",
-            "county selected index={index} (outside the atlas)"
+    for _ in subjects.read() {
+        scoped_info!(
+            session,
+            command = "archive_subject",
+            "observer command requested"
         );
     }
-}
-
-/// A pending request is not an admitted observation. Record only its static
-/// action kind; the scope-checked page installation has its separate record.
-fn log_subject_page_requests(mut requests: MessageReader<SubjectPageRequest>) {
-    for request in requests.read() {
-        let kind = if request.kind == "place" {
-            "place"
-        } else {
-            "unrecognized"
+    for command in observer.read() {
+        scoped_info!(
+            session,
+            command = observer_command_name(*command),
+            "observer command requested"
+        );
+    }
+    for command in production.read() {
+        // Select can contain a stale or undisclosed site. Only the applied
+        // projection below is permitted to log a validated subject identity.
+        let name = match command {
+            ProductionCommand::Open => "production_open",
+            ProductionCommand::Map => "map_open",
+            ProductionCommand::Flat => "production_flat",
+            ProductionCommand::Back => "production_back",
+            ProductionCommand::Details => "production_details",
+            ProductionCommand::Reading(_) => "production_reading_section",
+            ProductionCommand::Select { .. } => "production_select",
+            ProductionCommand::Focus { .. } => "production_focus",
+            ProductionCommand::Page { .. } => "production_page",
+            ProductionCommand::Process { .. } => "production_process",
         };
-        bevy::log::info!(target: "session", "subject page requested kind={kind}");
+        scoped_info!(session, command = name, "observer command requested");
+    }
+    for command in browser.read() {
+        let name = match command {
+            CampaignBrowserCommand::Previous => "campaign_previous",
+            CampaignBrowserCommand::Next => "campaign_next",
+            CampaignBrowserCommand::Open => "campaign_open",
+            CampaignBrowserCommand::Compare => "campaign_compare",
+            CampaignBrowserCommand::CloseComparison => "comparison_close",
+            CampaignBrowserCommand::Refresh => "campaign_refresh",
+        };
+        scoped_info!(session, command = name, "observer command requested");
     }
 }
 
-/// `Update`: county or linked-subject navigation within the same Archive panel.
-fn log_page_view_changes(view: Res<DossierPageView>, mut last: Local<Snapshot<DossierPageView>>) {
-    let current = &*view;
-    if matches!(&*last, Snapshot::Seen(previous) if previous == current) {
-        return;
-    }
-    let first = matches!(*last, Snapshot::Unseen);
-    *last = Snapshot::Seen(current.clone());
-    if first {
-        return;
-    }
-    if let DossierPageView::Subject(request) = current {
-        bevy::log::info!(
-            target: "session",
-            "page view: subject kind={} id={}",
-            request.kind,
-            request.id
-        );
-    } else {
-        bevy::log::info!(target: "session", "page view: county card");
-    }
+#[derive(PartialEq)]
+struct SessionSnapshot {
+    context: ObservationContext,
+    durable: u64,
+    archive: u64,
+    phase: SessionPhase,
+    playing: bool,
+    speed: f64,
+    failed: bool,
 }
 
-/// `Update`: dossier projection installs and clears — what the card actually
-/// composed from, at field-count resolution (the atoms themselves stay in the
-/// Archive; the log records that they arrived).
-fn log_dossier_projection_changes(
-    projection: Res<ActiveCountyDossier>,
-    mut last: Local<Snapshot<Option<InstalledDossier>>>,
-) {
-    let current = &projection.0;
-    if matches!(&*last, Snapshot::Seen(previous) if previous == current) {
-        return;
-    }
-    let first = matches!(*last, Snapshot::Unseen);
-    *last = Snapshot::Seen(current.clone());
-    if first {
-        return;
-    }
-    if let Some(installed) = current {
-        let read = &installed.read;
-        let page = crate::dossier::retained_page(read);
-        bevy::log::info!(
-            target: "session",
-            "dossier installed geoid={} title={:?} atoms={} links={} changes={} requested={} durable={} processed={} verified={:?} availability={}",
-            installed.scope.county_geoid,
-            page.map(|page| page.title.as_str()),
-            page.map_or(0, |page| page.atoms.len()),
-            page.map_or(0, |page| page.links.len()),
-            page.map_or(0, |page| page.changes.changes.len()),
-            read.scope.tick(),
-            read.durable_tick,
-            read.processed_tick,
-            crate::dossier::verified_tick(read),
-            crate::dossier::availability_label(read)
-        );
-    } else {
-        bevy::log::info!(target: "session", "dossier cleared");
-    }
-}
-
-/// `Update`: the fetch lifecycle, so a card that shows "Archive reader not
-/// configured" or a hard failure is explained by the log line that precedes
-/// it. Snapshots a descriptor string: `DossierFetchState` holds the in-flight
-/// `Task` (no `PartialEq`); the descriptor diff suppresses unchanged lifecycle
-/// descriptions.
-fn log_fetch_state_changes(state: Res<DossierFetchState>, mut last: Local<Snapshot<String>>) {
-    let current = match &*state {
-        DossierFetchState::Idle => "idle".to_owned(),
-        DossierFetchState::WaitingForObservation => "waiting-for-observation".to_owned(),
-        DossierFetchState::InFlight { scope, .. } => format!("in-flight:{}", scope.county_geoid),
-        DossierFetchState::Failed(crate::ui::dossier_card::DossierFetchError::ReaderAbsent(_)) => {
-            "failed:ReaderAbsent".to_owned()
-        }
-        DossierFetchState::Failed(crate::ui::dossier_card::DossierFetchError::ReadFailed(_)) => {
-            "failed:ReadFailed".to_owned()
-        }
+fn log_session(session: Res<ObserverSession>, mut last: Local<Option<SessionSnapshot>>) {
+    let next = SessionSnapshot {
+        context: session.context(),
+        durable: session.durable_tick,
+        archive: session.archive_verified_tick,
+        phase: session.phase,
+        playing: session.playing,
+        speed: session.periods_per_second,
+        failed: session.error.is_some(),
     };
-    if matches!(&*last, Snapshot::Seen(previous) if previous == &current) {
+    if last.as_ref() == Some(&next) {
         return;
     }
-    let first = matches!(*last, Snapshot::Unseen);
-    *last = Snapshot::Seen(current.clone());
-    if first {
-        return;
-    }
-    if let Some(failure) = current.strip_prefix("failed:") {
-        bevy::log::info!(target: "session", "dossier fetch failed: {failure}");
-    } else if let Some(fips) = current.strip_prefix("in-flight:") {
-        bevy::log::info!(target: "session", "dossier fetch started fips={fips}");
-    } else {
-        bevy::log::info!(target: "session", "dossier fetch: {current}");
-    }
-}
-
-/// `Update`: the sim clock's control plane — pause/resume, speed steps,
-/// autopause flips. `accumulator` churns every frame by design, so the
-/// snapshot is the three fields a keypress can move. Unlike the interaction
-/// plane, the baseline IS logged: a session record starts from the controls
-/// it started with.
-fn log_control_changes(
-    run_state: Option<Res<RunState>>,
-    mut last: Local<Snapshot<(bool, usize, AutopauseMode)>>,
-) {
-    let Some(run_state) = run_state else {
-        return;
-    };
-    let current = (
-        run_state.running,
-        run_state.speed_index,
-        run_state.autopause,
-    );
-    if matches!(&*last, Snapshot::Seen(previous) if previous == &current) {
-        return;
-    }
-    let first = matches!(*last, Snapshot::Unseen);
-    *last = Snapshot::Seen(current);
-    let (running, speed_index, autopause) = current;
-    let speed = SPEEDS_PER_SECOND.get(speed_index).copied().unwrap_or(0.0);
-    if first {
-        bevy::log::info!(
-            target: "session",
-            "controls at start: running={running} speed={speed}t/s autopause={autopause:?}"
-        );
-    } else {
-        bevy::log::info!(
-            target: "session",
-            "controls changed: running={running} speed={speed}t/s autopause={autopause:?}"
-        );
-    }
-}
-
-/// `Update`: story switches — the N-key restart replaces the whole engine
-/// session, so the story identity is part of the session's frame of
-/// reference. The baseline is logged for the same reason as the controls.
-fn log_story_changes(story: Option<Res<SelectedStory>>, mut last: Local<Snapshot<&'static str>>) {
-    let Some(story) = story else {
-        return;
-    };
-    let current = story.0.id;
-    if matches!(&*last, Snapshot::Seen(previous) if *previous == current) {
-        return;
-    }
-    let first = matches!(*last, Snapshot::Unseen);
-    *last = Snapshot::Seen(current);
-    if first {
-        bevy::log::info!(target: "session", "story at start: id={current}");
-    } else {
-        bevy::log::info!(target: "session", "story restarted id={current}");
-    }
-}
-
-/// `Update`: the tick spine. The heartbeat is `DEBUG` (file-only); beats
-/// drained during the tick are `INFO` — they are the "what happened" stream
-/// the on-screen beat feed renders. Beats are matched by tick rather than
-/// tracked by cursor, so the 512-cap eviction can never desync the log; the
-/// baseline tick logs no beats (they are history, not this session's events).
-fn log_tick_and_beats(
-    counter: Option<Res<TickCounter>>,
-    beats: Option<Res<BeatLog>>,
-    mut last: Local<Snapshot<i64>>,
-) {
-    let Some(counter) = counter else {
-        return;
-    };
-    let current = counter.0;
-    if matches!(&*last, Snapshot::Seen(previous) if *previous == current) {
-        return;
-    }
-    let first = matches!(*last, Snapshot::Unseen);
-    *last = Snapshot::Seen(current);
-    if first {
-        bevy::log::info!(target: "session", "tick heartbeat starts at tick={current}");
-        return;
-    }
-    bevy::log::debug!(target: "session", "tick {current}");
-    if let Some(beats) = beats {
-        for beat in beats.beats.iter().filter(|beat| beat.tick == current) {
-            bevy::log::info!(
-                target: "session",
-                "beat tick={} type={} tier={:?} delta={:?}",
-                beat.tick,
-                beat.event_type,
-                beat.tier,
-                beat.magnitude_delta
+    if let Some(previous) = last.as_ref() {
+        if previous.context.campaign == next.context.campaign && next.durable > previous.durable {
+            scoped_info!(
+                session,
+                previous_period = previous.durable,
+                "observer durable progress acknowledged"
             );
         }
+    }
+    scoped_info!(session, phase = ?next.phase, playing = next.playing,
+        speed = next.speed, archive_processed_period = next.archive, failed = next.failed,
+        "observer session applied");
+    *last = Some(next);
+}
+
+fn log_feedback(
+    session: Res<ObserverSession>,
+    feedback: Option<Res<ObserverFeedback>>,
+    mut last_revision: Local<u64>,
+) {
+    let Some(feedback) = feedback else {
+        return;
+    };
+    if feedback.revision == *last_revision {
+        return;
+    }
+    *last_revision = feedback.revision;
+    // Feedback reasons are static control-availability text, never row labels
+    // or transport errors. Revisions preserve distinct repeated denied clicks.
+    if let Some(reason) = feedback.message {
+        scoped_info!(session, reason, "observer command rejected");
+    }
+}
+
+#[derive(PartialEq)]
+// These are independent applied controls, not mutually exclusive session states.
+#[allow(clippy::struct_excessive_bools)]
+struct PresentationSnapshot {
+    network_layer: crate::observer_ui::RoadLayer,
+    network_sector: crate::observer_ui::NetworkSector,
+    perspective: Perspective,
+    lens: String,
+    view: PrimaryView,
+    flat: bool,
+    details: bool,
+    reading_section: crate::production::ProductionReadingSection,
+    disclosure: &'static str,
+    evidence: bool,
+    economic_details: bool,
+    site: Option<String>,
+    county: Option<String>,
+    archive: bool,
+    menu: bool,
+    splash: bool,
+    history: bool,
+    comparison: bool,
+    reduced_motion: bool,
+    stop_on_delivery: bool,
+    ui_scale: f32,
+    audio: Option<(f32, f32, usize)>,
+}
+
+#[allow(clippy::too_many_arguments)]
+fn log_presentation(
+    session: Res<ObserverSession>,
+    frame: Option<Res<ObserverFrame>>,
+    ui: Option<Res<ObserverUiState>>,
+    view: Option<Res<PrimaryView>>,
+    navigation: Option<Res<ProductionNavigation>>,
+    audio: Option<Res<ObserverAudioSettings>>,
+    scale: Option<Res<UiScale>>,
+    selected: Option<Res<SelectedCounty>>,
+    atlas: Option<Res<CountyAtlas>>,
+    mut last: Local<Option<PresentationSnapshot>>,
+) {
+    let Some(ui) = ui else {
+        return;
+    };
+    if last.is_some()
+        && !session.is_changed()
+        && !ui.is_changed()
+        && !frame.as_ref().is_some_and(DetectChanges::is_changed)
+        && !view.as_ref().is_some_and(DetectChanges::is_changed)
+        && !navigation.as_ref().is_some_and(DetectChanges::is_changed)
+        && !audio.as_ref().is_some_and(DetectChanges::is_changed)
+        && !scale.as_ref().is_some_and(DetectChanges::is_changed)
+        && !selected.as_ref().is_some_and(DetectChanges::is_changed)
+    {
+        return;
+    }
+    let snapshot = frame.as_ref().and_then(|frame| frame.for_session(&session));
+    let site = if session.perspective == Perspective::FullObserver {
+        snapshot
+            .and_then(|snapshot| snapshot.production.as_ref())
+            .and_then(|production| {
+                let selected = navigation.as_ref()?.selected_site.as_ref()?;
+                production
+                    .sites
+                    .iter()
+                    .find(|site| &site.id == selected)
+                    .map(|site| site.id.clone())
+            })
+    } else {
+        None
+    };
+    let county = selected.as_ref().and_then(|selected| {
+        atlas
+            .as_ref()?
+            .county(selected.0?)
+            .map(|county| county.fips.to_owned())
+    });
+    let next = PresentationSnapshot {
+        perspective: session.perspective,
+        network_layer: ui.road_layer,
+        network_sector: ui.network_sector,
+        lens: ui.lens.label_for_log(snapshot),
+        view: view.as_deref().copied().unwrap_or_default(),
+        flat: navigation
+            .as_ref()
+            .is_some_and(|navigation| navigation.flat),
+        details: navigation
+            .as_ref()
+            .is_some_and(|navigation| navigation.details_open),
+        reading_section: navigation
+            .as_ref()
+            .map(|navigation| navigation.reading_section)
+            .unwrap_or_default(),
+        disclosure: match ui.disclosure {
+            Some(ObserverDisclosure::Time) => "time",
+            Some(ObserverDisclosure::Lens) => "lens",
+            None => "none",
+        },
+        evidence: ui.evidence_open,
+        economic_details: ui.economic_details_open,
+        site,
+        county,
+        archive: ui.archive_open,
+        menu: ui.menu_open,
+        splash: ui.splash_visible,
+        history: ui.history_open,
+        comparison: ui.comparison_open,
+        reduced_motion: ui.reduced_motion,
+        stop_on_delivery: ui.stop_on_delivery,
+        ui_scale: scale.as_ref().map_or(1.0, |scale| scale.0),
+        audio: audio
+            .as_ref()
+            .map(|audio| (audio.music_volume, audio.effects_volume, audio.track)),
+    };
+    if last.as_ref() == Some(&next) {
+        return;
+    }
+    scoped_info!(session, lens = %next.lens, network_layer = ?next.network_layer, network_sector = ?next.network_sector, view = ?next.view, flat = next.flat,
+        details = next.details, reading_section = ?next.reading_section, disclosure = next.disclosure, evidence = next.evidence, economic_details = next.economic_details,
+        selected_site = next.site.as_deref().unwrap_or("none_or_undisclosed"),
+        county = next.county.as_deref().unwrap_or("none"), archive = next.archive,
+        menu = next.menu, splash = next.splash, history = next.history,
+        comparison = next.comparison, reduced_motion = next.reduced_motion,
+        stop_on_delivery = next.stop_on_delivery, ui_scale = %next.ui_scale,
+        music_volume = next.audio.map(|audio| audio.0),
+        effects_volume = next.audio.map(|audio| audio.1),
+        track = next.audio.map(|audio| audio.2), "observer presentation applied");
+    *last = Some(next);
+}
+
+#[derive(PartialEq)]
+struct DossierSnapshot {
+    context: ObservationContext,
+    county: Option<String>,
+    subject: Option<String>,
+    content_tick: Option<u64>,
+    verified_tick: Option<u64>,
+    status: &'static str,
+    page: &'static str,
+}
+#[allow(clippy::too_many_arguments)]
+fn log_dossier(
+    session: Res<ObserverSession>,
+    projection: Option<Res<ActiveCountyDossier>>,
+    fetch: Option<Res<DossierFetchState>>,
+    campaign: Option<Res<DossierCampaignId>>,
+    selected: Option<Res<SelectedCounty>>,
+    atlas: Option<Res<CountyAtlas>>,
+    view: Option<Res<DossierPageView>>,
+    frame: Option<Res<ObserverFrame>>,
+    refresh: Option<Res<DossierRefresh>>,
+    mut last: Local<Option<DossierSnapshot>>,
+) {
+    let Some(fetch) = fetch else {
+        return;
+    };
+    if last.is_some()
+        && !session.is_changed()
+        && !fetch.is_changed()
+        && !selected.as_ref().is_some_and(DetectChanges::is_changed)
+        && !campaign.as_ref().is_some_and(DetectChanges::is_changed)
+        && !view.as_ref().is_some_and(DetectChanges::is_changed)
+        && !projection.as_ref().is_some_and(DetectChanges::is_changed)
+        && !frame.as_ref().is_some_and(DetectChanges::is_changed)
+        && !refresh.as_ref().is_some_and(DetectChanges::is_changed)
+    {
+        return;
+    }
+    let county = selected
+        .as_ref()
+        .and_then(|selected| atlas.as_ref()?.county(selected.0?));
+    let card = projection.as_ref().and_then(|projection| {
+        if !matches!(*fetch, DossierFetchState::Idle) || campaign.as_ref()?.0 != session.campaign {
+            return None;
+        }
+        projection.for_observer(
+            &session,
+            frame.as_ref()?,
+            refresh.as_ref()?.0,
+            county.as_ref()?.fips,
+        )
+    });
+    let status = match (&*fetch, card) {
+        (DossierFetchState::Idle, Some(read)) => match &read.state {
+            babylon_persistence::archive_revision::ArchiveDossierState::Ready { .. } => "ready",
+            babylon_persistence::archive_revision::ArchiveDossierState::Pending { .. } => "pending",
+            babylon_persistence::archive_revision::ArchiveDossierState::Unavailable(_) => {
+                "unavailable"
+            }
+        },
+        (DossierFetchState::Idle, None) => "empty",
+        (DossierFetchState::InFlight { .. }, _) => "reading",
+        (DossierFetchState::WaitingForObservation, _) => "waiting_for_observation",
+        (
+            DossierFetchState::Failed(crate::ui::dossier_card::DossierFetchError::ReaderAbsent(_)),
+            _,
+        ) => "reader_unavailable",
+        (DossierFetchState::Failed(_), _) => "read_failed",
+    };
+    let next = DossierSnapshot {
+        context: session.context(),
+        county: card
+            .and(county.as_ref())
+            .map(|county| county.fips.to_owned()),
+        // A requested identity is not itself a disclosure. Only a witnessed
+        // retained page authorizes a subject identity in the applied log.
+        subject: card
+            .filter(|read| crate::dossier::retained_page(read).is_some())
+            .map(|read| format!("{}:{}", read.subject.kind().as_str(), read.subject.id())),
+        content_tick: card
+            .and_then(crate::dossier::retained_page)
+            .map(|page| page.content_source.tick()),
+        verified_tick: card.and_then(crate::dossier::verified_tick),
+        status,
+        page: if view
+            .as_deref()
+            .is_some_and(|view| matches!(view, DossierPageView::Subject(_)))
+        {
+            "subject"
+        } else {
+            "county"
+        },
+    };
+    if last.as_ref() == Some(&next) {
+        return;
+    }
+    scoped_info!(
+        session,
+        county = next.county.as_deref().unwrap_or("none"),
+        subject = next.subject.as_deref().unwrap_or("none"),
+        content_tick = next.content_tick,
+        verified_tick = next.verified_tick,
+        status = next.status,
+        page = next.page,
+        "observer archive applied"
+    );
+    *last = Some(next);
+}
+
+#[derive(Clone, Copy, PartialEq)]
+struct CameraPose {
+    position: Vec3,
+    rotation: Quat,
+    kind: &'static str,
+    lens: f32,
+    aspect_or_width: f32,
+}
+impl CameraPose {
+    fn from_components(transform: &Transform, projection: &Projection) -> Self {
+        let (kind, lens, aspect_or_width) = match projection {
+            Projection::Perspective(perspective) => {
+                ("perspective", perspective.fov, perspective.aspect_ratio)
+            }
+            Projection::Orthographic(orthographic) => (
+                "orthographic",
+                orthographic.scale,
+                orthographic.area.width(),
+            ),
+            Projection::Custom(_) => ("custom", 0.0, 0.0),
+        };
+        Self {
+            position: transform.translation,
+            rotation: transform.rotation,
+            kind,
+            lens,
+            aspect_or_width,
+        }
+    }
+}
+
+#[derive(Default)]
+struct CameraCheckpoint {
+    observed: Option<CameraPose>,
+    emitted: Option<CameraPose>,
+    emitted_at: f64,
+    moved_at: f64,
+    settled: bool,
+}
+impl CameraCheckpoint {
+    fn sample(&mut self, pose: CameraPose, now: f64) -> Option<bool> {
+        if self.observed != Some(pose) {
+            self.observed = Some(pose);
+            self.moved_at = now;
+            self.settled = false;
+        }
+        let settled = now - self.moved_at >= 0.15;
+        if self.emitted.is_some() && now - self.emitted_at < 0.5 {
+            return None;
+        }
+        if self.emitted == Some(pose) && (self.settled || !settled) {
+            return None;
+        }
+        self.emitted = Some(pose);
+        self.emitted_at = now;
+        self.settled = settled;
+        Some(settled)
+    }
+}
+
+type CameraReadings<'w, 's> = Query<
+    'w,
+    's,
+    (
+        &'static Camera,
+        &'static Transform,
+        &'static Projection,
+        Option<&'static ObserverMapCamera>,
+        Option<&'static ProductionCamera>,
+    ),
+>;
+
+fn log_camera(
+    session: Res<ObserverSession>,
+    view: Option<Res<PrimaryView>>,
+    ui: Option<Res<ObserverUiState>>,
+    time: Option<Res<Time<Real>>>,
+    cameras: CameraReadings,
+    mut checkpoint: Local<CameraCheckpoint>,
+) {
+    let Some(time) = time else {
+        return;
+    };
+    if ui
+        .as_ref()
+        .is_some_and(|ui| ui.menu_open || ui.splash_visible || ui.comparison_open)
+    {
+        return;
+    }
+    let view = view.as_deref().copied().unwrap_or_default();
+    for (camera, transform, projection, map, production) in &cameras {
+        if !camera.is_active
+            || !matches!(
+                (view, map.is_some(), production.is_some()),
+                (PrimaryView::Map, true, _) | (PrimaryView::Production, _, true)
+            )
+        {
+            continue;
+        }
+        let pose = CameraPose::from_components(transform, projection);
+        let Some(settled) = checkpoint.sample(pose, time.elapsed_secs_f64()) else {
+            continue;
+        };
+        bevy::log::debug!(target: "session", campaign = %session.campaign.as_uuid(),
+            viewed_period = session.viewed_tick, durable_period = session.durable_tick,
+            perspective = session.perspective.label(), generation = session.generation,
+            view = ?view, projection = pose.kind, lens = pose.lens, aspect_or_width = pose.aspect_or_width,
+            position = ?pose.position.to_array(), rotation = ?pose.rotation.to_array(),
+            settled, "observer camera checkpoint");
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::logging::RotatingSink;
-    use crate::severity::SeverityTier;
-    use crate::ui::beats::Beat;
-    use crate::ui::dossier_card::DossierFetchError;
-    use babylon_persistence::archive_revision::{
-        ArchiveChangePageV2, ArchiveDossierPageV2, ArchiveDossierReadV2, ArchiveDossierStateV2,
-        ArchivePublicationOriginV2, ArchiveReadScopeV2,
+    use babylon_persistence::{
+        identity::CampaignId, observer_reader::ObserverEconomySnapshot,
+        observer_reader::ObserverVisibility, production_observation::ProductionSite,
+        production_observation::ProductionSnapshot,
     };
-    use babylon_persistence::{ArchivePageRefV1, ArchiveSubjectKindV1};
     use bevy::log::tracing_subscriber::layer::SubscriberExt as _;
-    use std::collections::VecDeque;
-    use std::path::PathBuf;
+    use std::time::Duration;
 
-    const ATLAS_BYTES: &[u8] = include_bytes!(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/../../../assets/map/county_atlas.bin"
-    ));
+    const HIDDEN_SITE: &str = "undisclosed-production-id";
+    const HIDDEN_LABEL: &str = "Undisclosed factory label";
 
-    fn temp_dir(tag: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!(
-            "babylon-session-logtest-{tag}-{}",
-            std::process::id()
-        ));
-        std::fs::remove_dir_all(&dir).ok();
-        std::fs::create_dir_all(&dir).expect("test log dir");
-        dir
+    fn snapshot(session: &ObserverSession) -> ObserverEconomySnapshot {
+        ObserverEconomySnapshot {
+            campaign_id: session.campaign.as_uuid().to_string(),
+            resolve_tick: session.viewed_tick,
+            foundation_digest: "foundation".into(),
+            nominal_world_hash: None,
+            tick_content_hash: session.content_hash.clone(),
+            envelope_digest: None,
+            visibility: ObserverVisibility::FullObserver,
+            counties: Vec::new(),
+            production: Some(ProductionSnapshot {
+                content_authority_sha256: "a".repeat(64),
+                road_source: None,
+                physical_edges: Vec::new(),
+                merchant_handling_accounts: Vec::new(),
+                final_demand_accounts: Vec::new(),
+                freight_capacity_accounts: Vec::new(),
+                material_balance: None,
+                labor_accounts: Vec::new(),
+                staffing_accounts: Vec::new(),
+                scenario_label: "Designed telemetry fixture".into(),
+                horizon_period: 16,
+                sites: vec![ProductionSite {
+                    id: HIDDEN_SITE.into(),
+                    name: HIDDEN_LABEL.into(),
+                    county_geoid: "26163".into(),
+                    industry_code: "331".into(),
+                    observed_employment: None,
+                    inventory: Vec::new(),
+                    role:
+                        babylon_persistence::production_observation::ProductionSiteRole::Production,
+                    sector_code: "31-33".into(),
+                    processes: vec![
+                        babylon_persistence::production_observation::ProductionProcess {
+                            id: "fixture-process".into(),
+                            name: "Fixture process".into(),
+                            output_good_id: "hidden-good-id".into(),
+                            output_unit_id: "hidden-unit-id".into(),
+                            output_good: "hidden-good-name".into(),
+                            output_unit: "kg".into(),
+                            output_per_batch: 1,
+                            available_batches: 1,
+                            planned_batches: None,
+                            produced_batches: None,
+                            inputs: Vec::new(),
+                            labor: Vec::new(),
+                        },
+                    ],
+                }],
+                routes: Vec::new(),
+                freight: Vec::new(),
+                events: Vec::new(),
+                observed_contexts: Vec::new(),
+                process_attributions: Vec::new(),
+                provenance: Vec::new(),
+            }),
+        }
     }
 
-    /// Boot the session app with the REAL rotating sink + fmt layer as the
-    /// subscriber (never a copied pipeline), run one baseline update (Startup
-    /// plus the observers' first-observation pass), then `drive` the
-    /// interaction and one more update, and return the live file's contents.
-    /// The schedules run single-threaded so the thread-local subscriber
-    /// captures every system — the default multi-threaded executor would run
-    /// them on the global `ComputeTaskPool`, where `with_default` does not
-    /// reach.
-    fn run_session_app(dir: &std::path::Path, drive: impl Fn(&mut App)) -> String {
-        let sink = RotatingSink::open(dir, 1024 * 1024, 2).expect("sink opens");
-        let layer = bevy::log::tracing_subscriber::fmt::Layer::default()
-            .with_ansi(false)
-            .with_writer(sink);
-        let subscriber = bevy::log::tracing_subscriber::registry().with(layer);
+    fn captured(drive: impl FnOnce(&mut App)) -> String {
+        let path = std::env::temp_dir().join(format!(
+            "babylon-observer-telemetry-{}",
+            uuid::Uuid::new_v4()
+        ));
+        let sink =
+            crate::logging::RotatingSink::open(&path, 1024 * 1024, 2).expect("rotating sink");
+        let subscriber = bevy::log::tracing_subscriber::registry().with(
+            bevy::log::tracing_subscriber::fmt::Layer::default()
+                .with_ansi(false)
+                .with_writer(sink),
+        );
         let mut app = App::new();
-        app.add_plugins(SessionLogPlugin)
-            .insert_resource(CountyAtlas::parse(ATLAS_BYTES).expect("committed atlas parses"));
+        let mut session = ObserverSession::new(CampaignId::from_uuid(uuid::Uuid::nil()));
+        session.foundation_digest = Some("foundation".into());
+        session.ready(0, None);
+        assert!(session.installed(&session.context()));
+        app.insert_resource(ObserverFrame(Some(snapshot(&session))))
+            .insert_resource(session)
+            .insert_resource(ObserverUiState {
+                menu_open: false,
+                splash_visible: false,
+                ..default()
+            })
+            .init_resource::<PrimaryView>()
+            .init_resource::<ProductionNavigation>()
+            .init_resource::<ObserverAudioSettings>()
+            .init_resource::<UiScale>()
+            .init_resource::<Time<Real>>()
+            .init_resource::<SelectedCounty>()
+            .init_resource::<ActiveCountyDossier>()
+            .init_resource::<DossierPageView>()
+            .init_resource::<DossierFetchState>()
+            .add_plugins(SessionLogPlugin);
         app.edit_schedule(Startup, |schedule| {
             schedule.set_executor_kind(bevy::ecs::schedule::ExecutorKind::SingleThreaded);
         });
@@ -384,248 +699,311 @@ mod tests {
             drive(&mut app);
             app.update();
         });
-        std::fs::read_to_string(dir.join("babylon-client.log")).expect("live log")
+        let log = std::fs::read_to_string(path.join("babylon-client.log")).expect("captured log");
+        std::fs::remove_dir_all(path).expect("remove exact owned test log");
+        log
     }
 
     #[test]
-    fn a_full_interaction_sequence_lands_in_the_file_log() {
-        let dir = temp_dir("sequence");
-        let log = run_session_app(&dir, |app| {
-            let wayne = app
-                .world()
-                .resource::<CountyAtlas>()
-                .index_of_fips("26163")
-                .expect("the committed atlas carries Wayne County");
-            app.world_mut().resource_mut::<SelectedCounty>().0 = Some(wayne);
-            let scope = crate::ui::dossier_card::DossierRequestScope {
-                campaign: DossierCampaignId::default().0,
-                county_geoid: "26163".into(),
-                refresh_generation: 0,
-                observer: None,
-                read_scope: ArchiveReadScopeV2::committed(
-                    DossierCampaignId::default().0,
-                    2,
-                    [2; 32],
-                )
-                .unwrap(),
-                subject: ArchivePageRefV1::try_new(ArchiveSubjectKindV1::County, "26163".into())
-                    .unwrap(),
-            };
-            app.world_mut()
-                .resource_mut::<Messages<SubjectPageRequest>>()
-                .write(SubjectPageRequest {
-                    scope: scope.clone(),
-                    kind: "place".to_owned(),
-                    id: "2674900".to_owned(),
-                    label: None,
-                });
-            *app.world_mut().resource_mut::<DossierPageView>() =
-                DossierPageView::Subject(Box::new(SubjectPageRequest {
-                    scope: scope.clone(),
-                    kind: "place".to_owned(),
-                    id: "2674900".to_owned(),
-                    label: None,
-                }));
-            app.world_mut().resource_mut::<ActiveCountyDossier>().0 = Some(InstalledDossier {
-                read: ArchiveDossierReadV2 {
-                    scope: scope.read_scope.clone(),
-                    subject: scope.subject.clone(),
-                    durable_tick: 2,
-                    processed_tick: 2,
-                    history_floor_tick: 0,
-                    state: ArchiveDossierStateV2::Ready {
-                        verified_through_tick: 2,
-                        page: ArchiveDossierPageV2 {
-                            revision_id: [1; 32],
-                            effective_tick: 1,
-                            origin: ArchivePublicationOriginV2::Materialized,
-                            content_source: ArchiveReadScopeV2::committed(
-                                scope.campaign,
-                                1,
-                                [1; 32],
-                            )
-                            .unwrap(),
-                            title: "Wayne County".into(),
-                            question: "What changed?".into(),
-                            signals: Vec::new(),
-                            markdown: String::new(),
-                            content_sha256: [0; 32],
-                            citations: Vec::new(),
-                            atoms: Vec::new(),
-                            links: Vec::new(),
-                            changes: ArchiveChangePageV2 {
-                                coverage_from_tick: 0,
-                                changes: Vec::new(),
-                                next_cursor: None,
-                            },
-                        },
+    fn a_scoped_undisclosed_archive_response_does_not_log_the_requested_identity() {
+        use crate::ui::dossier_card::{DossierRequestScope, InstalledDossier};
+        use babylon_persistence::archive_revision::{
+            ArchiveDossierRead, ArchiveDossierState, ArchiveDossierUnavailable, ArchiveReadScope,
+        };
+        use babylon_persistence::{ArchivePageRef, ArchiveSubjectKind};
+
+        let log = captured(|app| {
+            {
+                let mut session = app.world_mut().resource_mut::<ObserverSession>();
+                session.ready(1, Some("01".repeat(32)));
+                let context = session.context();
+                assert!(session.installed(&context));
+            }
+            let session = app.world().resource::<ObserverSession>();
+            let campaign = session.campaign;
+            let observer = session.context();
+            let frame = snapshot(session);
+            let atlas = CountyAtlas::parse(include_bytes!(concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/../../../assets/map/county_atlas.bin"
+            )))
+            .unwrap();
+            let wayne = atlas.index_of_fips("26163").unwrap();
+            let scope = ArchiveReadScope::committed(campaign, 1, [1; 32]).unwrap();
+            let subject =
+                ArchivePageRef::try_new(ArchiveSubjectKind::Place, "2674900".into()).unwrap();
+            app.insert_resource(atlas)
+                .insert_resource(SelectedCounty(Some(wayne)))
+                .insert_resource(DossierCampaignId(campaign))
+                .insert_resource(ObserverFrame(Some(frame)))
+                .init_resource::<DossierRefresh>()
+                .insert_resource(ActiveCountyDossier(Some(InstalledDossier {
+                    scope: DossierRequestScope {
+                        campaign,
+                        county_geoid: "26163".into(),
+                        refresh_generation: 0,
+                        observer: Some(observer),
+                        read_scope: scope.clone(),
+                        subject: subject.clone(),
                     },
-                },
-                scope,
-            });
+                    read: ArchiveDossierRead {
+                        scope,
+                        subject,
+                        durable_tick: 1,
+                        processed_tick: 1,
+                        state: ArchiveDossierState::Unavailable(
+                            ArchiveDossierUnavailable::SubjectNotDisclosed,
+                        ),
+                    },
+                })));
         });
-        assert!(log.contains("session start campaign="), "startup: {log}");
-        assert!(
-            log.contains("county selected fips=26163"),
-            "selection: {log}"
-        );
-        assert!(
-            log.contains("subject page requested kind=place"),
-            "chip: {log}"
-        );
-        assert!(
-            log.contains("page view: subject kind=place id=2674900"),
-            "view: {log}"
-        );
-        assert!(
-            log.contains("dossier installed geoid=26163 title=Some(\"Wayne County\") atoms=0 links=0 changes=0 requested=2 durable=2 processed=2 verified=Some(2)"),
-            "install: {log}"
-        );
-        std::fs::remove_dir_all(&dir).ok();
+        assert!(log.contains("status=\"unavailable\""), "{log}");
+        assert!(log.contains("subject=\"none\""), "{log}");
+        assert!(!log.contains("2674900"), "{log}");
     }
 
     #[test]
-    fn pending_subject_log_never_emits_a_label_after_scope_changes() {
-        use crate::observer::{ObserverSession, Perspective};
-        use crate::ui::dossier_card::{DossierRefresh, DossierRequestScope};
-        let dir = temp_dir("pending-scope");
-        let sink = RotatingSink::open(&dir, 1024 * 1024, 2).unwrap();
-        let layer = bevy::log::tracing_subscriber::fmt::Layer::default()
-            .with_ansi(false)
-            .with_writer(sink);
-        let subscriber = bevy::log::tracing_subscriber::registry().with(layer);
-        let mut app = App::new();
-        app.add_message::<SubjectPageRequest>()
-            .init_resource::<DossierRefresh>()
-            .add_systems(Update, log_subject_page_requests);
-        let campaign = DossierCampaignId::default().0;
-        app.insert_resource(ObserverSession::new(campaign));
-        app.edit_schedule(Update, |schedule| {
-            schedule.set_executor_kind(bevy::ecs::schedule::ExecutorKind::SingleThreaded);
+    fn requested_controls_and_acknowledged_state_use_distinct_records() {
+        let log = captured(|app| {
+            app.world_mut()
+                .resource_mut::<Messages<ObserverCommand>>()
+                .write(ObserverCommand::Step);
+            app.update();
+            // The request alone cannot advance durability. The real session
+            // state machine still requires a matching acknowledgement.
+            assert_eq!(app.world().resource::<ObserverSession>().durable_tick, 0);
+            let mut session = app.world_mut().resource_mut::<ObserverSession>();
+            let request = session.begin_advance().expect("ready advance");
+            assert!(session.acknowledge(request, 1, Some("committed".into())));
+            session.archive_verified_tick = 1;
+            session.playing = true;
+            session.periods_per_second = 2.0;
+            app.update();
+            let mut ui = app.world_mut().resource_mut::<ObserverUiState>();
+            ui.history_open = true;
+            ui.reduced_motion = true;
+            ui.stop_on_delivery = true;
+            ui.menu_open = true;
+            ui.comparison_open = true;
+            ui.evidence_open = true;
+            ui.disclosure = Some(ObserverDisclosure::Time);
+            app.world_mut()
+                .resource_mut::<ProductionNavigation>()
+                .details_open = true;
+            app.world_mut()
+                .resource_mut::<ProductionNavigation>()
+                .reading_section = crate::production::ProductionReadingSection::Freight;
+            app.world_mut().resource_mut::<UiScale>().0 = 1.15;
+            let mut audio = app.world_mut().resource_mut::<ObserverAudioSettings>();
+            audio.track = 1;
+            audio.music_volume = 0.5;
+            audio.effects_volume = 0.0;
         });
-        bevy::log::tracing::subscriber::with_default(subscriber, || {
-            for perspective_change in [false, true] {
-                let scope = DossierRequestScope {
-                    campaign,
-                    county_geoid: "26163".into(),
-                    refresh_generation: app.world().resource::<DossierRefresh>().0,
-                    observer: Some(app.world().resource::<ObserverSession>().context()),
-                    read_scope: ArchiveReadScopeV2::foundation(campaign),
-                    subject: ArchivePageRefV1::try_new(
-                        ArchiveSubjectKindV1::County,
-                        "26163".into(),
-                    )
-                    .unwrap(),
-                };
-                app.world_mut().write_message(SubjectPageRequest {
-                    scope,
-                    kind: "place".into(),
-                    id: "private-place-id".into(),
-                    label: Some("withheld-place-label".into()),
-                });
-                if perspective_change {
-                    app.world_mut()
-                        .resource_mut::<ObserverSession>()
-                        .set_perspective(Perspective::PlayerKnowledge);
-                } else {
-                    app.world_mut().resource_mut::<DossierRefresh>().bump();
-                }
+        let requested = log
+            .find("observer command requested")
+            .expect("request record");
+        let acknowledged = log
+            .find("observer durable progress acknowledged")
+            .expect("ack record");
+        assert!(requested < acknowledged, "{log}");
+        assert!(log.contains("command=\"step\""), "{log}");
+        for field in [
+            "durable_period=1",
+            "archive_processed_period=1",
+            "playing=true",
+            "speed=2",
+            "history=true",
+            "reduced_motion=true",
+            "comparison=true",
+            "details=true",
+            "reading_section=Freight",
+            "disclosure=\"time\"",
+            "evidence=true",
+            "ui_scale=1.15",
+            "track=1",
+        ] {
+            assert!(log.contains(field), "missing {field}: {log}");
+        }
+        assert!(
+            log.contains("campaign=00000000-0000-0000-0000-000000000000"),
+            "{log}"
+        );
+        assert!(log.contains("generation=2"), "{log}");
+    }
+
+    #[test]
+    fn denied_clicks_log_each_revision_without_repeating_visible_feedback() {
+        let log = captured(|app| {
+            app.insert_resource(ObserverFeedback {
+                message: Some("Wait for the current period to finish."),
+                revision: 1,
+                expires_at: 10.0,
+            });
+            app.update();
+            for _ in 0..5 {
                 app.update();
             }
-        });
-        let log = std::fs::read_to_string(dir.join("babylon-client.log")).unwrap();
-        assert_eq!(log.matches("subject page requested kind=place").count(), 2);
-        assert!(!log.contains("private-place-id"));
-        assert!(!log.contains("withheld-place-label"));
-        std::fs::remove_dir_all(dir).unwrap();
-    }
-
-    #[test]
-    fn clearing_the_selection_and_failing_a_fetch_are_logged_honestly() {
-        let dir = temp_dir("clear-fail");
-        let log = run_session_app(&dir, |app| {
-            app.world_mut().resource_mut::<SelectedCounty>().0 = Some(usize::MAX);
+            app.world_mut().resource_mut::<ObserverFeedback>().revision = 2;
             app.update();
-            app.world_mut().resource_mut::<SelectedCounty>().0 = None;
-            *app.world_mut().resource_mut::<DossierFetchState>() = DossierFetchState::Failed(
-                DossierFetchError::ReaderAbsent("BABYLON_READER_DSN unset".to_owned()),
-            );
+            app.world_mut().resource_mut::<ObserverFeedback>().message = None;
+            app.update();
         });
-        let expected = format!("county selected index={} (outside the atlas)", usize::MAX);
-        assert!(log.contains(&expected), "select: {log}");
-        assert!(log.contains("county selection cleared"), "clear: {log}");
-        assert!(
-            log.contains("dossier fetch failed: ReaderAbsent"),
-            "fail: {log}"
+        assert_eq!(log.matches("observer command rejected").count(), 2, "{log}");
+        assert_eq!(
+            log.matches("Wait for the current period to finish.")
+                .count(),
+            2,
+            "{log}"
         );
-        std::fs::remove_dir_all(&dir).ok();
+        assert!(
+            !log.contains("observer durable progress acknowledged"),
+            "{log}"
+        );
     }
 
     #[test]
-    fn spurious_change_marks_do_not_flood_the_log() {
-        // The Codex review case: `collect_dossier_fetch` marks the fetch state
-        // changed on every poll, so change-detection alone would re-log every
-        // frame. The snapshot diff must emit one line for one real transition
-        // no matter how many times the resource is touched unchanged.
-        let dir = temp_dir("flood");
-        let log = run_session_app(&dir, |app| {
-            *app.world_mut().resource_mut::<DossierFetchState>() = DossierFetchState::Failed(
-                DossierFetchError::ReaderAbsent("BABYLON_READER_DSN unset".to_owned()),
-            );
+    fn preview_clears_logged_subjects_and_never_serializes_stale_requests_or_errors() {
+        let log = captured(|app| {
+            app.world_mut()
+                .resource_mut::<ProductionNavigation>()
+                .selected_site = Some(HIDDEN_SITE.into());
+            app.update(); // Valid FullObserver selection can be identified.
+            app.world_mut()
+                .resource_mut::<ObserverSession>()
+                .set_perspective(Perspective::PlayerKnowledge);
+            app.world_mut().resource_mut::<ObserverUiState>().lens =
+                crate::map_economy_lens::MapLens::Material {
+                    kind: crate::map_economy_lens::MaterialLensKind::ProducedThisPeriod,
+                    good: Some(crate::map_economy_lens::MaterialGoodKey {
+                        good_id: "hidden-good-id".into(),
+                        unit_id: "hidden-unit-id".into(),
+                    }),
+                };
+            let stale_context = ObservationContext {
+                perspective: Perspective::FullObserver,
+                ..app.world().resource::<ObserverSession>().context()
+            };
+            app.world_mut()
+                .resource_mut::<Messages<ProductionCommand>>()
+                .write(ProductionCommand::Select {
+                    site_id: "never-disclose-this-request".into(),
+                    context: stale_context,
+                });
+            // Both navigation and the old full-observer snapshot remain in
+            // memory. The telemetry capability check must reject them itself.
             app.update();
-            for _ in 0..3 {
-                // A producer-side `ResMut` deref with no value change.
+            app.world_mut()
+                .resource_mut::<ObserverSession>()
+                .fail("postgres://user:secret@private".into());
+            *app.world_mut().resource_mut::<DossierFetchState>() =
+                DossierFetchState::Failed(crate::ui::dossier_card::DossierFetchError::ReadFailed(
+                    "password=never-log-this".into(),
+                ));
+        });
+        assert!(log.contains(HIDDEN_SITE), "valid observer identity: {log}");
+        let preview = log
+            .split_once("perspective=\"PLAYER KNOWLEDGE\"")
+            .expect("preview event")
+            .1;
+        assert!(
+            !preview.contains(HIDDEN_SITE),
+            "stale selected identity: {preview}"
+        );
+        assert!(
+            preview.contains("selected_site=\"none_or_undisclosed\""),
+            "clear event: {preview}"
+        );
+        for hidden in [
+            HIDDEN_LABEL,
+            "never-disclose-this-request",
+            "password=",
+            "postgres://",
+            "hidden-good",
+        ] {
+            assert!(!log.contains(hidden), "sensitive {hidden}: {log}");
+        }
+        assert!(
+            log.contains("command=\"production_select\""),
+            "request without ID: {log}"
+        );
+        assert!(
+            log.contains("status=\"read_failed\""),
+            "bounded failure classification: {log}"
+        );
+    }
+
+    #[test]
+    fn idle_change_marks_do_not_repeat_applied_events() {
+        let log = captured(|app| {
+            for _ in 0..20 {
                 app.world_mut()
-                    .resource_mut::<DossierFetchState>()
+                    .resource_mut::<ObserverSession>()
+                    .set_changed();
+                app.world_mut()
+                    .resource_mut::<ObserverUiState>()
+                    .set_changed();
+                app.world_mut()
+                    .resource_mut::<ProductionNavigation>()
+                    .set_changed();
+                app.world_mut()
+                    .resource_mut::<ObserverAudioSettings>()
                     .set_changed();
                 app.update();
             }
         });
+        assert_eq!(log.matches("observer session applied").count(), 1, "{log}");
         assert_eq!(
-            log.matches("dossier fetch failed").count(),
+            log.matches("observer presentation applied").count(),
             1,
-            "one transition, one line: {log}"
+            "{log}"
         );
-        std::fs::remove_dir_all(&dir).ok();
+        assert_eq!(log.matches("observer archive applied").count(), 1, "{log}");
+        assert!(!log.contains("observer command requested"), "{log}");
     }
 
     #[test]
-    fn control_transitions_story_and_the_tick_spine_are_logged() {
-        let dir = temp_dir("controls");
-        let log = run_session_app(&dir, |app| {
-            app.insert_resource(RunState::default());
-            app.insert_resource(TickCounter(41));
-            let mut beats = BeatLog::default();
-            beats.beats = VecDeque::from([Beat {
-                tick: 42,
-                event_type: "LIFECYCLE_TRANSITION".to_owned(),
-                payload: Vec::new(),
-                tier: SeverityTier::Informational,
-                magnitude_delta: Some(1.0),
-            }]);
-            app.insert_resource(beats);
-            app.update();
-            app.world_mut().resource_mut::<RunState>().running = false;
-            app.world_mut().resource_mut::<TickCounter>().0 = 42;
-            app.update();
+    fn camera_logs_bounded_checkpoints_and_the_final_settled_pose() {
+        let log = captured(|app| {
+            let camera = app
+                .world_mut()
+                .spawn((
+                    Camera::default(),
+                    Transform::IDENTITY,
+                    Projection::Perspective(PerspectiveProjection::default()),
+                    ObserverMapCamera,
+                ))
+                .id();
+            for position in 0_u16..100 {
+                app.world_mut()
+                    .resource_mut::<Time<Real>>()
+                    .advance_by(Duration::from_millis(10));
+                app.world_mut()
+                    .get_mut::<Transform>(camera)
+                    .expect("camera")
+                    .translation
+                    .x = f32::from(position);
+                app.update();
+            }
+            for _ in 0..100 {
+                app.world_mut()
+                    .resource_mut::<Time<Real>>()
+                    .advance_by(Duration::from_millis(10));
+                app.update();
+            }
         });
-        assert!(
-            log.contains("controls at start: running=true speed=5t/s autopause=OnCritical"),
-            "baseline controls: {log}"
+        assert_eq!(
+            log.matches("observer camera checkpoint").count(),
+            4,
+            "{log}"
         );
+        let last = log
+            .lines()
+            .filter(|line| line.contains("observer camera checkpoint"))
+            .next_back()
+            .expect("pose");
         assert!(
-            log.contains("controls changed: running=false"),
-            "pause: {log}"
+            last.contains("position=[99.0, 0.0, 0.0]") && last.contains("settled=true"),
+            "{last}"
         );
-        assert!(
-            log.contains("tick heartbeat starts at tick=41"),
-            "spine: {log}"
-        );
-        assert!(log.contains("tick 42"), "heartbeat: {log}");
-        assert!(
-            log.contains("beat tick=42 type=LIFECYCLE_TRANSITION"),
-            "beat: {log}"
-        );
-        std::fs::remove_dir_all(&dir).ok();
     }
 }

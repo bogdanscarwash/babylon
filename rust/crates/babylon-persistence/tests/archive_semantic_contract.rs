@@ -1,21 +1,21 @@
-use babylon_kernel::sha256_of;
+use babylon_kernel::content_digest::sha256_of;
 use babylon_persistence::{
-    ArchiveCitationV1, ArchiveDirtyBatchV1, ArchiveKnowledgeGrantV1, ArchiveKnowledgeV1,
-    ArchiveLinkV1, ArchivePageInputV1, ArchivePageRefV1, ArchiveSignalV1, ArchiveSubjectKindV1,
-    ArchiveSubjectV1, FogSafeArchiveRendererV1, SemanticArchiveErrorV1, SemanticArchiveStoreV1,
-    ARCHIVE_KNOWLEDGE_SQL_V1, ARCHIVE_PAGE_TEMPLATE_SHA256_V1, SEMANTIC_ARCHIVE_SCHEMA_V1_SQL,
+    ArchiveCitation, ArchiveDirtyBatch, ArchiveKnowledge, ArchiveKnowledgeGrant, ArchiveLink,
+    ArchivePageInput, ArchivePageRef, ArchiveSignal, ArchiveSubject, ArchiveSubjectKind,
+    FogSafeArchiveRenderer, SemanticArchiveError, SemanticArchiveStore, ARCHIVE_KNOWLEDGE_SQL,
+    ARCHIVE_PAGE_TEMPLATE_SHA256, CURRENT_ARCHIVE_SCHEMA_SQL,
 };
 
-fn county() -> ArchiveSubjectV1 {
-    ArchiveSubjectV1::try_new(
-        ArchiveSubjectKindV1::County,
+fn county() -> ArchiveSubject {
+    ArchiveSubject::try_new(
+        ArchiveSubjectKind::County,
         "26163".to_owned(),
         "Wayne County".to_owned(),
     )
     .expect("county identity")
 }
 
-fn page_input() -> ArchivePageInputV1 {
+fn page_input() -> ArchivePageInput {
     page_input_at(
         "Which neighboring place should organizers investigate next?",
         42,
@@ -23,7 +23,7 @@ fn page_input() -> ArchivePageInputV1 {
     )
 }
 
-fn page_input_with_question(question: &str) -> ArchivePageInputV1 {
+fn page_input_with_question(question: &str) -> ArchivePageInput {
     page_input_at(question, 42, [0x11; 32])
 }
 
@@ -31,17 +31,17 @@ fn page_input_at(
     question: &str,
     verified_tick: u64,
     tick_content_hash: [u8; 32],
-) -> ArchivePageInputV1 {
-    ArchivePageInputV1::try_new(
+) -> ArchivePageInput {
+    ArchivePageInput::try_new(
         county(),
         verified_tick,
         tick_content_hash,
         question.to_owned(),
-        vec![ArchiveSignalV1::try_new(
+        vec![ArchiveSignal::try_new(
             "employment".to_owned(),
             "Employment".to_owned(),
             "728576 jobs".to_owned(),
-            ArchiveCitationV1::try_new(
+            ArchiveCitation::try_new(
                 "qcew-2024".to_owned(),
                 "fact_qcew_county_rollup county_fips=26163".to_owned(),
             )
@@ -49,14 +49,14 @@ fn page_input_at(
         )
         .expect("signal")],
         vec![
-            ArchiveLinkV1::try_new(
-                ArchivePageRefV1::try_new(ArchiveSubjectKindV1::Place, "2622000".to_owned())
+            ArchiveLink::try_new(
+                ArchivePageRef::try_new(ArchiveSubjectKind::Place, "2622000".to_owned())
                     .expect("Detroit ref"),
                 "Detroit".to_owned(),
             )
             .expect("Detroit link"),
-            ArchiveLinkV1::try_new(
-                ArchivePageRefV1::try_new(ArchiveSubjectKindV1::Place, "2668880".to_owned())
+            ArchiveLink::try_new(
+                ArchivePageRef::try_new(ArchiveSubjectKind::Place, "2668880".to_owned())
                     .expect("unknown place ref"),
                 "Riverview".to_owned(),
             )
@@ -68,9 +68,9 @@ fn page_input_at(
 
 #[test]
 fn receipt_retry_identity_includes_the_exact_dirty_batch() {
-    let first = ArchiveDirtyBatchV1::try_new(42, [0x11; 32], vec![page_input()])
-        .expect("first dirty batch");
-    let changed = ArchiveDirtyBatchV1::try_new(
+    let first =
+        ArchiveDirtyBatch::try_new(42, [0x11; 32], vec![page_input()]).expect("first dirty batch");
+    let changed = ArchiveDirtyBatch::try_new(
         42,
         [0x11; 32],
         vec![page_input_with_question(
@@ -80,52 +80,52 @@ fn receipt_retry_identity_includes_the_exact_dirty_batch() {
     .expect("changed dirty batch");
 
     assert_ne!(first.sha256(), changed.sha256());
-    assert!(SEMANTIC_ARCHIVE_SCHEMA_V1_SQL.contains("batch_sha256 BYTEA NOT NULL"));
+    assert!(CURRENT_ARCHIVE_SCHEMA_SQL.contains("batch_sha256 BYTEA NOT NULL"));
 }
 
 #[test]
 fn dirty_batch_has_an_explicit_page_limit() {
-    let pages = vec![page_input(); ArchiveDirtyBatchV1::MAX_PAGES + 1];
+    let pages = vec![page_input(); ArchiveDirtyBatch::MAX_PAGES + 1];
 
     assert_eq!(
-        ArchiveDirtyBatchV1::try_new(42, [0x11; 32], pages),
-        Err(SemanticArchiveErrorV1::CollectionBound)
+        ArchiveDirtyBatch::try_new(42, [0x11; 32], pages),
+        Err(SemanticArchiveError::CollectionBound)
     );
 }
 
-fn knowledge() -> ArchiveKnowledgeV1 {
+fn knowledge() -> ArchiveKnowledge {
     knowledge_with_subject_locator("county/26163")
 }
 
-fn knowledge_with_subject_locator(subject_locator: &str) -> ArchiveKnowledgeV1 {
-    let county_ref = ArchivePageRefV1::try_new(ArchiveSubjectKindV1::County, "26163".to_owned())
+fn knowledge_with_subject_locator(subject_locator: &str) -> ArchiveKnowledge {
+    let county_ref = ArchivePageRef::try_new(ArchiveSubjectKind::County, "26163".to_owned())
         .expect("county ref");
-    ArchiveKnowledgeV1::try_new(vec![
-        ArchiveKnowledgeGrantV1::try_new(
+    ArchiveKnowledge::try_new(vec![
+        ArchiveKnowledgeGrant::try_new(
             county_ref.clone(),
             "subject".to_owned(),
             42,
-            ArchiveCitationV1::try_new("archive-subject".to_owned(), subject_locator.to_owned())
+            ArchiveCitation::try_new("archive-subject".to_owned(), subject_locator.to_owned())
                 .expect("subject citation"),
         )
         .expect("subject grant"),
-        ArchiveKnowledgeGrantV1::try_new(
+        ArchiveKnowledgeGrant::try_new(
             county_ref,
             "employment".to_owned(),
             42,
-            ArchiveCitationV1::try_new(
+            ArchiveCitation::try_new(
                 "knowledge-event".to_owned(),
                 "employment@tick-42".to_owned(),
             )
             .expect("field grant citation"),
         )
         .expect("field grant"),
-        ArchiveKnowledgeGrantV1::try_new(
-            ArchivePageRefV1::try_new(ArchiveSubjectKindV1::Place, "2622000".to_owned())
+        ArchiveKnowledgeGrant::try_new(
+            ArchivePageRef::try_new(ArchiveSubjectKind::Place, "2622000".to_owned())
                 .expect("Detroit ref"),
             "subject".to_owned(),
             42,
-            ArchiveCitationV1::try_new("archive-subject".to_owned(), "place/2622000".to_owned())
+            ArchiveCitation::try_new("archive-subject".to_owned(), "place/2622000".to_owned())
                 .expect("linked subject citation"),
         )
         .expect("linked subject grant"),
@@ -135,7 +135,7 @@ fn knowledge_with_subject_locator(subject_locator: &str) -> ArchiveKnowledgeV1 {
 
 #[test]
 fn pinned_strict_renderer_is_deterministic_and_preserves_unknown_redlinks() {
-    let renderer = FogSafeArchiveRendererV1::new().expect("pinned template compiles");
+    let renderer = FogSafeArchiveRenderer::new().expect("pinned template compiles");
     let first = renderer
         .render(&page_input(), &knowledge())
         .expect("known page renders");
@@ -150,7 +150,7 @@ fn pinned_strict_renderer_is_deterministic_and_preserves_unknown_redlinks() {
         0xe6, 0xe8, 0x04, 0x86, 0x7c, 0xf8, 0x76, 0xbd, 0x44, 0xa0, 0x9f, 0xe6, 0x3b, 0xa9, 0x75,
         0x51, 0x08,
     ];
-    assert_eq!(ARCHIVE_PAGE_TEMPLATE_SHA256_V1, expected_template_sha256);
+    assert_eq!(ARCHIVE_PAGE_TEMPLATE_SHA256, expected_template_sha256);
     assert_eq!(renderer.template_sha256(), expected_template_sha256);
     assert!(first.markdown().contains("verified_tick: 42"));
     assert!(first.markdown().contains(
@@ -176,24 +176,24 @@ fn knowledge_snapshot_identity_includes_exact_grant_provenance() {
         knowledge().sha256(),
         knowledge_with_subject_locator("county/26163/revised").sha256()
     );
-    assert!(SEMANTIC_ARCHIVE_SCHEMA_V1_SQL.contains("knowledge_sha256 BYTEA NOT NULL"));
+    assert!(CURRENT_ARCHIVE_SCHEMA_SQL.contains("knowledge_sha256 BYTEA NOT NULL"));
 }
 
 #[test]
 fn subject_and_signal_grants_are_both_required() {
-    let renderer = FogSafeArchiveRendererV1::new().expect("pinned template compiles");
-    let no_subject = ArchiveKnowledgeV1::try_new(Vec::new()).expect("empty knowledge");
+    let renderer = FogSafeArchiveRenderer::new().expect("pinned template compiles");
+    let no_subject = ArchiveKnowledge::try_new(Vec::new()).expect("empty knowledge");
     assert_eq!(
         renderer.render(&page_input(), &no_subject),
-        Err(SemanticArchiveErrorV1::UnknownSubject)
+        Err(SemanticArchiveError::UnknownSubject)
     );
 
-    let subject_only = ArchiveKnowledgeV1::try_new(vec![ArchiveKnowledgeGrantV1::try_new(
-        ArchivePageRefV1::try_new(ArchiveSubjectKindV1::County, "26163".to_owned())
+    let subject_only = ArchiveKnowledge::try_new(vec![ArchiveKnowledgeGrant::try_new(
+        ArchivePageRef::try_new(ArchiveSubjectKind::County, "26163".to_owned())
             .expect("county ref"),
         "subject".to_owned(),
         42,
-        ArchiveCitationV1::try_new("archive-subject".to_owned(), "county/26163".to_owned())
+        ArchiveCitation::try_new("archive-subject".to_owned(), "county/26163".to_owned())
             .expect("subject citation"),
     )
     .expect("subject grant")])
@@ -208,15 +208,15 @@ fn subject_and_signal_grants_are_both_required() {
 #[test]
 fn validated_inputs_refuse_ambiguous_or_unbounded_identity() {
     assert_eq!(
-        ArchivePageRefV1::try_new(ArchiveSubjectKindV1::County, String::new()),
-        Err(SemanticArchiveErrorV1::InvalidIdentity)
+        ArchivePageRef::try_new(ArchiveSubjectKind::County, String::new()),
+        Err(SemanticArchiveError::InvalidIdentity)
     );
     assert_eq!(
-        ArchivePageRefV1::try_new(ArchiveSubjectKindV1::Place, "x".repeat(129)),
-        Err(SemanticArchiveErrorV1::InvalidIdentity)
+        ArchivePageRef::try_new(ArchiveSubjectKind::Place, "x".repeat(129)),
+        Err(SemanticArchiveError::InvalidIdentity)
     );
     assert_eq!(
-        ArchivePageInputV1::try_new(
+        ArchivePageInput::try_new(
             county(),
             0,
             [0; 32],
@@ -224,25 +224,24 @@ fn validated_inputs_refuse_ambiguous_or_unbounded_identity() {
             Vec::new(),
             Vec::new(),
         ),
-        Err(SemanticArchiveErrorV1::InvalidVerifiedTick)
+        Err(SemanticArchiveError::InvalidVerifiedTick)
     );
     assert_eq!(
-        ArchiveKnowledgeGrantV1::try_new(
+        ArchiveKnowledgeGrant::try_new(
             county().page_ref().clone(),
             "-hidden".to_owned(),
             42,
-            ArchiveCitationV1::try_new("source".to_owned(), "locator".to_owned())
+            ArchiveCitation::try_new("source".to_owned(), "locator".to_owned())
                 .expect("valid citation"),
         ),
-        Err(SemanticArchiveErrorV1::InvalidText)
+        Err(SemanticArchiveError::InvalidText)
     );
 }
 
 #[test]
 fn serialized_citations_cannot_bypass_validation() {
     assert!(
-        serde_json::from_str::<ArchiveCitationV1>(r#"{"source_id":"","locator":"locator"}"#)
-            .is_err()
+        serde_json::from_str::<ArchiveCitation>(r#"{"source_id":"","locator":"locator"}"#).is_err()
     );
 }
 
@@ -251,29 +250,30 @@ fn schema_contract_keeps_epistemic_rows_out_of_material_state() {
     for relation in [
         "babylon_meta.archive_knowledge_grant_v1",
         "babylon_meta.archive_receipt_consumption_v1",
-        "babylon_meta.archive_page_v1",
+        "babylon_meta.archive_page_revision_v2",
     ] {
-        assert!(SEMANTIC_ARCHIVE_SCHEMA_V1_SQL.contains(relation));
+        assert!(CURRENT_ARCHIVE_SCHEMA_SQL.contains(relation));
     }
-    assert!(SEMANTIC_ARCHIVE_SCHEMA_V1_SQL
-        .contains("REFERENCES babylon_state.archive_dirty_receipt_v1"));
-    assert!(SEMANTIC_ARCHIVE_SCHEMA_V1_SQL.contains("REFERENCES babylon_state.tick_commit"));
-    assert!(!SEMANTIC_ARCHIVE_SCHEMA_V1_SQL.contains("CREATE TABLE babylon_state.archive_page"));
-    assert!(!SEMANTIC_ARCHIVE_SCHEMA_V1_SQL.contains("IF NOT EXISTS"));
+    assert!(
+        CURRENT_ARCHIVE_SCHEMA_SQL.contains("REFERENCES babylon_state.archive_dirty_receipt_v1")
+    );
+    assert!(CURRENT_ARCHIVE_SCHEMA_SQL.contains("REFERENCES babylon_state.tick_commit"));
+    assert!(!CURRENT_ARCHIVE_SCHEMA_SQL.contains("CREATE TABLE babylon_state.archive_page"));
+    assert!(!CURRENT_ARCHIVE_SCHEMA_SQL.contains("IF NOT EXISTS"));
 }
 
 #[test]
 fn persistence_queries_enforce_grants_in_sql_and_hide_raw_ledgers() {
     fn assert_send_sync<T: Send + Sync>() {}
-    assert_send_sync::<SemanticArchiveStoreV1>();
+    assert_send_sync::<SemanticArchiveStore>();
 
-    assert!(ARCHIVE_KNOWLEDGE_SQL_V1.contains("babylon_meta.archive_knowledge_grant_v1"));
-    assert!(ARCHIVE_KNOWLEDGE_SQL_V1.contains("granted_tick <= $2"));
-    assert!(ARCHIVE_KNOWLEDGE_SQL_V1.contains("provenance_source_id"));
-    assert!(ARCHIVE_KNOWLEDGE_SQL_V1.contains("provenance_locator"));
-    let revision = include_str!("../migrations/archive_revision_v2.sql");
+    assert!(ARCHIVE_KNOWLEDGE_SQL.contains("babylon_meta.archive_knowledge_grant_v1"));
+    assert!(ARCHIVE_KNOWLEDGE_SQL.contains("granted_tick <= $2"));
+    assert!(ARCHIVE_KNOWLEDGE_SQL.contains("provenance_source_id"));
+    assert!(ARCHIVE_KNOWLEDGE_SQL.contains("provenance_locator"));
+    let revision = include_str!("../migrations/current_archive.sql");
     assert!(revision.contains("grant_row.granted_tick = dependency.granted_tick"));
-    assert!(revision.contains("emission_json IS NOT NULL"));
+    assert!(revision.contains("emission_json TEXT NOT NULL"));
     let read = include_str!("../src/archive_revision/read.rs");
     assert!(!read.contains("babylon_meta."));
     assert!(!read.contains("babylon_state."));

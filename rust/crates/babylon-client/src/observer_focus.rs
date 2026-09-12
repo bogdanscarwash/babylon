@@ -1317,9 +1317,10 @@ mod tests {
     fn stale_scope_and_destroyed_focus_never_redirect_enter_or_restore_facts() {
         let (mut app, window) = app();
         let root = group(&mut app, false);
-        let context =
-            ObserverSession::new(babylon_persistence::CampaignId::from_uuid(uuid::Uuid::nil()))
-                .context();
+        let context = ObserverSession::new(babylon_persistence::identity::CampaignId::from_uuid(
+            uuid::Uuid::nil(),
+        ))
+        .context();
         app.world_mut()
             .resource_mut::<ObserverFocusPolicy>()
             .context = Some(context.clone());

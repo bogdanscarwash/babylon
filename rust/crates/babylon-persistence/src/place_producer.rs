@@ -1,6 +1,6 @@
 //! PER-22 place dossier producer (slice 3) for the semantic Archive worker.
 //!
-//! [`PlaceDossierProducerV1`] turns one committed dirty receipt into a bounded
+//! [`PlaceDossierProducer`] turns one committed dirty receipt into a bounded
 //! batch of place dossier pages resolved lazily from the checked Michigan
 //! spatial reference products. Nothing is materialized into `PostgreSQL`
 //! reference tables: place geometry and county overlap resolve from the
@@ -26,12 +26,12 @@
 //! The projection folds the grant-visible rendering: the `identity` signal
 //! counts only while the campaign grants that field, and a county link name
 //! counts only while the campaign grants that county subject, both snapshotted
-//! at the receipt tick through [`ARCHIVE_PLACE_GRANTS_SQL_V1`]. A page
+//! at the receipt tick through [`ARCHIVE_PLACE_GRANTS_SQL`]. A page
 //! published redacted therefore re-dirties the moment later grants reveal its
 //! signal or link names, and the next sweep republishes it. Receipt-stamped
 //! fields (`verified_tick`, `tick_content_hash`) never dirty a page: the
 //! projection is recomputed from the stored Markdown with the pinned
-//! `archive_page_v1.md.j2` shape ([`crate::ARCHIVE_PAGE_TEMPLATE_SHA256_V1`]
+//! `archive_page_v1.md.j2` shape ([`crate::ARCHIVE_PAGE_TEMPLATE_SHA256`]
 //! bytes folded into the hash), stripping the receipt-stamped frontmatter.
 //! Malformed stored pages are treated as dirty, which safely republishes
 //! drifted content.
@@ -39,52 +39,52 @@
 //! # Drain bound
 //!
 //! The producer never truncates a dirty set and never refuses an over-bound
-//! one. When more than [`ArchiveDirtyBatchV1::MAX_PAGES`] places are dirty
+//! one. When more than [`ArchiveDirtyBatch::MAX_PAGES`] places are dirty
 //! for one receipt it selects the leading `limit` entries in geoid order and
-//! reports the exact undrained tail count ([`ArchiveDirtySelectionV1`]), so
+//! reports the exact undrained tail count ([`ArchiveDirtySelection`]), so
 //! the sweep stages one bounded batch, the receipt stays pending, and the
 //! next sweep continues the drain where the stored-current pages leave off.
 //! The full 745-place campaign therefore materializes across successive
 //! sweeps instead of dead-ending on the batch bound (PER-318). The bounded
-//! allowlist ([`PlaceDossierProducerV1::with_place_allowlist`]) still covers
+//! allowlist ([`PlaceDossierProducer::with_place_allowlist`]) still covers
 //! small fixture drains and rerun proofs.
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use babylon_kernel::tick_content_hash::RefDigestV1;
+use babylon_kernel::tick_content_hash::RefDigest;
 use postgres::Config;
 use sha2::{Digest as _, Sha256};
 use uuid::Uuid;
 
-use crate::archive::{validate_text, ARCHIVE_PAGE_TEMPLATE_SHA256_V1};
+use crate::archive::{validate_text, ARCHIVE_PAGE_TEMPLATE_SHA256};
 use crate::{
-    michigan_spatial_reference_products_v1, representative_h3_reference_cohort_v1,
-    ArchiveCitationV1, ArchiveDirtySelectionV1, ArchiveDossierProducerV1, ArchiveLinkV1,
-    ArchivePageInputV1, ArchivePageRefV1, ArchiveProducerOutcomeV1, ArchiveSignalV1,
-    ArchiveSubjectKindV1, ArchiveSubjectV1, CampaignId, PendingArchiveReceiptV1, PlaceIdentityRow,
-    SemanticArchiveErrorV1, SpatialReferenceProducts,
+    h3_reference_cohort::representative_h3_reference_cohort, identity::CampaignId,
+    spatial_reference_products::michigan_spatial_reference_products,
+    spatial_reference_products::PlaceIdentityRow,
+    spatial_reference_products::SpatialReferenceProducts, ArchiveCitation, ArchiveDirtySelection,
+    ArchiveDossierProducer, ArchiveLink, ArchivePageInput, ArchivePageRef, ArchiveProducerOutcome,
+    ArchiveSignal, ArchiveSubject, ArchiveSubjectKind, PendingArchiveReceipt, SemanticArchiveError,
 };
 
 /// Stable decision question every place dossier page answers.
-pub const PLACE_DECISION_QUESTION_V1: &str =
+pub const PLACE_DECISION_QUESTION: &str =
     "Which overlapping county should organizers investigate next?";
 
 /// Source identity of the census place authority contract artifact.
-pub const PLACE_IDENTITY_SOURCE_ID_V1: &str = "census-place-authority-v1";
+pub const PLACE_IDENTITY_SOURCE_ID: &str = "census-place-authority-v1";
 
 /// Grant key addressing the one place identity signal.
-pub const PLACE_IDENTITY_GRANT_KEY_V1: &str = "identity";
+pub const PLACE_IDENTITY_GRANT_KEY: &str = "identity";
 
 /// Player-facing label of the place identity signal.
-pub const PLACE_IDENTITY_SIGNAL_LABEL_V1: &str = "Census identity";
+pub const PLACE_IDENTITY_SIGNAL_LABEL: &str = "Census identity";
 
 /// Artifact locator prefix pinning one identity row.
-pub const PLACE_IDENTITY_LOCATOR_PREFIX_V1: &str =
-    "census_place_identity_mi_2023.csv.gz#place_geoid=";
+pub const PLACE_IDENTITY_LOCATOR_PREFIX: &str = "census_place_identity_mi_2023.csv.gz#place_geoid=";
 
 /// Contract-pinned SHA-256 of `census_place_identity_mi_2023.csv.gz`
 /// (`contracts/census_place_authority_v1.yaml`).
-pub const PINNED_PLACE_IDENTITY_ARTIFACT_SHA256_V1: [u8; 32] = [
+pub const PINNED_PLACE_IDENTITY_ARTIFACT_SHA256: [u8; 32] = [
     0xcb, 0x86, 0x4b, 0x4f, 0x6f, 0x43, 0x90, 0x2b, 0xb8, 0x21, 0xe8, 0x4f, 0xe9, 0xa4, 0x05, 0x5a,
     0x90, 0x39, 0xe0, 0xa7, 0x4d, 0x8b, 0x83, 0x99, 0xf2, 0x09, 0xae, 0x6e, 0xd2, 0x6a, 0x8b, 0xe7,
 ];
@@ -92,7 +92,7 @@ pub const PINNED_PLACE_IDENTITY_ARTIFACT_SHA256_V1: [u8; 32] = [
 /// Contract-pinned SHA-256 of
 /// `census_county_place_h3_land_overlap_mi_2023.parquet`
 /// (`contracts/county_place_h3_overlap_v1.yaml`).
-pub const PINNED_COUNTY_PLACE_OVERLAP_ARTIFACT_SHA256_V1: [u8; 32] = [
+pub const PINNED_COUNTY_PLACE_OVERLAP_ARTIFACT_SHA256: [u8; 32] = [
     0xfc, 0xb7, 0xba, 0xaf, 0x63, 0xa5, 0x42, 0x2a, 0xcc, 0xce, 0x87, 0x09, 0x99, 0x7d, 0xe8, 0xe4,
     0x09, 0x93, 0x6f, 0x71, 0x31, 0xfa, 0x0e, 0xf6, 0xb0, 0xa2, 0x87, 0x62, 0xfd, 0xfe, 0xe4, 0x2f,
 ];
@@ -101,7 +101,7 @@ pub const PINNED_COUNTY_PLACE_OVERLAP_ARTIFACT_SHA256_V1: [u8; 32] = [
 ///
 /// The query returns the exact stored page rows for one campaign, ordered by
 /// subject, and never joins material or raw event ledgers.
-pub const ARCHIVE_PLACE_PAGE_READ_SQL_V1: &str = "SELECT subject_id, title, markdown \
+pub const ARCHIVE_PLACE_PAGE_READ_SQL: &str = "SELECT subject_id, title, markdown \
 FROM babylon_meta.archive_page_v1 \
 WHERE campaign_id = $1::uuid AND subject_kind = 'place' \
 ORDER BY subject_id";
@@ -114,27 +114,27 @@ ORDER BY subject_id";
 /// knowledge only: seeded concept grants widen the grant table's subject
 /// domain (ADR249 R3/R12) but never enter the page grant snapshot, which
 /// decodes through the page-domain subject kind.
-pub const ARCHIVE_PLACE_GRANTS_SQL_V1: &str = "SELECT subject_kind, subject_id, grant_key \
+pub const ARCHIVE_PLACE_GRANTS_SQL: &str = "SELECT subject_kind, subject_id, grant_key \
 FROM babylon_meta.archive_knowledge_grant_v1 \
 WHERE campaign_id = $1::uuid AND granted_tick <= $2 \
   AND subject_kind IN ('county', 'place') \
 ORDER BY subject_kind, subject_id, grant_key";
 
 /// Grant key that establishes knowledge of a page subject.
-const PLACE_SUBJECT_GRANT_KEY_V1: &str = "subject";
+const PLACE_SUBJECT_GRANT_KEY: &str = "subject";
 
-const PLACE_SEMANTIC_DOMAIN_V1: &[u8] = b"babylon.place-page-semantic.v1\0";
-const PLACE_PRODUCT_CODE_V1: &str = "census_place_identity_mi_2023";
-const OVERLAP_PRODUCT_CODE_V1: &str = "census_county_place_h3_land_overlap_mi_2023";
+const PLACE_SEMANTIC_DOMAIN: &[u8] = b"babylon.place-page-semantic.v1\0";
+const PLACE_PRODUCT_CODE: &str = "census_place_identity_mi_2023";
+const OVERLAP_PRODUCT_CODE: &str = "census_county_place_h3_land_overlap_mi_2023";
 
 /// One overlapping county slice of a place dossier page.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct PlaceCountySliceV1 {
+pub struct PlaceCountySlice {
     county_geoid: String,
     county_name: String,
 }
 
-impl PlaceCountySliceV1 {
+impl PlaceCountySlice {
     /// Construct one county slice with its governed census county name.
     ///
     /// # Errors
@@ -142,10 +142,10 @@ impl PlaceCountySliceV1 {
     pub fn try_new(
         county_geoid: String,
         county_name: String,
-    ) -> Result<Self, SemanticArchiveErrorV1> {
-        ArchivePageRefV1::try_new(ArchiveSubjectKindV1::County, county_geoid.clone())?;
-        ArchiveSubjectV1::try_new(
-            ArchiveSubjectKindV1::County,
+    ) -> Result<Self, SemanticArchiveError> {
+        ArchivePageRef::try_new(ArchiveSubjectKind::County, county_geoid.clone())?;
+        ArchiveSubject::try_new(
+            ArchiveSubjectKind::County,
             county_geoid.clone(),
             county_name.clone(),
         )?;
@@ -170,13 +170,13 @@ impl PlaceCountySliceV1 {
 
 /// One desired place dossier page resolved from the pinned products.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct PlacePagePlanV1 {
+pub struct PlacePagePlan {
     place_geoid: String,
     title: String,
-    county_links: Vec<PlaceCountySliceV1>,
+    county_links: Vec<PlaceCountySlice>,
 }
 
-impl PlacePagePlanV1 {
+impl PlacePagePlan {
     /// Construct one desired place page plan.
     ///
     /// # Errors
@@ -185,10 +185,10 @@ impl PlacePagePlanV1 {
     pub fn try_new(
         place_geoid: String,
         title: String,
-        county_links: Vec<PlaceCountySliceV1>,
-    ) -> Result<Self, SemanticArchiveErrorV1> {
-        ArchiveSubjectV1::try_new(
-            ArchiveSubjectKindV1::Place,
+        county_links: Vec<PlaceCountySlice>,
+    ) -> Result<Self, SemanticArchiveError> {
+        ArchiveSubject::try_new(
+            ArchiveSubjectKind::Place,
             place_geoid.clone(),
             title.clone(),
         )?;
@@ -198,7 +198,7 @@ impl PlacePagePlanV1 {
             .windows(2)
             .any(|pair| pair[0].county_geoid == pair[1].county_geoid)
         {
-            return Err(SemanticArchiveErrorV1::DuplicateKey);
+            return Err(SemanticArchiveError::DuplicateKey);
         }
         Ok(Self {
             place_geoid,
@@ -221,21 +221,21 @@ impl PlacePagePlanV1 {
 
     /// Borrow the sorted per-county slices.
     #[must_use]
-    pub fn county_links(&self) -> &[PlaceCountySliceV1] {
+    pub fn county_links(&self) -> &[PlaceCountySlice] {
         &self.county_links
     }
 }
 
 /// One grant-visible signal in the place page semantic projection.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct PlaceSignalProjectionV1 {
+pub struct PlaceSignalProjection {
     label: String,
     value: String,
     source_id: String,
     locator: String,
 }
 
-impl PlaceSignalProjectionV1 {
+impl PlaceSignalProjection {
     /// Construct one signal projection.
     ///
     /// # Errors
@@ -246,13 +246,13 @@ impl PlaceSignalProjectionV1 {
         value: String,
         source_id: String,
         locator: String,
-    ) -> Result<Self, SemanticArchiveErrorV1> {
+    ) -> Result<Self, SemanticArchiveError> {
         validate_text(&label)?;
         validate_text(&value)?;
         validate_text(&source_id)?;
         validate_text(&locator)?;
         if label.contains(":** ") || value.contains(" — ") || source_id.contains("; ") {
-            return Err(SemanticArchiveErrorV1::InvalidText);
+            return Err(SemanticArchiveError::InvalidText);
         }
         Ok(Self {
             label,
@@ -294,14 +294,14 @@ impl PlaceSignalProjectionV1 {
 /// stored side parses it back out of the rendered Markdown. County names are
 /// present only while the campaign grants the county subject.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct PlacePageProjectionV1 {
+pub struct PlacePageProjection {
     title: String,
     question: String,
-    signals: Vec<PlaceSignalProjectionV1>,
+    signals: Vec<PlaceSignalProjection>,
     counties: Vec<(String, Option<String>)>,
 }
 
-impl PlacePageProjectionV1 {
+impl PlacePageProjection {
     /// Construct one place page projection.
     ///
     /// # Errors
@@ -309,19 +309,19 @@ impl PlacePageProjectionV1 {
     pub fn try_new(
         title: String,
         question: String,
-        signals: Vec<PlaceSignalProjectionV1>,
+        signals: Vec<PlaceSignalProjection>,
         counties: Vec<(String, Option<String>)>,
-    ) -> Result<Self, SemanticArchiveErrorV1> {
+    ) -> Result<Self, SemanticArchiveError> {
         validate_text(&title)?;
         validate_text(&question)?;
         let mut unique = BTreeSet::new();
         for (geoid, name) in &counties {
-            ArchivePageRefV1::try_new(ArchiveSubjectKindV1::County, geoid.clone())?;
+            ArchivePageRef::try_new(ArchiveSubjectKind::County, geoid.clone())?;
             if let Some(name) = name {
                 validate_text(name)?;
             }
             if !unique.insert(geoid.clone()) {
-                return Err(SemanticArchiveErrorV1::DuplicateKey);
+                return Err(SemanticArchiveError::DuplicateKey);
             }
         }
         Ok(Self {
@@ -346,7 +346,7 @@ impl PlacePageProjectionV1 {
 
     /// Borrow the grant-visible signals in rendered order.
     #[must_use]
-    pub fn signals(&self) -> &[PlaceSignalProjectionV1] {
+    pub fn signals(&self) -> &[PlaceSignalProjection] {
         &self.signals
     }
 
@@ -363,22 +363,22 @@ impl PlacePageProjectionV1 {
 /// projection depends on: whether a place field (the `identity` signal) is
 /// granted, and whether a county subject (the link name) is granted.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub struct PlaceGrantIndexV1 {
-    grants: BTreeMap<ArchivePageRefV1, BTreeSet<String>>,
+pub struct PlaceGrantIndex {
+    grants: BTreeMap<ArchivePageRef, BTreeSet<String>>,
 }
 
-impl PlaceGrantIndexV1 {
+impl PlaceGrantIndex {
     /// Index exact SQL grant rows decoded from
-    /// [`ARCHIVE_PLACE_GRANTS_SQL_V1`].
+    /// [`ARCHIVE_PLACE_GRANTS_SQL`].
     ///
     /// # Errors
     /// Refuses a malformed page identity or grant key.
     pub fn try_from_rows(
-        rows: impl IntoIterator<Item = (ArchiveSubjectKindV1, String, String)>,
-    ) -> Result<Self, SemanticArchiveErrorV1> {
-        let mut grants: BTreeMap<ArchivePageRefV1, BTreeSet<String>> = BTreeMap::new();
+        rows: impl IntoIterator<Item = (ArchiveSubjectKind, String, String)>,
+    ) -> Result<Self, SemanticArchiveError> {
+        let mut grants: BTreeMap<ArchivePageRef, BTreeSet<String>> = BTreeMap::new();
         for (kind, id, grant_key) in rows {
-            let page_ref = ArchivePageRefV1::try_new(kind, id)?;
+            let page_ref = ArchivePageRef::try_new(kind, id)?;
             validate_text(&grant_key)?;
             grants.entry(page_ref).or_default().insert(grant_key);
         }
@@ -387,7 +387,7 @@ impl PlaceGrantIndexV1 {
 
     /// Return whether the snapshot grants one field key on one page.
     #[must_use]
-    pub fn knows_field(&self, page_ref: &ArchivePageRefV1, grant_key: &str) -> bool {
+    pub fn knows_field(&self, page_ref: &ArchivePageRef, grant_key: &str) -> bool {
         self.grants
             .get(page_ref)
             .is_some_and(|keys| keys.contains(grant_key))
@@ -395,8 +395,8 @@ impl PlaceGrantIndexV1 {
 
     /// Return whether the snapshot grants knowledge of one page subject.
     #[must_use]
-    pub fn knows_subject(&self, page_ref: &ArchivePageRefV1) -> bool {
-        self.knows_field(page_ref, PLACE_SUBJECT_GRANT_KEY_V1)
+    pub fn knows_subject(&self, page_ref: &ArchivePageRef) -> bool {
+        self.knows_field(page_ref, PLACE_SUBJECT_GRANT_KEY)
     }
 }
 
@@ -408,18 +408,18 @@ impl PlaceGrantIndexV1 {
 ///
 /// # Errors
 /// Refuses any unsafe projected component.
-pub fn desired_place_projection_v1(
-    plan: &PlacePagePlanV1,
-    grants: &PlaceGrantIndexV1,
-) -> Result<PlacePageProjectionV1, SemanticArchiveErrorV1> {
+pub fn desired_place_projection(
+    plan: &PlacePagePlan,
+    grants: &PlaceGrantIndex,
+) -> Result<PlacePageProjection, SemanticArchiveError> {
     let place_ref =
-        ArchivePageRefV1::try_new(ArchiveSubjectKindV1::Place, plan.place_geoid().to_owned())?;
-    let signals = if grants.knows_field(&place_ref, PLACE_IDENTITY_GRANT_KEY_V1) {
-        vec![PlaceSignalProjectionV1::try_new(
-            PLACE_IDENTITY_SIGNAL_LABEL_V1.to_owned(),
+        ArchivePageRef::try_new(ArchiveSubjectKind::Place, plan.place_geoid().to_owned())?;
+    let signals = if grants.knows_field(&place_ref, PLACE_IDENTITY_GRANT_KEY) {
+        vec![PlaceSignalProjection::try_new(
+            PLACE_IDENTITY_SIGNAL_LABEL.to_owned(),
             plan.title().to_owned(),
-            PLACE_IDENTITY_SOURCE_ID_V1.to_owned(),
-            format!("{PLACE_IDENTITY_LOCATOR_PREFIX_V1}{}", plan.place_geoid()),
+            PLACE_IDENTITY_SOURCE_ID.to_owned(),
+            format!("{PLACE_IDENTITY_LOCATOR_PREFIX}{}", plan.place_geoid()),
         )?]
     } else {
         Vec::new()
@@ -428,8 +428,8 @@ pub fn desired_place_projection_v1(
         .county_links()
         .iter()
         .map(|slice| {
-            let county_ref = ArchivePageRefV1::try_new(
-                ArchiveSubjectKindV1::County,
+            let county_ref = ArchivePageRef::try_new(
+                ArchiveSubjectKind::County,
                 slice.county_geoid().to_owned(),
             )?;
             Ok((
@@ -439,10 +439,10 @@ pub fn desired_place_projection_v1(
                     .then(|| slice.county_name().to_owned()),
             ))
         })
-        .collect::<Result<Vec<_>, SemanticArchiveErrorV1>>()?;
-    PlacePageProjectionV1::try_new(
+        .collect::<Result<Vec<_>, SemanticArchiveError>>()?;
+    PlacePageProjection::try_new(
         plan.title().to_owned(),
-        PLACE_DECISION_QUESTION_V1.to_owned(),
+        PLACE_DECISION_QUESTION.to_owned(),
         signals,
         counties,
     )
@@ -451,22 +451,19 @@ pub fn desired_place_projection_v1(
 /// Hash the exact receipt-stamp-free place page projection.
 ///
 /// The projection covers the place GEOID, title, decision question, the
-/// pinned page template identity ([`ARCHIVE_PAGE_TEMPLATE_SHA256_V1`]), the
+/// pinned page template identity ([`ARCHIVE_PAGE_TEMPLATE_SHA256`]), the
 /// ordered grant-visible signals with their full citations, and the sorted
 /// county links including whether each name is visible. `verified_tick` and
 /// `tick_content_hash` deliberately never enter the hash, so a later receipt
 /// alone never re-publishes an unchanged page.
 #[must_use]
-pub fn place_page_semantic_sha256_v1(
-    place_geoid: &str,
-    projection: &PlacePageProjectionV1,
-) -> [u8; 32] {
+pub fn place_page_semantic_sha256(place_geoid: &str, projection: &PlacePageProjection) -> [u8; 32] {
     let mut hasher = Sha256::new();
-    hasher.update(PLACE_SEMANTIC_DOMAIN_V1);
+    hasher.update(PLACE_SEMANTIC_DOMAIN);
     hash_text(&mut hasher, place_geoid);
     hash_text(&mut hasher, projection.title());
     hash_text(&mut hasher, projection.question());
-    hasher.update(ARCHIVE_PAGE_TEMPLATE_SHA256_V1);
+    hasher.update(ARCHIVE_PAGE_TEMPLATE_SHA256);
     hash_len(&mut hasher, projection.signals().len());
     for signal in projection.signals() {
         hash_text(&mut hasher, signal.label());
@@ -508,15 +505,15 @@ fn parse_subject_scheme_link(entry: &str) -> Option<(Option<String>, &str)> {
 /// Parse the semantic projection out of one stored rendered place page.
 ///
 /// The parser is coupled to the pinned `archive_page_v1.md.j2` template
-/// ([`crate::ARCHIVE_PAGE_TEMPLATE_SHA256_V1`]) and returns `None` for any
+/// ([`crate::ARCHIVE_PAGE_TEMPLATE_SHA256`]) and returns `None` for any
 /// stored page whose frontmatter subject, title, question, signal-bullet, or
 /// related-link shape drifted; callers treat `None` as dirty.
 #[must_use]
-pub fn parse_stored_place_page_v1(
+pub fn parse_stored_place_page(
     place_geoid: &str,
     title: &str,
     markdown: &str,
-) -> Option<PlacePageProjectionV1> {
+) -> Option<PlacePageProjection> {
     let mut lines = markdown.lines();
     if lines.next()? != "---" {
         return None;
@@ -575,16 +572,16 @@ pub fn parse_stored_place_page_v1(
         }
         return None;
     }
-    PlacePageProjectionV1::try_new(stored_title, question?, signals, counties).ok()
+    PlacePageProjection::try_new(stored_title, question?, signals, counties).ok()
 }
 
 /// Parse one pinned-template signal bullet.
-fn parse_signal_bullet(line: &str) -> Option<PlaceSignalProjectionV1> {
+fn parse_signal_bullet(line: &str) -> Option<PlaceSignalProjection> {
     let rest = line.strip_prefix("- **")?;
     let (label, rest) = rest.split_once(":** ")?;
     let (value, citation) = rest.split_once(" — ")?;
     let (source_id, locator) = citation.split_once("; ")?;
-    PlaceSignalProjectionV1::try_new(
+    PlaceSignalProjection::try_new(
         label.to_owned(),
         value.to_owned(),
         source_id.to_owned(),
@@ -604,18 +601,18 @@ fn parse_signal_bullet(line: &str) -> Option<PlaceSignalProjectionV1> {
 ///
 /// # Errors
 /// Returns any projection refusal.
-pub fn select_dirty_place_pages_v1<'a>(
-    desired: &'a [PlacePagePlanV1],
-    stored: &BTreeMap<String, PlacePageProjectionV1>,
-    grants: &PlaceGrantIndexV1,
+pub fn select_dirty_place_pages<'a>(
+    desired: &'a [PlacePagePlan],
+    stored: &BTreeMap<String, PlacePageProjection>,
+    grants: &PlaceGrantIndex,
     limit: usize,
-) -> Result<ArchiveDirtySelectionV1<&'a PlacePagePlanV1>, SemanticArchiveErrorV1> {
+) -> Result<ArchiveDirtySelection<&'a PlacePagePlan>, SemanticArchiveError> {
     let mut dirty = Vec::new();
     for plan in desired {
-        let projection = desired_place_projection_v1(plan, grants)?;
+        let projection = desired_place_projection(plan, grants)?;
         let is_dirty = stored.get(plan.place_geoid()).is_none_or(|page| {
-            place_page_semantic_sha256_v1(plan.place_geoid(), page)
-                != place_page_semantic_sha256_v1(plan.place_geoid(), &projection)
+            place_page_semantic_sha256(plan.place_geoid(), page)
+                != place_page_semantic_sha256(plan.place_geoid(), &projection)
         });
         if is_dirty {
             dirty.push(plan);
@@ -623,73 +620,70 @@ pub fn select_dirty_place_pages_v1<'a>(
     }
     let remaining = dirty.len().saturating_sub(limit);
     dirty.truncate(limit);
-    Ok(ArchiveDirtySelectionV1::new(dirty, remaining))
+    Ok(ArchiveDirtySelection::new(dirty, remaining))
 }
 
 /// Build the exact receipt-bound page input for one desired place page.
 ///
 /// # Errors
 /// Refuses any unsafe page component.
-pub fn place_page_input_v1(
-    plan: &PlacePagePlanV1,
+pub fn place_page_input(
+    plan: &PlacePagePlan,
     resolve_tick: u64,
     tick_content_hash: [u8; 32],
-) -> Result<ArchivePageInputV1, SemanticArchiveErrorV1> {
-    let subject = ArchiveSubjectV1::try_new(
-        ArchiveSubjectKindV1::Place,
+) -> Result<ArchivePageInput, SemanticArchiveError> {
+    let subject = ArchiveSubject::try_new(
+        ArchiveSubjectKind::Place,
         plan.place_geoid.clone(),
         plan.title.clone(),
     )?;
-    let signal = ArchiveSignalV1::try_new(
-        PLACE_IDENTITY_GRANT_KEY_V1.to_owned(),
-        PLACE_IDENTITY_SIGNAL_LABEL_V1.to_owned(),
+    let signal = ArchiveSignal::try_new(
+        PLACE_IDENTITY_GRANT_KEY.to_owned(),
+        PLACE_IDENTITY_SIGNAL_LABEL.to_owned(),
         plan.title.clone(),
-        ArchiveCitationV1::try_new(
-            PLACE_IDENTITY_SOURCE_ID_V1.to_owned(),
-            format!("{PLACE_IDENTITY_LOCATOR_PREFIX_V1}{}", plan.place_geoid),
+        ArchiveCitation::try_new(
+            PLACE_IDENTITY_SOURCE_ID.to_owned(),
+            format!("{PLACE_IDENTITY_LOCATOR_PREFIX}{}", plan.place_geoid),
         )?,
     )?;
     let links = plan
         .county_links()
         .iter()
         .map(|slice| {
-            ArchiveLinkV1::try_new(
-                ArchivePageRefV1::try_new(
-                    ArchiveSubjectKindV1::County,
-                    slice.county_geoid.clone(),
-                )?,
+            ArchiveLink::try_new(
+                ArchivePageRef::try_new(ArchiveSubjectKind::County, slice.county_geoid.clone())?,
                 slice.county_name.clone(),
             )
         })
         .collect::<Result<Vec<_>, _>>()?;
-    ArchivePageInputV1::try_new(
+    ArchivePageInput::try_new(
         subject,
         resolve_tick,
         tick_content_hash,
-        PLACE_DECISION_QUESTION_V1.to_owned(),
+        PLACE_DECISION_QUESTION.to_owned(),
         vec![signal],
         links,
     )
 }
 
 /// Production place dossier producer over the checked reference products.
-pub struct PlaceDossierProducerV1 {
+pub struct PlaceDossierProducer {
     config: Config,
     products: SpatialReferenceProducts,
     allowlist: Option<Vec<String>>,
 }
 
-impl PlaceDossierProducerV1 {
+impl PlaceDossierProducer {
     /// Load the checked reference products and bind the stored-page reader.
     ///
     /// # Errors
     /// Refuses loudly when the embedded reference products, their governing
     /// H3 cohort, or either contract-pinned artifact digest diverges.
-    pub fn try_new(config: &Config) -> Result<Self, SemanticArchiveErrorV1> {
-        let cohort = representative_h3_reference_cohort_v1()
-            .map_err(|_| SemanticArchiveErrorV1::ArtifactDigest)?;
-        let products = michigan_spatial_reference_products_v1(cohort)
-            .map_err(|_| SemanticArchiveErrorV1::ArtifactDigest)?;
+    pub fn try_new(config: &Config) -> Result<Self, SemanticArchiveError> {
+        let cohort = representative_h3_reference_cohort()
+            .map_err(|_| SemanticArchiveError::ArtifactDigest)?;
+        let products = michigan_spatial_reference_products(cohort)
+            .map_err(|_| SemanticArchiveError::ArtifactDigest)?;
         verify_pinned_artifact_digests(&products)?;
         Ok(Self {
             config: config.clone(),
@@ -703,9 +697,9 @@ impl PlaceDossierProducerV1 {
     /// The allowlist must be sorted ascending, unique, and seven-digit
     /// numeric, and every member must be one of the pinned fixture places;
     /// anything else refuses with
-    /// [`SemanticArchiveErrorV1::InvalidIdentity`]. Only allowlisted places
+    /// [`SemanticArchiveError::InvalidIdentity`]. Only allowlisted places
     /// enumerate, which keeps small drains single-sweep for live proofs.
-    /// Production keeps the full fixture through [`PlaceDossierProducerV1::try_new`];
+    /// Production keeps the full fixture through [`PlaceDossierProducer::try_new`];
     /// larger dirty sets page across sweeps under the shared page budget.
     ///
     /// # Errors
@@ -714,14 +708,14 @@ impl PlaceDossierProducerV1 {
     pub fn with_place_allowlist(
         config: &Config,
         geoids: &[String],
-    ) -> Result<Self, SemanticArchiveErrorV1> {
+    ) -> Result<Self, SemanticArchiveError> {
         if geoids.is_empty()
             || geoids.windows(2).any(|pair| pair[0] >= pair[1])
             || geoids
                 .iter()
                 .any(|geoid| geoid.len() != 7 || !geoid.bytes().all(|byte| byte.is_ascii_digit()))
         {
-            return Err(SemanticArchiveErrorV1::InvalidIdentity);
+            return Err(SemanticArchiveError::InvalidIdentity);
         }
         let mut producer = Self::try_new(config)?;
         let known: BTreeSet<&str> = producer
@@ -731,7 +725,7 @@ impl PlaceDossierProducerV1 {
             .map(PlaceIdentityRow::place_geoid)
             .collect();
         if geoids.iter().any(|geoid| !known.contains(geoid.as_str())) {
-            return Err(SemanticArchiveErrorV1::InvalidIdentity);
+            return Err(SemanticArchiveError::InvalidIdentity);
         }
         producer.allowlist = Some(geoids.to_vec());
         Ok(producer)
@@ -746,7 +740,7 @@ impl PlaceDossierProducerV1 {
     /// # Errors
     /// Refuses unsafe product text; the checked fixture already pinned every
     /// row count, subject, and measure during construction.
-    pub fn desired_pages(&self) -> Result<Vec<PlacePagePlanV1>, SemanticArchiveErrorV1> {
+    pub fn desired_pages(&self) -> Result<Vec<PlacePagePlan>, SemanticArchiveError> {
         let county_names = self
             .products
             .counties()
@@ -779,14 +773,14 @@ impl PlaceDossierProducerV1 {
                     .map(|county_geoid| {
                         let county_name = county_names
                             .get(county_geoid)
-                            .ok_or(SemanticArchiveErrorV1::StoredPageMismatch)?;
-                        PlaceCountySliceV1::try_new(
+                            .ok_or(SemanticArchiveError::StoredPageMismatch)?;
+                        PlaceCountySlice::try_new(
                             (*county_geoid).to_owned(),
                             (*county_name).to_owned(),
                         )
                     })
                     .collect::<Result<Vec<_>, _>>()?;
-                PlacePagePlanV1::try_new(
+                PlacePagePlan::try_new(
                     place.place_geoid().to_owned(),
                     place.name_lsad().to_owned(),
                     county_links,
@@ -796,14 +790,14 @@ impl PlaceDossierProducerV1 {
     }
 }
 
-impl ArchiveDossierProducerV1 for PlaceDossierProducerV1 {
+impl ArchiveDossierProducer for PlaceDossierProducer {
     fn produce(
         &self,
         campaign_id: Uuid,
-        receipt: &PendingArchiveReceiptV1,
-        knowledge: &crate::ArchiveKnowledgeV1,
+        receipt: &PendingArchiveReceipt,
+        knowledge: &crate::ArchiveKnowledge,
         page_budget: usize,
-    ) -> Result<ArchiveProducerOutcomeV1, SemanticArchiveErrorV1> {
+    ) -> Result<ArchiveProducerOutcome, SemanticArchiveError> {
         let campaign = CampaignId::from_uuid(campaign_id);
         let desired = self.desired_pages()?;
         crate::archive_revision::publication::select_dirty_pages(
@@ -813,48 +807,28 @@ impl ArchiveDossierProducerV1 for PlaceDossierProducerV1 {
             knowledge,
             &desired,
             page_budget,
-            place_page_input_v1,
+            place_page_input,
         )
-    }
-    fn cutover_subjects(
-        &self,
-        _campaign_id: Uuid,
-        receipt: &PendingArchiveReceiptV1,
-        knowledge: &crate::ArchiveKnowledgeV1,
-    ) -> Result<Vec<ArchivePageRefV1>, SemanticArchiveErrorV1> {
-        let desired = self.desired_pages()?;
-        let mut subjects = std::collections::BTreeSet::new();
-        for plan in &desired {
-            let page =
-                place_page_input_v1(plan, receipt.resolve_tick(), *receipt.tick_content_hash())?;
-            if knowledge.knows_subject(page.subject().page_ref()) {
-                subjects.insert(page.subject().page_ref().clone());
-            }
-        }
-        Ok(subjects.into_iter().collect())
     }
 }
 
 fn verify_pinned_artifact_digests(
     products: &SpatialReferenceProducts,
-) -> Result<(), SemanticArchiveErrorV1> {
+) -> Result<(), SemanticArchiveError> {
     for (code, pinned) in [
+        (PLACE_PRODUCT_CODE, PINNED_PLACE_IDENTITY_ARTIFACT_SHA256),
         (
-            PLACE_PRODUCT_CODE_V1,
-            PINNED_PLACE_IDENTITY_ARTIFACT_SHA256_V1,
-        ),
-        (
-            OVERLAP_PRODUCT_CODE_V1,
-            PINNED_COUNTY_PLACE_OVERLAP_ARTIFACT_SHA256_V1,
+            OVERLAP_PRODUCT_CODE,
+            PINNED_COUNTY_PLACE_OVERLAP_ARTIFACT_SHA256,
         ),
     ] {
         let product = products
             .products()
             .iter()
             .find(|product| product.code() == code)
-            .ok_or(SemanticArchiveErrorV1::ArtifactDigest)?;
-        if product.artifact_sha256() != RefDigestV1::from_bytes(pinned) {
-            return Err(SemanticArchiveErrorV1::ArtifactDigest);
+            .ok_or(SemanticArchiveError::ArtifactDigest)?;
+        if product.artifact_sha256() != RefDigest::from_bytes(pinned) {
+            return Err(SemanticArchiveError::ArtifactDigest);
         }
     }
     Ok(())

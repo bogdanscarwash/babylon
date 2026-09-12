@@ -1,22 +1,22 @@
 //! Executable contract for the pinned Michigan Dynamic-Hex Foundation V1.
 
+use babylon_bsl::canonical_ast::rules_hash_of;
 use babylon_bsl::rule_pipeline::split_content;
-use babylon_bsl::rules_hash_of;
 use babylon_graph::hypergraph_store::HypergraphStore;
-use babylon_kernel::replay::{ReplaySeed, ReplaySessionIdV1};
-use babylon_kernel::tick_content_hash::RefDigestV1;
-use babylon_kernel::{sha256_of, ContentDigest, H3CellId};
+use babylon_kernel::replay::{ReplaySeed, ReplaySessionId};
+use babylon_kernel::tick_content_hash::RefDigest;
+use babylon_kernel::{content_digest::sha256_of, content_digest::ContentDigest, H3CellId};
 use babylon_persistence::{
-    decode_michigan_dynamic_hex_foundation_v1, michigan_dynamic_hex_foundation_fixture_parts_v1,
-    michigan_dynamic_hex_foundation_v1, MichiganDynamicHexFoundationDecodeErrorV1,
+    decode_michigan_dynamic_hex_foundation, michigan_dynamic_hex_foundation,
+    michigan_dynamic_hex_foundation_fixture_parts, MichiganDynamicHexFoundationDecodeError,
 };
-use babylon_practice_contract::ordered_action_v1::OrderedPracticeActionBatchV1;
+use babylon_practice_contract::OrderedPracticeActionBatch;
 use babylon_tick::h3_runtime::{
-    MichiganDynamicHexFoundationErrorV1, MichiganDynamicHexFoundationRowV1,
-    MichiganDynamicHexFoundationV1, MichiganDynamicHexValueBitsV1, MichiganDynamicHexValuesV1,
-    MichiganH3R8ChildParentV1,
+    MichiganDynamicHexFoundation, MichiganDynamicHexFoundationError,
+    MichiganDynamicHexFoundationRow, MichiganDynamicHexValueBits, MichiganDynamicHexValues,
+    MichiganH3R8ChildParent,
 };
-use babylon_tick::material_state::MaterialStateV1;
+use babylon_tick::material_state::MaterialState;
 use babylon_tick::replay_session::ReplayTickSession;
 
 const DOMAIN: &[u8] = b"babylon.michigan-dynamic-hex-foundation.v1\0";
@@ -60,8 +60,8 @@ fn digest(hex: &str) -> [u8; 32] {
     output
 }
 
-fn value_input(bits: [u64; 9]) -> MichiganDynamicHexValueBitsV1 {
-    MichiganDynamicHexValueBitsV1 {
+fn value_input(bits: [u64; 9]) -> MichiganDynamicHexValueBits {
+    MichiganDynamicHexValueBits {
         c: bits[0],
         v: bits[1],
         s: bits[2],
@@ -91,23 +91,23 @@ fn tick_owned_rows_refuse_values_outside_the_existing_dynamic_hex_domains() {
         let mut bits = valid;
         bits[lane] = f64::NAN.to_bits();
         assert_eq!(
-            MichiganDynamicHexValuesV1::try_new(value_input(bits)),
-            Err(MichiganDynamicHexFoundationErrorV1::NonFiniteValue { lane })
+            MichiganDynamicHexValues::try_new(value_input(bits)),
+            Err(MichiganDynamicHexFoundationError::NonFiniteValue { lane })
         );
 
         let mut bits = valid;
         bits[lane] = (-0.0_f64).to_bits();
         assert_eq!(
-            MichiganDynamicHexValuesV1::try_new(value_input(bits)),
-            Err(MichiganDynamicHexFoundationErrorV1::NegativeZero { lane })
+            MichiganDynamicHexValues::try_new(value_input(bits)),
+            Err(MichiganDynamicHexFoundationError::NegativeZero { lane })
         );
     }
     for lane in 0..7 {
         let mut bits = valid;
         bits[lane] = (-1.0_f64).to_bits();
         assert_eq!(
-            MichiganDynamicHexValuesV1::try_new(value_input(bits)),
-            Err(MichiganDynamicHexFoundationErrorV1::NegativeValue { lane })
+            MichiganDynamicHexValues::try_new(value_input(bits)),
+            Err(MichiganDynamicHexFoundationError::NegativeValue { lane })
         );
     }
     for lane in 7..9 {
@@ -115,8 +115,8 @@ fn tick_owned_rows_refuse_values_outside_the_existing_dynamic_hex_domains() {
             let mut bits = valid;
             bits[lane] = value.to_bits();
             assert_eq!(
-                MichiganDynamicHexValuesV1::try_new(value_input(bits)),
-                Err(MichiganDynamicHexFoundationErrorV1::UnitIntervalValue { lane })
+                MichiganDynamicHexValues::try_new(value_input(bits)),
+                Err(MichiganDynamicHexFoundationError::UnitIntervalValue { lane })
             );
         }
     }
@@ -125,43 +125,43 @@ fn tick_owned_rows_refuse_values_outside_the_existing_dynamic_hex_domains() {
 #[test]
 fn tick_owned_foundation_cannot_be_minted_from_alternate_membership_or_values() {
     let foundation =
-        michigan_dynamic_hex_foundation_v1().expect("governed fixture must construct once");
+        michigan_dynamic_hex_foundation().expect("governed fixture must construct once");
 
     let mut alternate_membership = foundation.rows().to_vec();
     let foreign_cell = H3CellId::try_from(0x0872_8308_28ff_ffff_u64).unwrap();
     let retained_values = *alternate_membership[0].values();
     alternate_membership[0] =
-        MichiganDynamicHexFoundationRowV1::try_new(foreign_cell, retained_values).unwrap();
+        MichiganDynamicHexFoundationRow::try_new(foreign_cell, retained_values).unwrap();
     alternate_membership.sort_unstable_by_key(|row| row.cell_id().as_u64());
     assert_eq!(
-        MichiganDynamicHexFoundationV1::try_new(
+        MichiganDynamicHexFoundation::try_new(
             alternate_membership,
             foundation.r8_child_parent_rows().to_vec(),
         ),
-        Err(MichiganDynamicHexFoundationErrorV1::SourceR7Digest)
+        Err(MichiganDynamicHexFoundationError::SourceR7Digest)
     );
 
     let mut alternate_value = foundation.rows().to_vec();
     let mut bits = alternate_value[0].value_bits();
     bits[0] = (f64::from_bits(bits[0]) + 1.0).to_bits();
-    alternate_value[0] = MichiganDynamicHexFoundationRowV1::try_new(
+    alternate_value[0] = MichiganDynamicHexFoundationRow::try_new(
         alternate_value[0].cell_id(),
-        MichiganDynamicHexValuesV1::try_new(value_input(bits)).unwrap(),
+        MichiganDynamicHexValues::try_new(value_input(bits)).unwrap(),
     )
     .unwrap();
     assert_eq!(
-        MichiganDynamicHexFoundationV1::try_new(
+        MichiganDynamicHexFoundation::try_new(
             alternate_value,
             foundation.r8_child_parent_rows().to_vec(),
         ),
-        Err(MichiganDynamicHexFoundationErrorV1::ArtifactDigest)
+        Err(MichiganDynamicHexFoundationError::ArtifactDigest)
     );
 
     let mut incomplete_r8 = foundation.r8_child_parent_rows().to_vec();
     incomplete_r8.pop();
     assert_eq!(
-        MichiganDynamicHexFoundationV1::try_new(foundation.rows().to_vec(), incomplete_r8),
-        Err(MichiganDynamicHexFoundationErrorV1::R8RowCount {
+        MichiganDynamicHexFoundation::try_new(foundation.rows().to_vec(), incomplete_r8),
+        Err(MichiganDynamicHexFoundationError::R8RowCount {
             actual: R8_ROW_COUNT - 1,
         })
     );
@@ -169,8 +169,8 @@ fn tick_owned_foundation_cannot_be_minted_from_alternate_membership_or_values() 
     let first = foundation.r8_child_parent_rows()[0];
     let wrong_parent = foundation.rows()[1].cell_id();
     assert_eq!(
-        MichiganH3R8ChildParentV1::try_new(first.child_cell_id(), wrong_parent),
-        Err(MichiganDynamicHexFoundationErrorV1::R8ParentMismatch {
+        MichiganH3R8ChildParent::try_new(first.child_cell_id(), wrong_parent),
+        Err(MichiganDynamicHexFoundationError::R8ParentMismatch {
             child: first.child_cell_id(),
             parent: wrong_parent,
         })
@@ -180,11 +180,11 @@ fn tick_owned_foundation_cannot_be_minted_from_alternate_membership_or_values() 
     let foreign_child = foreign_parent.immediate_children().unwrap().as_slice()[0];
     let mut wrong_complete_set = foundation.r8_child_parent_rows().to_vec();
     wrong_complete_set[0] =
-        MichiganH3R8ChildParentV1::try_new(foreign_child, foreign_parent).unwrap();
-    wrong_complete_set.sort_unstable_by_key(MichiganH3R8ChildParentV1::child_cell_id);
+        MichiganH3R8ChildParent::try_new(foreign_child, foreign_parent).unwrap();
+    wrong_complete_set.sort_unstable_by_key(MichiganH3R8ChildParent::child_cell_id);
     assert!(matches!(
-        MichiganDynamicHexFoundationV1::try_new(foundation.rows().to_vec(), wrong_complete_set),
-        Err(MichiganDynamicHexFoundationErrorV1::R8CoverageMismatch { .. })
+        MichiganDynamicHexFoundation::try_new(foundation.rows().to_vec(), wrong_complete_set),
+        Err(MichiganDynamicHexFoundationError::R8CoverageMismatch { .. })
     ));
 }
 
@@ -195,28 +195,26 @@ fn dynamic_runtime_construction_is_private_to_material_state() {
         "the public foundation module must not expose the private runtime authority"
     );
     assert!(MATERIAL_STATE_SOURCE.contains(concat!(
-        "struct DynamicHexRuntimeRowV1 {\n",
+        "struct DynamicHexRuntimeRow {\n",
         "    cell_id: H3CellId,\n",
         "    value_bits: [u64; 9],\n",
         "}",
     )));
     assert!(MATERIAL_STATE_SOURCE.contains(concat!(
-        "struct DynamicHexRuntimeV1 {\n",
-        "    rows: Vec<DynamicHexRuntimeRowV1>,\n",
+        "struct DynamicHexRuntime {\n",
+        "    rows: Vec<DynamicHexRuntimeRow>,\n",
         "    source_r7_digest: [u8; 32],\n",
         "    reference_bundle_digest: [u8; 32],\n",
         "    artifact_sha256: [u8; 32],\n",
         "}",
     )));
     assert_eq!(
-        MATERIAL_STATE_SOURCE
-            .matches("DynamicHexRuntimeV1 {")
-            .count(),
+        MATERIAL_STATE_SOURCE.matches("DynamicHexRuntime {").count(),
         2,
         "only the private declaration and type-owned impl may name the aggregate runtime"
     );
     let runtime_impl_start = MATERIAL_STATE_SOURCE
-        .find("impl DynamicHexRuntimeV1 {")
+        .find("impl DynamicHexRuntime {")
         .expect("private runtime impl must exist");
     let runtime_impl_end = MATERIAL_STATE_SOURCE[runtime_impl_start..]
         .find("struct MaterialWriter")
@@ -225,23 +223,19 @@ fn dynamic_runtime_construction_is_private_to_material_state() {
     let runtime_impl = &MATERIAL_STATE_SOURCE[runtime_impl_start..runtime_impl_end];
     assert_eq!(
         MATERIAL_STATE_SOURCE
-            .matches("DynamicHexRuntimeRowV1 {")
+            .matches("DynamicHexRuntimeRow {")
             .count(),
         4,
         "one private declaration and three type-owned row constructions are governed"
     );
     assert_eq!(
-        runtime_impl.matches("DynamicHexRuntimeRowV1 {").count(),
+        runtime_impl.matches("DynamicHexRuntimeRow {").count(),
         3,
         "foundation construction, detachment, and the test-only fixture own every row literal"
     );
 }
 
-fn assert_row(
-    row: &MichiganDynamicHexFoundationRowV1,
-    expected_cell: u64,
-    expected_bits: [u64; 9],
-) {
+fn assert_row(row: &MichiganDynamicHexFoundationRow, expected_cell: u64, expected_bits: [u64; 9]) {
     assert_eq!(row.cell_id(), H3CellId::try_from(expected_cell).unwrap());
     assert_eq!(row.value_bits(), expected_bits);
 }
@@ -252,7 +246,7 @@ fn assert_row(
     reason = "one consensus test binds all three checked archive representations"
 )]
 fn static_fixture_decodes_the_exact_three_archive_consensus() {
-    let parts = michigan_dynamic_hex_foundation_fixture_parts_v1();
+    let parts = michigan_dynamic_hex_foundation_fixture_parts();
     assert_eq!(
         parts.map(<[u8]>::len),
         [
@@ -262,8 +256,8 @@ fn static_fixture_decodes_the_exact_three_archive_consensus() {
     );
     assert!(parts.iter().all(|part| part.len() <= 1_000_000));
 
-    let foundation: &MichiganDynamicHexFoundationV1 =
-        michigan_dynamic_hex_foundation_v1().expect("checked-in fixture must decode once");
+    let foundation: &MichiganDynamicHexFoundation =
+        michigan_dynamic_hex_foundation().expect("checked-in fixture must decode once");
     assert_eq!(foundation.domain(), DOMAIN);
     assert_eq!(foundation.layout(), LAYOUT);
     assert_eq!(foundation.source_r7_digest(), digest(SOURCE_R7_DIGEST));
@@ -297,7 +291,7 @@ fn static_fixture_decodes_the_exact_three_archive_consensus() {
                 .rows()
                 .binary_search_by_key(
                     &row.parent_r7_cell_id(),
-                    MichiganDynamicHexFoundationRowV1::cell_id,
+                    MichiganDynamicHexFoundationRow::cell_id,
                 )
                 .is_ok()
     }));
@@ -365,10 +359,10 @@ fn static_fixture_decodes_the_exact_three_archive_consensus() {
 #[test]
 fn exact_foundation_projects_through_a_real_replay_session() {
     let mut artifact = Vec::new();
-    for part in michigan_dynamic_hex_foundation_fixture_parts_v1() {
+    for part in michigan_dynamic_hex_foundation_fixture_parts() {
         artifact.extend_from_slice(part);
     }
-    let foundation = decode_michigan_dynamic_hex_foundation_v1(&artifact)
+    let foundation = decode_michigan_dynamic_hex_foundation(&artifact)
         .expect("a fresh owned foundation must decode");
     let reference_digest = foundation.reference_bundle_digest();
     let expected_rows = foundation.rows().len();
@@ -378,10 +372,10 @@ fn exact_foundation_projects_through_a_real_replay_session() {
             foundation.rows()[index].value_bits(),
         )
     });
-    let material = MaterialStateV1::try_new(&foundation).unwrap();
+    let material = MaterialState::try_new(&foundation).unwrap();
     drop(foundation);
     drop(artifact);
-    let replay_id = ReplaySessionIdV1::try_from("per281/michigan-foundation").unwrap();
+    let replay_id = ReplaySessionId::try_from("per281/michigan-foundation").unwrap();
     let mut session = ReplayTickSession::new(
         REPLAY_SCENARIO,
         None,
@@ -390,11 +384,11 @@ fn exact_foundation_projects_through_a_real_replay_session() {
         replay_id.clone(),
         ReplaySeed::new(71),
         replay_content(),
-        RefDigestV1::from_bytes(reference_digest),
+        RefDigest::from_bytes(reference_digest),
         material,
     )
     .unwrap();
-    let actions = OrderedPracticeActionBatchV1::empty(replay_id, 1).unwrap();
+    let actions = OrderedPracticeActionBatch::empty(replay_id, 1).unwrap();
     let mut sink = babylon_bsl::structural_verbs::CollectingSink::default();
     let report = session.advance(&mut sink, &actions).unwrap();
     let dynamic = report.material_state_rows().dynamic_hexes();
@@ -420,7 +414,7 @@ fn exact_foundation_projects_through_a_real_replay_session() {
 
 #[test]
 fn decoder_refuses_mutation_truncation_and_trailing_bytes() {
-    let parts = michigan_dynamic_hex_foundation_fixture_parts_v1();
+    let parts = michigan_dynamic_hex_foundation_fixture_parts();
     let mut joined = Vec::new();
     for part in parts {
         joined.extend_from_slice(part);
@@ -430,19 +424,19 @@ fn decoder_refuses_mutation_truncation_and_trailing_bytes() {
     let last = mutated.len() - 1;
     mutated[last] ^= 1;
     assert_eq!(
-        decode_michigan_dynamic_hex_foundation_v1(&mutated),
-        Err(MichiganDynamicHexFoundationDecodeErrorV1::ArtifactDigest)
+        decode_michigan_dynamic_hex_foundation(&mutated),
+        Err(MichiganDynamicHexFoundationDecodeError::ArtifactDigest)
     );
 
     let truncated = &joined[..joined.len() - 1];
     assert_eq!(
-        decode_michigan_dynamic_hex_foundation_v1(truncated),
-        Err(MichiganDynamicHexFoundationDecodeErrorV1::Truncated)
+        decode_michigan_dynamic_hex_foundation(truncated),
+        Err(MichiganDynamicHexFoundationDecodeError::Truncated)
     );
 
     joined.push(0);
     assert_eq!(
-        decode_michigan_dynamic_hex_foundation_v1(&joined),
-        Err(MichiganDynamicHexFoundationDecodeErrorV1::TrailingBytes)
+        decode_michigan_dynamic_hex_foundation(&joined),
+        Err(MichiganDynamicHexFoundationDecodeError::TrailingBytes)
     );
 }

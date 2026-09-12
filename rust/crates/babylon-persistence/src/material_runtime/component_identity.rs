@@ -1,21 +1,21 @@
 //! Immutable checkpoint admission shared by runtime and full-observer reads.
 
-use super::{CampaignFoundationV1, MaterialRuntimeErrorV3};
+use super::{CampaignFoundation, MaterialRuntimeError};
 use babylon_graph::hypergraph_store::HypergraphStore;
-use babylon_kernel::replay::{ReplaySeed, ReplaySessionIdV1};
-use babylon_kernel::tick_content_hash::RefDigestV1;
-use babylon_kernel::ContentDigest;
-use babylon_practice_contract::ordered_action_v1::OrderedPracticeActionBatchV1;
+use babylon_kernel::content_digest::ContentDigest;
+use babylon_kernel::replay::{ReplaySeed, ReplaySessionId};
+use babylon_kernel::tick_content_hash::RefDigest;
+use babylon_practice_contract::OrderedPracticeActionBatch;
 use babylon_tick::replay_session::ReplayTickSession;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct MaterialComponentIdentityV1 {
+pub(crate) struct MaterialComponentIdentity {
     sections: [Vec<u8>; 6],
-    session_id: ReplaySessionIdV1,
+    session_id: ReplaySessionId,
 }
 
-impl MaterialComponentIdentityV1 {
-    pub(crate) fn from_foundation(foundation: &CampaignFoundationV1) -> Self {
+impl MaterialComponentIdentity {
+    pub(crate) fn from_foundation(foundation: &CampaignFoundation) -> Self {
         Self::from_parts(
             foundation.resolver_manifest_bytes(),
             foundation.prepared_environment_bytes(),
@@ -40,10 +40,10 @@ impl MaterialComponentIdentityV1 {
     fn from_parts(
         resolver: &[u8],
         environment: &[u8],
-        session: &ReplaySessionIdV1,
+        session: &ReplaySessionId,
         seed: ReplaySeed,
         content: &ContentDigest,
-        reference: RefDigestV1,
+        reference: RefDigest,
     ) -> Self {
         let mut content_bytes = [0_u8; 64];
         content_bytes[..32].copy_from_slice(&content.defines_hash);
@@ -64,9 +64,9 @@ impl MaterialComponentIdentityV1 {
     pub(super) fn validate_sections(
         &self,
         sections: &[Vec<u8>],
-    ) -> Result<(), MaterialRuntimeErrorV3> {
+    ) -> Result<(), MaterialRuntimeError> {
         if sections.len() != 9 || sections[2..8] != self.sections {
-            return Err(MaterialRuntimeErrorV3::InvalidCheckpoint);
+            return Err(MaterialRuntimeError::InvalidCheckpoint);
         }
         Ok(())
     }
@@ -77,14 +77,14 @@ impl MaterialComponentIdentityV1 {
         layout: i16,
         digest: &[u8],
         bytes: &[u8],
-    ) -> Result<(), MaterialRuntimeErrorV3> {
-        let expected = OrderedPracticeActionBatchV1::empty(self.session_id.clone(), tick)
-            .map_err(|_| MaterialRuntimeErrorV3::InvalidCheckpoint)?;
+    ) -> Result<(), MaterialRuntimeError> {
+        let expected = OrderedPracticeActionBatch::empty(self.session_id.clone(), tick)
+            .map_err(|_| MaterialRuntimeError::InvalidCheckpoint)?;
         if layout != 1
             || digest != expected.digest().as_bytes()
             || bytes != expected.canonical_bytes()
         {
-            return Err(MaterialRuntimeErrorV3::InvalidCheckpoint);
+            return Err(MaterialRuntimeError::InvalidCheckpoint);
         }
         Ok(())
     }

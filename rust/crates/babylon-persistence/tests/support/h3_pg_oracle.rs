@@ -5,7 +5,7 @@ use super::h3_cell_vectors::{
     load_fixture, ValidVector, VectorFixture, INVALID_RAW_VECTOR_COUNT, PENTAGON_VECTOR_COUNT,
     VALID_VECTOR_COUNT,
 };
-use babylon_persistence::{compiled_schema_migrations, migrate_schema_epoch};
+use babylon_persistence::{install_current_schema, CurrentSchemaDisposition};
 use postgres::error::SqlState;
 use postgres::types::ToSql;
 use postgres::{Client, Config, NoTls, Transaction};
@@ -15,13 +15,8 @@ const H3_RESOLUTION_COUNT: usize = 16;
 const PENTAGONS_PER_RESOLUTION: usize = 12;
 
 pub(super) fn verify_h3_pg_oracle(owner: &Config, admin: &Config) {
-    let current_epoch = current_schema_epoch();
-    let first = migrate_schema_epoch(owner).expect("H3 oracle scratch database must migrate");
-    assert_eq!(
-        (first.prior_applied, first.final_applied),
-        (0, current_epoch)
-    );
-    assert_eq!(first.applied_versions.len(), current_epoch);
+    let first = install_current_schema(owner).expect("H3 oracle current schema installs");
+    assert_eq!(first.disposition, CurrentSchemaDisposition::Installed);
 
     let fixture = load_fixture();
     assert_shared_fixture_transport(&fixture);
@@ -51,19 +46,9 @@ pub(super) fn verify_h3_pg_oracle(owner: &Config, admin: &Config) {
     assert_post_drop_independence(&mut client);
     drop(client);
 
-    let second = migrate_schema_epoch(owner).expect("post-oracle epoch must remain valid");
-    assert_eq!(
-        (second.prior_applied, second.final_applied),
-        (current_epoch, current_epoch)
-    );
-    assert!(second.applied_versions.is_empty());
-    assert!(second.reconciled_versions.is_empty());
-}
-
-fn current_schema_epoch() -> usize {
-    compiled_schema_migrations()
-        .expect("compiled migration registry must validate")
-        .len()
+    let second = install_current_schema(owner).expect("post-oracle current schema remains valid");
+    assert_eq!(second.disposition, CurrentSchemaDisposition::AlreadyCurrent);
+    assert_eq!(first.identity, second.identity);
 }
 
 fn assert_shared_fixture_transport(fixture: &VectorFixture) {
@@ -103,7 +88,7 @@ fn assert_shared_fixture_transport(fixture: &VectorFixture) {
 fn assert_pre_activation_state(client: &mut Client) {
     let row = client
         .query_one(
-            "SELECT (SELECT pg_catalog.count(*) FROM babylon_state.schema_migration), \
+            "SELECT (SELECT pg_catalog.count(*) FROM babylon_meta.current_schema), \
                     (SELECT installed_version FROM pg_catalog.pg_available_extensions \
                      WHERE name = 'h3'), \
                     (SELECT default_version FROM pg_catalog.pg_available_extensions \
@@ -111,10 +96,7 @@ fn assert_pre_activation_state(client: &mut Client) {
             &[],
         )
         .expect("pre-activation H3 state must query");
-    assert_eq!(
-        row.get::<_, i64>(0),
-        i64::try_from(current_schema_epoch()).expect("schema epoch must fit BIGINT")
-    );
+    assert_eq!(row.get::<_, i64>(0), 1);
     assert_eq!(row.get::<_, Option<String>>(1), None);
     assert_eq!(
         row.get::<_, Option<String>>(2).as_deref(),

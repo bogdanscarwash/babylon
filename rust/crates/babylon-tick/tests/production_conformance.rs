@@ -49,7 +49,7 @@
 use babylon_bsl::scenario::load_scenario;
 use babylon_graph::hypergraph_store::HypergraphStore;
 use babylon_graph::substrate::{GraphSubstrate, NodeId};
-use babylon_kernel::SessionId;
+use babylon_kernel::replay::ReplaySessionId;
 use babylon_tick::run_once_into;
 
 const SCENARIO: &str = include_str!("../content/scenarios/production-conformance.bscn");
@@ -499,7 +499,7 @@ fn p0_and_p4_fire_on_every_territory() {
 /// distinguish "p0 resets production-total to 0" from "p0 does nothing" —
 /// every territory's `production-total` is ALREADY seeded `0`, so a missing
 /// reset would be invisible in one tick. This test runs TWO ticks via
-/// `TickSession` (same idiom `territory_conformance.rs::
+/// `RuleDiagnosticSession` (same idiom `territory_conformance.rs::
 /// p2_already_latched_territory_compounds_rent_across_two_ticks` uses):
 /// every input to `t-alpha`'s own computation (`active`, `population`,
 /// `biocapacity`, `max-biocapacity`) is tick-invariant in this fixture, so
@@ -516,11 +516,13 @@ fn p0_and_p4_fire_on_every_territory() {
 #[test]
 fn p0_reset_keeps_extraction_intensity_stable_across_two_ticks() {
     let mut sink = babylon_bsl::structural_verbs::CollectingSink::default();
-    let mut session = babylon_tick::TickSession::new(
+    let mut session = babylon_tick::diagnostic::RuleDiagnosticSession::new(
         SCENARIO,
+        None,
         PRODUCTION_RULE,
         HypergraphStore::new(),
-        SessionId::new("production-conformance-test").expect("literal is non-empty"),
+        ReplaySessionId::try_from("production-conformance-test").expect("literal is non-empty"),
+        babylon_kernel::replay::ReplaySeed::new(0),
     )
     .expect("the pack must load into a session");
     session.advance(&mut sink).expect("tick 1");

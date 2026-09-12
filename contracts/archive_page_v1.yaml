@@ -30,11 +30,10 @@ authority:
 
 constants:
   front_matter_contract_id: babylon.archive-page.v1
-  archive_schema_contract_id: babylon.semantic-archive-schema.v1
   template_path: rust/crates/babylon-persistence/src/archive_page_v1.md.j2
   template_sha256: d7904379cf09f41db6abea91465b5fe6e804867cf876bd44a09fe63ba9755108
   worker_domain_ascii_nul: babylon.semantic-archive-worker.v1
-  atom_schema_path: rust/crates/babylon-persistence/migrations/archive_atom_v1.sql
+  schema_path: rust/crates/babylon-persistence/migrations/current_archive.sql
   dirty_batch_domain_ascii_nul: babylon.semantic-archive-dirty-batch.v1
   knowledge_domain_ascii_nul: babylon.semantic-archive-knowledge.v1
   county_kind_tag_u8: 1
@@ -94,8 +93,7 @@ layouts:
   worker_contract_v1:
     fields:
       - worker_domain_ascii_nul
-      - exact_schema_sql_bytes
-      - exact_atom_schema_sql_bytes
+      - exact_current_archive_schema_sql_bytes
       - template_sha256_exact_32_bytes
     digest: SHA-256 over the concatenation
   page_markdown_v1:

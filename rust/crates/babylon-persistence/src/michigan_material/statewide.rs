@@ -1,12 +1,11 @@
 //! Source qualification is reference authoring; no allocation or tick runs here.
 use super::{
-    regional, sha256_of, MichiganDefinesErrorV1, MichiganDefinesV3, MichiganDeliveryPresetV1,
-    MichiganFinalDemandV2, MichiganIndustryBaselineRowV1, MichiganInterventionV2,
-    MichiganMaterialCatalogV1, MichiganMaterialCorridorV1, MichiganMaterialErrorV1,
-    MichiganMaterialGoodV1, MichiganMaterialInputV2, MichiganMaterialPathV2,
-    MichiganMaterialProcessV1, MichiganMaterialRouteV1, MichiganMaterialSiteV1, MichiganMerchantV2,
-    MichiganNormalizedContentV2, MichiganPhysicalNetworkV2, MichiganSiteRoleV2,
-    MichiganWorkforceSeedV1, MAX_MICHIGAN_CAPTURED_CONTENT_BYTES_V2,
+    regional, sha256_of, MichiganDefines, MichiganDefinesError, MichiganDeliveryPreset,
+    MichiganFinalDemand, MichiganIndustryBaselineRow, MichiganIntervention,
+    MichiganMaterialCatalog, MichiganMaterialCorridor, MichiganMaterialError, MichiganMaterialGood,
+    MichiganMaterialInput, MichiganMaterialPath, MichiganMaterialProcess, MichiganMaterialRoute,
+    MichiganMaterialSite, MichiganMerchant, MichiganNormalizedContent, MichiganPhysicalNetwork,
+    MichiganSiteRole, MichiganWorkforceSeed, MAX_MICHIGAN_CAPTURED_CONTENT_BYTES,
 };
 use crate::michigan_defines::{CommodityDisposition, CommodityUnit};
 use serde::Deserialize;
@@ -140,18 +139,18 @@ fn site_key(county: &str, sector: &str) -> String {
 fn process_key(county: &str, sector: &str, family: &str) -> String {
     format!("{county}-{sector}-{family}")
 }
-fn error() -> MichiganDefinesErrorV1 {
-    MichiganDefinesErrorV1::Material(MichiganMaterialErrorV1::ContentReference)
+fn error() -> MichiganDefinesError {
+    MichiganDefinesError::Material(MichiganMaterialError::ContentReference)
 }
-fn role(value: &str) -> Result<MichiganSiteRoleV2, MichiganDefinesErrorV1> {
+fn role(value: &str) -> Result<MichiganSiteRole, MichiganDefinesError> {
     match value {
-        "producer" => Ok(MichiganSiteRoleV2::Production),
-        "wholesaler" => Ok(MichiganSiteRoleV2::Wholesale),
-        "retailer" => Ok(MichiganSiteRoleV2::Retail),
+        "producer" => Ok(MichiganSiteRole::Production),
+        "wholesaler" => Ok(MichiganSiteRole::Wholesale),
+        "retailer" => Ok(MichiganSiteRole::Retail),
         _ => Err(error()),
     }
 }
-fn load_roster() -> Result<Roster, MichiganDefinesErrorV1> {
+fn load_roster() -> Result<Roster, MichiganDefinesError> {
     if crate::michigan_economy::digest_hex(&sha256_of(ROSTER)) != ROSTER_SHA256 {
         return Err(error());
     }
@@ -171,7 +170,7 @@ fn load_roster() -> Result<Roster, MichiganDefinesErrorV1> {
         || r.source_manifest_sha256.len() != 64
         || r.sector_context.path
             != "src/babylon/data/reference/economy/qcew_county_sectors_mi_2024.csv.gz"
-        || r.sector_context.sha256 != crate::michigan_sectors::QCEW_SECTORS_ARTIFACT_SHA256_V1
+        || r.sector_context.sha256 != crate::michigan_sectors::QCEW_SECTORS_ARTIFACT_SHA256
         || r.excluded_cohorts.len() != 5
         || r.excluded_cohorts.iter().any(|e| {
             e.sector_code != "21"
@@ -189,13 +188,13 @@ fn load_roster() -> Result<Roster, MichiganDefinesErrorV1> {
 pub(super) fn compile(
     text: &str,
     bytes: &[u8],
-    physical: MichiganPhysicalNetworkV2,
-    interventions: Vec<MichiganInterventionV2>,
-) -> Result<MichiganMaterialCatalogV1, MichiganDefinesErrorV1> {
-    if bytes.len() > MAX_MICHIGAN_CAPTURED_CONTENT_BYTES_V2 {
+    physical: MichiganPhysicalNetwork,
+    interventions: Vec<MichiganIntervention>,
+) -> Result<MichiganMaterialCatalog, MichiganDefinesError> {
+    if bytes.len() > MAX_MICHIGAN_CAPTURED_CONTENT_BYTES {
         return Err(error());
     }
-    let defines = MichiganDefinesV3::parse(text)?;
+    let defines = MichiganDefines::parse(text)?;
     let qualification: Qualification = serde_json::from_slice(bytes).map_err(|_| error())?;
     if qualification.schema != "MichiganCommodityCircuitV1"
         || qualification.evidence_class != "Designed"
@@ -214,7 +213,7 @@ pub(super) fn compile(
     append_owners(&mut c, &defines, &qualification, &roster)?;
     append_industry(&mut c, roster, &qualification.owners)?;
     for (name, g) in &defines.commodity {
-        c.goods.push(MichiganMaterialGoodV1 {
+        c.goods.push(MichiganMaterialGood {
             key: name.clone(),
             label: name.replace('_', " "),
             unit_key: match g.unit {
@@ -227,7 +226,7 @@ pub(super) fn compile(
     }
     append_processes(&mut c, &defines, &qualification)?;
     for group in &physical.capacity_groups {
-        c.corridors.push(MichiganMaterialCorridorV1 {
+        c.corridors.push(MichiganMaterialCorridor {
             key: group.key.clone(),
             label: group.label.clone(),
             capacity_grams_per_period: defines.transport.road_capacity_grams_per_period,
@@ -236,20 +235,20 @@ pub(super) fn compile(
     append_routes(&mut c, &defines, &qualification.orders, &physical)?;
     append_merchants_and_final_demand(&mut c, &defines, &qualification.retail_final_demands)?;
     c.physical_network = Some(physical);
-    MichiganMaterialCatalogV1::from_normalized(
+    MichiganMaterialCatalog::from_normalized(
         defines,
         c,
-        MichiganDeliveryPresetV1::StatewideBaseline,
+        MichiganDeliveryPreset::StatewideBaseline,
         interventions,
     )
 }
 
 fn append_owners(
-    c: &mut MichiganNormalizedContentV2,
-    defines: &MichiganDefinesV3,
+    c: &mut MichiganNormalizedContent,
+    defines: &MichiganDefines,
     qualification: &Qualification,
     roster: &Roster,
-) -> Result<(), MichiganDefinesErrorV1> {
+) -> Result<(), MichiganDefinesError> {
     if qualification.owners.len() != roster.actors.len() {
         return Err(error());
     }
@@ -291,13 +290,13 @@ fn append_owners(
 }
 
 fn append_owner_material(
-    c: &mut MichiganNormalizedContentV2,
-    defines: &MichiganDefinesV3,
+    c: &mut MichiganNormalizedContent,
+    defines: &MichiganDefines,
     qualification: &Qualification,
     roster: &Roster,
     owner: &Owner,
     source: &Source,
-) -> Result<(), MichiganDefinesErrorV1> {
+) -> Result<(), MichiganDefinesError> {
     let industry = if let Some(family) = &owner.primary_family {
         qualification
             .processes
@@ -328,7 +327,7 @@ fn append_owner_material(
             .ok_or_else(error)?
     };
     let site = site_key(&owner.county_geoid, &owner.sector_code);
-    c.sites.push(MichiganMaterialSiteV1 {
+    c.sites.push(MichiganMaterialSite {
         key: site.clone(),
         label: format!(
             "{} · {}",
@@ -357,7 +356,7 @@ fn append_owner_material(
             defines.merchant.reserve_people,
         )
     };
-    c.staffing.pools.push(MichiganWorkforceSeedV1 {
+    c.staffing.pools.push(MichiganWorkforceSeed {
         key: site.clone(),
         site_key: site,
         process_keys: Vec::new(),
@@ -373,10 +372,10 @@ fn append_owner_material(
 }
 
 fn append_industry(
-    c: &mut MichiganNormalizedContentV2,
+    c: &mut MichiganNormalizedContent,
     roster: Roster,
     owners: &[Owner],
-) -> Result<(), MichiganDefinesErrorV1> {
+) -> Result<(), MichiganDefinesError> {
     let seen: BTreeSet<_> = owners
         .iter()
         .map(|owner| (&owner.county_geoid, &owner.sector_code))
@@ -390,7 +389,7 @@ fn append_industry(
             .iter()
             .find(|s| s.county_geoid == r.county_geoid)
             .ok_or_else(error)?;
-        c.industry.push(MichiganIndustryBaselineRowV1 {
+        c.industry.push(MichiganIndustryBaselineRow {
             area_fips: r.county_geoid,
             area_title: source.file.clone(),
             industry_code: r.industry_code,
@@ -411,10 +410,10 @@ fn append_industry(
 }
 
 fn append_processes(
-    c: &mut MichiganNormalizedContentV2,
-    defines: &MichiganDefinesV3,
+    c: &mut MichiganNormalizedContent,
+    defines: &MichiganDefines,
     qualification: &Qualification,
-) -> Result<(), MichiganDefinesErrorV1> {
+) -> Result<(), MichiganDefinesError> {
     for p in &qualification.processes {
         let owner = qualification
             .owners
@@ -435,14 +434,14 @@ fn append_processes(
             .batches_per_week
             .checked_mul(babylon_kernel::clock::WEEKS_PER_TICK)
             .ok_or_else(error)?;
-        c.processes.push(MichiganMaterialProcessV1 {
+        c.processes.push(MichiganMaterialProcess {
             key: key.clone(),
             site_key: site.clone(),
             industry_code: p.source_industry_code.clone(),
             inputs: t
                 .input_units_per_batch
                 .iter()
-                .map(|(good, n)| MichiganMaterialInputV2 {
+                .map(|(good, n)| MichiganMaterialInput {
                     good_key: good.clone(),
                     quantity_per_batch: *n,
                     opening_quantity: t.opening_input_units[good],
@@ -467,11 +466,11 @@ fn append_processes(
 }
 
 fn append_routes(
-    c: &mut MichiganNormalizedContentV2,
-    defines: &MichiganDefinesV3,
+    c: &mut MichiganNormalizedContent,
+    defines: &MichiganDefines,
     orders: &[Order],
-    physical: &MichiganPhysicalNetworkV2,
-) -> Result<(), MichiganDefinesErrorV1> {
+    physical: &MichiganPhysicalNetwork,
+) -> Result<(), MichiganDefinesError> {
     for order in orders {
         let supplier = site_key(&order.supplier_county_geoid, &order.supplier_sector_code);
         let buyer = site_key(&order.buyer_county_geoid, &order.buyer_sector_code);
@@ -513,10 +512,10 @@ fn append_routes(
             if order.distance_mm != 0 || !order.edge_ids.is_empty() {
                 return Err(error());
             }
-            MichiganMaterialPathV2::Local
+            MichiganMaterialPath::Local
         } else {
             let keys: BTreeSet<_> = order.edge_ids.iter().collect();
-            MichiganMaterialPathV2::Routed {
+            MichiganMaterialPath::Routed {
                 travel_periods: defines.transport.road_travel_periods,
                 capacity_keys: physical
                     .capacity_groups
@@ -528,7 +527,7 @@ fn append_routes(
                 distance_mm: Some(order.distance_mm),
             }
         };
-        c.routes.push(MichiganMaterialRouteV1 {
+        c.routes.push(MichiganMaterialRoute {
             key: format!("{supplier}:{buyer}:{}", order.good),
             supplier_site_key: supplier,
             buyer_site_key: buyer,
@@ -542,10 +541,10 @@ fn append_routes(
 }
 
 fn append_merchants_and_final_demand(
-    c: &mut MichiganNormalizedContentV2,
-    defines: &MichiganDefinesV3,
+    c: &mut MichiganNormalizedContent,
+    defines: &MichiganDefines,
     demands: &[Demand],
-) -> Result<(), MichiganDefinesErrorV1> {
+) -> Result<(), MichiganDefinesError> {
     for d in demands {
         if !c
             .goods
@@ -554,7 +553,7 @@ fn append_merchants_and_final_demand(
         {
             return Err(error());
         }
-        c.final_demands.push(MichiganFinalDemandV2 {
+        c.final_demands.push(MichiganFinalDemand {
             key: format!("{}:{}:{}", d.county_geoid, d.sector_code, d.good),
             retailer_site_key: site_key(&d.county_geoid, &d.sector_code),
             county_geoid: d.county_geoid.clone(),
@@ -565,7 +564,7 @@ fn append_merchants_and_final_demand(
     for site in c
         .sites
         .iter()
-        .filter(|s| s.role != MichiganSiteRoleV2::Production)
+        .filter(|s| s.role != MichiganSiteRole::Production)
     {
         let capacity_key = format!("handling-{}", site.key);
         let good_keys: BTreeSet<_> = c
@@ -591,13 +590,13 @@ fn append_merchants_and_final_demand(
                     },
                 ))
             })
-            .collect::<Result<BTreeMap<_, _>, MichiganDefinesErrorV1>>()?;
-        c.corridors.push(MichiganMaterialCorridorV1 {
+            .collect::<Result<BTreeMap<_, _>, MichiganDefinesError>>()?;
+        c.corridors.push(MichiganMaterialCorridor {
             key: capacity_key.clone(),
             label: format!("{} handling", site.label),
             capacity_grams_per_period: defines.merchant.handling_grams_per_period,
         });
-        c.merchants.push(MichiganMerchantV2 {
+        c.merchants.push(MichiganMerchant {
             site_key: site.key.clone(),
             capacity_key,
             handling_hours_per_unit,

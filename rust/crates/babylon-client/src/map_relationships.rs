@@ -3,7 +3,9 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use babylon_persistence::{ProductionPhysicalEdgeV2, ProductionSnapshotV2};
+use babylon_persistence::{
+    production_observation::ProductionPhysicalEdge, production_observation::ProductionSnapshot,
+};
 use bevy::asset::RenderAssetUsages;
 use bevy::ecs::system::SystemParam;
 use bevy::mesh::PrimitiveTopology;
@@ -72,7 +74,7 @@ struct RoadSegment([[i64; 2]; 2]);
 type RoadSegments = BTreeMap<RoadSegment, [Vec3; 2]>;
 
 fn projected_segments<'a>(
-    edges: impl IntoIterator<Item = &'a ProductionPhysicalEdgeV2>,
+    edges: impl IntoIterator<Item = &'a ProductionPhysicalEdge>,
     origin: Vec2,
 ) -> Option<RoadSegments> {
     let mut segments = BTreeSet::new();
@@ -107,7 +109,7 @@ fn projected_segments<'a>(
 fn disclosed_snapshot<'a>(
     frame: &'a ObserverFrame,
     session: &ObserverSession,
-) -> Option<&'a ProductionSnapshotV2> {
+) -> Option<&'a ProductionSnapshot> {
     if crate::observer_controls::inspection_availability(session)
         != crate::observer_controls::ControlAvailability::Enabled
     {
@@ -116,15 +118,16 @@ fn disclosed_snapshot<'a>(
     frame
         .for_session(session)
         .filter(|frame| {
-            frame.visibility == babylon_persistence::ObserverVisibilityV1::FullObserver
+            frame.visibility
+                == babylon_persistence::observer_reader::ObserverVisibility::FullObserver
         })?
         .production
         .as_ref()
 }
 
 fn physical_index(
-    snapshot: &ProductionSnapshotV2,
-) -> Option<BTreeMap<&str, &ProductionPhysicalEdgeV2>> {
+    snapshot: &ProductionSnapshot,
+) -> Option<BTreeMap<&str, &ProductionPhysicalEdge>> {
     let mut edges = BTreeMap::new();
     for edge in &snapshot.physical_edges {
         if edges.insert(edge.id.as_str(), edge).is_some() {
@@ -198,35 +201,20 @@ struct RelationshipProjection {
     available: bool,
 }
 
-fn declared_relations(snapshot: &ProductionSnapshotV2) -> BTreeMap<RelationKey, (String, String)> {
-    let mut relations = BTreeMap::new();
-    for buyer in &snapshot.sites {
-        for input in buyer.processes.iter().flat_map(|process| &process.inputs) {
-            for supplier in &input.supplier_site_ids {
-                relations.insert(
-                    RelationKey {
-                        supplier: supplier.clone(),
-                        buyer: buyer.id.clone(),
-                        good: input.good_id.clone(),
-                        unit: input.unit_id.clone(),
-                    },
-                    (input.good.clone(), input.unit.clone()),
-                );
-            }
-        }
-    }
-    for route in &snapshot.routes {
-        relations.insert(
-            RelationKey {
-                supplier: route.supplier_site_id.clone(),
-                buyer: route.buyer_site_id.clone(),
-                good: route.good_id.clone(),
-                unit: route.unit_id.clone(),
-            },
-            (route.good.clone(), route.unit.clone()),
-        );
-    }
-    relations
+fn declared_relations(snapshot: &ProductionSnapshot) -> BTreeMap<RelationKey, (String, String)> {
+    crate::material_relations::declared_material_relations(snapshot)
+        .map(|relation| {
+            (
+                RelationKey {
+                    supplier: relation.supplier.to_owned(),
+                    buyer: relation.buyer.to_owned(),
+                    good: relation.good_id.to_owned(),
+                    unit: relation.unit_id.to_owned(),
+                },
+                (relation.good.to_owned(), relation.unit.to_owned()),
+            )
+        })
+        .collect()
 }
 
 fn county_label(name: &str) -> &str {
@@ -235,9 +223,9 @@ fn county_label(name: &str) -> &str {
 }
 
 fn relation_roads(
-    snapshot: &ProductionSnapshotV2,
+    snapshot: &ProductionSnapshot,
     key: &RelationKey,
-    edges: Option<&BTreeMap<&str, &ProductionPhysicalEdgeV2>>,
+    edges: Option<&BTreeMap<&str, &ProductionPhysicalEdge>>,
     origin: Vec2,
 ) -> Option<RoadSegments> {
     let ids: BTreeSet<_> = snapshot
@@ -979,8 +967,9 @@ mod tests {
     use super::*;
     use crate::observer::Perspective;
     use babylon_persistence::{
-        CampaignId, ObserverEconomySnapshotV1, ObserverVisibilityV1, ProductionInputV1,
-        ProductionSiteV2,
+        identity::CampaignId, observer_reader::ObserverEconomySnapshot,
+        observer_reader::ObserverVisibility, production_observation::ProductionInput,
+        production_observation::ProductionSite,
     };
 
     #[test]
@@ -1033,30 +1022,32 @@ mod tests {
         assert!(reversed.iter().all(|(from, to)| from.x > to.x));
     }
 
-    fn site(id: &str, county: &str) -> ProductionSiteV2 {
-        ProductionSiteV2 {
+    fn site(id: &str, county: &str) -> ProductionSite {
+        ProductionSite {
             id: id.into(),
             county_geoid: county.into(),
             name: format!("{id} county cohort"),
             industry_code: "331".into(),
             observed_employment: None,
             inventory: Vec::new(),
-            role: babylon_persistence::ProductionSiteRoleV2::Production,
+            role: babylon_persistence::production_observation::ProductionSiteRole::Production,
             sector_code: "31-33".into(),
-            processes: vec![babylon_persistence::ProductionProcessV2 {
-                id: "fixture-process".into(),
-                name: "Fixture process".into(),
-                output_good_id: "steel".into(),
-                output_unit_id: "kg".into(),
-                output_good: "steel".into(),
-                output_unit: "kg".into(),
-                output_per_batch: 1,
-                available_batches: 0,
-                planned_batches: None,
-                produced_batches: None,
-                inputs: Vec::new(),
-                labor: Vec::new(),
-            }],
+            processes: vec![
+                babylon_persistence::production_observation::ProductionProcess {
+                    id: "fixture-process".into(),
+                    name: "Fixture process".into(),
+                    output_good_id: "steel".into(),
+                    output_unit_id: "kg".into(),
+                    output_good: "steel".into(),
+                    output_unit: "kg".into(),
+                    output_per_batch: 1,
+                    available_batches: 0,
+                    planned_batches: None,
+                    produced_batches: None,
+                    inputs: Vec::new(),
+                    labor: Vec::new(),
+                },
+            ],
         }
     }
 
@@ -1067,7 +1058,7 @@ mod tests {
         let supplier = site("a", "26163");
         let mut buyer = site("b", "26099");
         for (good, unit) in [("steel", "kg"), ("ore", "tonne")] {
-            buyer.processes[0].inputs.push(ProductionInputV1 {
+            buyer.processes[0].inputs.push(ProductionInput {
                 good_id: good.into(),
                 unit_id: unit.into(),
                 good: good.into(),
@@ -1077,16 +1068,16 @@ mod tests {
                 supplier_site_ids: vec![supplier.id.clone()],
             });
         }
-        let frame = ObserverFrame(Some(ObserverEconomySnapshotV1 {
+        let frame = ObserverFrame(Some(ObserverEconomySnapshot {
             campaign_id: session.campaign.as_uuid().to_string(),
             resolve_tick: 3,
             foundation_digest: "foundation".into(),
             nominal_world_hash: None,
             tick_content_hash: Some("committed".into()),
             envelope_digest: None,
-            visibility: ObserverVisibilityV1::FullObserver,
+            visibility: ObserverVisibility::FullObserver,
             counties: Vec::new(),
-            production: Some(ProductionSnapshotV2 {
+            production: Some(ProductionSnapshot {
                 content_authority_sha256: "a".repeat(64),
                 road_source: None,
                 physical_edges: Vec::new(),
@@ -1195,16 +1186,18 @@ mod tests {
     #[test]
     fn selected_physical_path_uses_captured_edges_and_exact_material_identity() {
         use babylon_persistence::{
-            ProductionPhysicalEdgeV2, ProductionRouteTransportV2, ProductionRouteV2,
+            production_observation::ProductionPhysicalEdge,
+            production_observation::ProductionRoute,
+            production_observation::ProductionRouteTransport,
         };
         let (session, mut frame, anchors) = fixture();
         let snapshot = frame.0.as_mut().unwrap().production.as_mut().unwrap();
-        snapshot.physical_edges = vec![ProductionPhysicalEdgeV2 {
+        snapshot.physical_edges = vec![ProductionPhysicalEdge {
             id: "road".into(),
             shape_e7: vec![[-830_000_000, 423_000_000], [-829_900_000, 423_100_000]],
             distance_mm: 1_500_000,
         }];
-        snapshot.routes = vec![ProductionRouteV2 {
+        snapshot.routes = vec![ProductionRoute {
             id: "supply-road".into(),
             supplier_site_id: "a".into(),
             buyer_site_id: "b".into(),
@@ -1213,7 +1206,7 @@ mod tests {
             good: "steel".into(),
             unit: "kg".into(),
             travel_periods: 1,
-            transport_kind: ProductionRouteTransportV2::Staged,
+            transport_kind: ProductionRouteTransport::Staged,
             physical_edge_ids: vec!["road".into(), "road".into()],
             distance_mm: Some(3_000_000),
             stages: Vec::new(),
@@ -1308,7 +1301,7 @@ mod tests {
             ("overlap", points[1..3].to_vec()),
             ("branch", vec![points[2], [-829_500_000, 423_200_000]]),
         ] {
-            snapshot.physical_edges.push(ProductionPhysicalEdgeV2 {
+            snapshot.physical_edges.push(ProductionPhysicalEdge {
                 id: id.into(),
                 shape_e7: shape,
                 distance_mm: 1_000_000,
@@ -1497,7 +1490,7 @@ mod tests {
                         .0
                         .as_mut()
                         .unwrap()
-                        .visibility = ObserverVisibilityV1::KnownPreview;
+                        .visibility = ObserverVisibility::KnownPreview;
                 }
                 "period" => {
                     app.world_mut()
@@ -1661,7 +1654,7 @@ mod tests {
         frame.0.as_mut().unwrap().resolve_tick = 3;
         session.set_perspective(Perspective::PlayerKnowledge);
         assert!(!project(&frame, &session, Some(1), &anchors, Some("a"), None).available);
-        frame.0.as_mut().unwrap().visibility = ObserverVisibilityV1::KnownPreview;
+        frame.0.as_mut().unwrap().visibility = ObserverVisibility::KnownPreview;
         frame.0.as_mut().unwrap().production = None;
         assert!(!project(&frame, &session, Some(1), &anchors, Some("a"), None).available);
         assert_eq!(

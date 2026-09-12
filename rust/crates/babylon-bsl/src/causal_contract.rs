@@ -1040,16 +1040,10 @@ pub(crate) fn canonical_event_type(event_type: &str) -> Result<String, ContractE
 
 fn write_effect(write: &Write) -> EffectSignature {
     match write {
-        Write::NodeAdded { .. } => EffectSignature::Shape(ShapeVerb::AddNode),
-        Write::NodeRemoved { .. } => EffectSignature::Shape(ShapeVerb::RemoveNode),
         Write::NodeAttribute { field, .. } | Write::NodeCurrencyAttribute { field, .. } => {
             EffectSignature::NodeField(field.clone())
         }
         Write::EdgeAttribute { field, .. } => EffectSignature::EdgeField(field.clone()),
-        Write::EdgeAdded { .. } => EffectSignature::Shape(ShapeVerb::AddEdge),
-        Write::EdgeRemoved { .. } => EffectSignature::Shape(ShapeVerb::RemoveEdge),
-        Write::HyperedgeAdded { .. } => EffectSignature::Shape(ShapeVerb::AddHyperedge),
-        Write::HyperedgeRemoved { .. } => EffectSignature::Shape(ShapeVerb::RemoveHyperedge),
         Write::HyperedgeAttribute { field, .. } => EffectSignature::HyperedgeField(field.clone()),
     }
 }
@@ -1734,7 +1728,12 @@ mod tests {
         let record = WriteRecord {
             rule: contract.rule_id.clone(),
             ordinal: 1,
-            write: Write::NodeRemoved { id: NodeId(42) },
+            write: Write::NodeAttribute {
+                id: NodeId(42),
+                field: "social-class/agitation".to_owned(),
+                previous: None,
+                value: 0.5,
+            },
         };
         assert_eq!(
             reduce_audit_receipts(&contract, &[], &[record]).unwrap_err(),
@@ -1755,7 +1754,12 @@ mod tests {
         let record = WriteRecord {
             rule: "demo/other".to_owned(),
             ordinal: 0,
-            write: Write::NodeRemoved { id: NodeId(42) },
+            write: Write::NodeAttribute {
+                id: NodeId(42),
+                field: "social-class/agitation".to_owned(),
+                previous: None,
+                value: 0.5,
+            },
         };
         assert_eq!(
             reduce_audit_receipts(&contract, &[], &[record]).unwrap_err(),

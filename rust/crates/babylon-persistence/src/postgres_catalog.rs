@@ -5,9 +5,9 @@ use std::net::IpAddr;
 use std::time::Duration;
 
 use postgres::config::Host;
-use postgres::{Config, IsolationLevel, Row, Transaction};
+use postgres::{Config, Row};
 
-use crate::{PostgresDiagnosticV1, SCHEMA_ADVISORY_LOCK_KEY};
+use crate::{PostgresDiagnostic, SCHEMA_ADVISORY_LOCK_KEY};
 
 /// Version of the canonical catalog census contract.
 pub const CATALOG_CENSUS_VERSION: u16 = 2;
@@ -45,20 +45,6 @@ const MAX_ERROR_SOURCE_DEPTH: usize = 8;
 const CATALOG_CENSUS_SQL: &str = include_str!("postgres_catalog.sql");
 const LOCK_SQL: &str = "SELECT pg_catalog.pg_try_advisory_lock($1)";
 const UNLOCK_SQL: &str = "SELECT pg_catalog.pg_advisory_unlock($1)";
-const TRANSACTION_SETTINGS_SQL: &str = "SELECT \
-    pg_catalog.current_setting('transaction_isolation'), \
-    pg_catalog.current_setting('transaction_read_only'), \
-    pg_catalog.current_setting('search_path'), \
-    pg_catalog.current_setting('jit'), \
-    pg_catalog.current_setting('event_triggers'), \
-    pg_catalog.current_setting('statement_timeout'), \
-    pg_catalog.current_setting('lock_timeout'), \
-    pg_catalog.current_setting('idle_in_transaction_session_timeout'), \
-    pg_catalog.current_setting('quote_all_identifiers')";
-const AUTHORITY_SCHEMAS_SQL: &str = "SELECT n.nspname::text \
-    FROM pg_catalog.pg_namespace AS n \
-    WHERE n.nspname IN ('babylon_ref', 'babylon_state') \
-    ORDER BY n.nspname LIMIT 3";
 /// Census object class.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum CatalogObjectKind {
@@ -145,16 +131,8 @@ pub enum CatalogCensusParseError {
 pub enum CatalogOperation {
     /// Acquire the schema advisory lock.
     Lock,
-    /// Start the verification transaction.
-    BeginTransaction,
-    /// Verify internal transaction settings.
-    VerifyTransaction,
-    /// Inspect future authority schemas.
-    AuthoritySchemas,
     /// Read the catalog census.
     Census,
-    /// Explicitly roll back the verification transaction.
-    Rollback,
     /// Release the schema advisory lock.
     Unlock,
 }
@@ -181,8 +159,6 @@ pub enum ConnectionTargetRejection {
 /// Fixed resources protected by public bounds.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CatalogBoundedResource {
-    /// Authority schema names.
-    AuthoritySchemas,
     /// Census rows.
     CensusRows,
     /// Ordinary bounded catalog candidate or subordinate rows.
@@ -212,22 +188,15 @@ pub enum CatalogError {
     /// A bounded database operation timed out.
     Timeout {
         operation: CatalogOperation,
-        diagnostic: PostgresDiagnosticV1,
+        diagnostic: PostgresDiagnostic,
     },
     /// A read query failed.
     Query {
         operation: CatalogOperation,
-        diagnostic: PostgresDiagnosticV1,
-    },
-    /// A transaction operation failed or its mode was not exact.
-    Transaction {
-        operation: CatalogOperation,
-        diagnostic: Option<PostgresDiagnosticV1>,
+        diagnostic: PostgresDiagnostic,
     },
     /// The exact schema lock was already held.
     LockUnavailable,
-    /// A future Rust-authority schema already exists.
-    UnsupportedAuthorityEpoch { schemas: Vec<Box<str>> },
     /// The same actual census key appeared more than once.
     DuplicateCensusObject { key: CatalogObjectKey },
     /// Expected object signatures did not match.
@@ -249,27 +218,11 @@ pub enum CatalogError {
         actual: usize,
         max: usize,
     },
-    /// Rollback or unlock cleanup failed after otherwise successful verification.
+    /// Releasing the schema advisory lock failed.
     Cleanup {
         operation: CatalogOperation,
-        diagnostic: Option<PostgresDiagnosticV1>,
+        diagnostic: Option<PostgresDiagnostic>,
     },
-    /// Verification failed and one or both bounded cleanup operations also failed.
-    VerificationAndCleanup {
-        /// Primary refusal/failure, preserved without replacement.
-        primary: Box<CatalogError>,
-        /// Ordered rollback/unlock failures; at most two entries.
-        cleanup: Vec<CatalogCleanupFailure>,
-    },
-}
-
-/// One bounded cleanup failure retained alongside the primary catalog failure.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CatalogCleanupFailure {
-    /// Exact rollback or unlock phase that failed.
-    pub operation: CatalogOperation,
-    /// Secret-safe `PostgreSQL` cause when the client supplied one.
-    pub diagnostic: Option<PostgresDiagnosticV1>,
 }
 
 impl CatalogObjectKey {
@@ -490,89 +443,8 @@ pub fn validate_connection_target(config: &Config) -> Result<(), CatalogError> {
     }
 }
 
-pub(crate) fn catalog_census_under_lock(
-    client: &mut postgres::Client,
-    require_authority_schemas_absent: bool,
-) -> Result<Vec<CatalogCensusEntry>, CatalogError> {
-    let mut transaction = client
-        .build_transaction()
-        .isolation_level(IsolationLevel::RepeatableRead)
-        .read_only(true)
-        .start()
-        .map_err(|error| transaction_error(&error, CatalogOperation::BeginTransaction))?;
-    let census = catalog_census_transaction(&mut transaction, require_authority_schemas_absent);
-    let rollback = transaction
-        .rollback()
-        .map_err(|error| CatalogError::Cleanup {
-            operation: CatalogOperation::Rollback,
-            diagnostic: Some(PostgresDiagnosticV1::capture(&error)),
-        });
-    preserve_primary(census, rollback)
-}
-
-fn catalog_census_transaction(
-    transaction: &mut Transaction<'_>,
-    require_authority_schemas_absent: bool,
-) -> Result<Vec<CatalogCensusEntry>, CatalogError> {
-    verify_transaction_settings(transaction)?;
-    if require_authority_schemas_absent {
-        refuse_authority_schemas(transaction)?;
-    }
-    read_census_rows(transaction)
-}
-
-fn verify_transaction_settings(transaction: &mut Transaction<'_>) -> Result<(), CatalogError> {
-    let operation = CatalogOperation::VerifyTransaction;
-    let row = transaction
-        .query_one(TRANSACTION_SETTINGS_SQL, &[])
-        .map_err(|error| query_error(&error, operation))?;
-    let isolation = try_text(&row, 0, operation)?;
-    let read_only = try_text(&row, 1, operation)?;
-    let search_path = try_text(&row, 2, operation)?;
-    let jit = try_text(&row, 3, operation)?;
-    let event_triggers = try_text(&row, 4, operation)?;
-    let statement_timeout = try_text(&row, 5, operation)?;
-    let lock_timeout = try_text(&row, 6, operation)?;
-    let idle_timeout = try_text(&row, 7, operation)?;
-    let quote_all_identifiers = try_text(&row, 8, operation)?;
-    if isolation == "repeatable read"
-        && read_only == "on"
-        && search_path == "pg_catalog"
-        && jit == "off"
-        && event_triggers == "off"
-        && statement_timeout == "5s"
-        && lock_timeout == "5s"
-        && idle_timeout == "5s"
-        && quote_all_identifiers == "off"
-    {
-        Ok(())
-    } else {
-        Err(CatalogError::Transaction {
-            operation,
-            diagnostic: None,
-        })
-    }
-}
-
-fn refuse_authority_schemas(transaction: &mut Transaction<'_>) -> Result<(), CatalogError> {
-    let operation = CatalogOperation::AuthoritySchemas;
-    let rows = transaction
-        .query(AUTHORITY_SCHEMAS_SQL, &[])
-        .map_err(|error| query_error(&error, operation))?;
-    check_row_bound(CatalogBoundedResource::AuthoritySchemas, rows.len(), 2)?;
-    let mut schemas = Vec::with_capacity(rows.len());
-    for row in rows.iter().take(2) {
-        schemas.push(try_text(row, 0, operation)?.into_boxed_str());
-    }
-    if schemas.is_empty() {
-        Ok(())
-    } else {
-        Err(CatalogError::UnsupportedAuthorityEpoch { schemas })
-    }
-}
-
 pub(crate) fn read_census_rows(
-    transaction: &mut Transaction<'_>,
+    transaction: &mut impl postgres::GenericClient,
 ) -> Result<Vec<CatalogCensusEntry>, CatalogError> {
     let operation = CatalogOperation::Census;
     let row_limit = bounded_limit(MAX_CATALOG_CENSUS_ROWS, CatalogBoundedResource::CensusRows)?;
@@ -688,11 +560,11 @@ pub(crate) fn release_lock(client: &mut postgres::Client) -> Result<(), CatalogE
         .query_one(UNLOCK_SQL, &[&SCHEMA_ADVISORY_LOCK_KEY])
         .map_err(|error| CatalogError::Cleanup {
             operation,
-            diagnostic: Some(PostgresDiagnosticV1::capture(&error)),
+            diagnostic: Some(PostgresDiagnostic::capture(&error)),
         })?;
     let unlocked: bool = row.try_get(0).map_err(|error| CatalogError::Cleanup {
         operation,
-        diagnostic: Some(PostgresDiagnosticV1::capture(&error)),
+        diagnostic: Some(PostgresDiagnostic::capture(&error)),
     })?;
     if unlocked {
         Ok(())
@@ -701,51 +573,6 @@ pub(crate) fn release_lock(client: &mut postgres::Client) -> Result<(), CatalogE
             operation,
             diagnostic: None,
         })
-    }
-}
-
-pub(crate) fn preserve_primary<T>(
-    primary: Result<T, CatalogError>,
-    cleanup: Result<(), CatalogError>,
-) -> Result<T, CatalogError> {
-    match (primary, cleanup) {
-        (Ok(value), Ok(())) => Ok(value),
-        (Ok(_), Err(cleanup_error)) => Err(cleanup_error),
-        (Err(primary_error), Ok(())) => Err(primary_error),
-        (Err(primary_error), Err(cleanup_error)) => {
-            Err(combine_primary_cleanup(primary_error, &cleanup_error))
-        }
-    }
-}
-
-fn combine_primary_cleanup(primary: CatalogError, cleanup_error: &CatalogError) -> CatalogError {
-    let CatalogError::Cleanup {
-        operation,
-        diagnostic,
-    } = cleanup_error
-    else {
-        return primary;
-    };
-    let cleanup_failure = CatalogCleanupFailure {
-        operation: *operation,
-        diagnostic: diagnostic.clone(),
-    };
-    if let CatalogError::VerificationAndCleanup {
-        primary,
-        cleanup: prior_cleanup,
-    } = primary
-    {
-        let mut cleanup = Vec::with_capacity(2);
-        cleanup.extend(prior_cleanup.into_iter().take(2));
-        if cleanup.len() < 2 {
-            cleanup.push(cleanup_failure);
-        }
-        CatalogError::VerificationAndCleanup { primary, cleanup }
-    } else {
-        CatalogError::VerificationAndCleanup {
-            primary: Box::new(primary),
-            cleanup: vec![cleanup_failure],
-        }
     }
 }
 
@@ -911,23 +738,8 @@ fn try_text(row: &Row, index: usize, operation: CatalogOperation) -> Result<Stri
         .map_err(|_| CatalogError::Decode { operation })
 }
 
-fn transaction_error(error: &postgres::Error, operation: CatalogOperation) -> CatalogError {
-    let diagnostic = PostgresDiagnosticV1::capture(error);
-    if is_timeout(error) {
-        CatalogError::Timeout {
-            operation,
-            diagnostic,
-        }
-    } else {
-        CatalogError::Transaction {
-            operation,
-            diagnostic: Some(diagnostic),
-        }
-    }
-}
-
 fn query_error(error: &postgres::Error, operation: CatalogOperation) -> CatalogError {
-    let diagnostic = PostgresDiagnosticV1::capture(error);
+    let diagnostic = PostgresDiagnostic::capture(error);
     if is_timeout(error) {
         CatalogError::Timeout {
             operation,
@@ -1039,29 +851,10 @@ impl std::error::Error for CatalogError {}
 
 #[cfg(test)]
 mod tests {
-    use std::time::Duration;
-
-    use postgres::{Config, NoTls};
-
-    use crate::PostgresDiagnosticV1;
-
     use super::{
-        check_row_bound, error_chain_has_timeout, preserve_primary, CatalogBoundedResource,
-        CatalogCleanupFailure, CatalogError, CatalogOperation,
+        check_row_bound, error_chain_has_timeout, CatalogBoundedResource, CatalogError,
         MAX_CATALOG_EXTENSION_DEPENDENCY_ADDRESSES,
     };
-
-    fn unreachable_diagnostic() -> PostgresDiagnosticV1 {
-        let mut config = Config::new();
-        config
-            .host("127.0.0.1")
-            .port(1)
-            .connect_timeout(Duration::from_millis(100));
-        let Err(error) = config.connect(NoTls) else {
-            panic!("the reserved local endpoint must refuse the test connection");
-        };
-        PostgresDiagnosticV1::capture(&error)
-    }
 
     #[test]
     fn extension_dependency_address_bound_refuses_first_excess() {
@@ -1077,82 +870,6 @@ mod tests {
                 resource: CatalogBoundedResource::ExtensionDependencyAddresses,
                 actual,
                 max: MAX_CATALOG_EXTENSION_DEPENDENCY_ADDRESSES,
-            })
-        );
-    }
-
-    #[test]
-    fn primary_verification_failure_preserves_bounded_cleanup_evidence() {
-        let primary = CatalogError::Decode {
-            operation: CatalogOperation::Census,
-        };
-        let cleanup = CatalogError::Cleanup {
-            operation: CatalogOperation::Rollback,
-            diagnostic: None,
-        };
-        assert_eq!(
-            preserve_primary::<()>(Err(primary.clone()), Err(cleanup)),
-            Err(CatalogError::VerificationAndCleanup {
-                primary: Box::new(primary),
-                cleanup: vec![CatalogCleanupFailure {
-                    operation: CatalogOperation::Rollback,
-                    diagnostic: None,
-                }],
-            })
-        );
-    }
-
-    #[test]
-    fn rollback_and_unlock_failures_are_bounded_and_ordered() {
-        let primary = CatalogError::Decode {
-            operation: CatalogOperation::Census,
-        };
-        let rollback = CatalogError::Cleanup {
-            operation: CatalogOperation::Rollback,
-            diagnostic: None,
-        };
-        let unlock = CatalogError::Cleanup {
-            operation: CatalogOperation::Unlock,
-            diagnostic: None,
-        };
-        let after_rollback = preserve_primary::<()>(Err(primary.clone()), Err(rollback));
-        assert_eq!(
-            preserve_primary::<()>(after_rollback, Err(unlock)),
-            Err(CatalogError::VerificationAndCleanup {
-                primary: Box::new(primary),
-                cleanup: vec![
-                    CatalogCleanupFailure {
-                        operation: CatalogOperation::Rollback,
-                        diagnostic: None,
-                    },
-                    CatalogCleanupFailure {
-                        operation: CatalogOperation::Unlock,
-                        diagnostic: None,
-                    },
-                ],
-            })
-        );
-    }
-
-    #[test]
-    fn primary_failure_preserves_the_cleanup_postgres_diagnostic() {
-        let primary = CatalogError::Decode {
-            operation: CatalogOperation::Census,
-        };
-        let diagnostic = unreachable_diagnostic();
-        let cleanup = CatalogError::Cleanup {
-            operation: CatalogOperation::Rollback,
-            diagnostic: Some(diagnostic.clone()),
-        };
-
-        assert_eq!(
-            preserve_primary::<()>(Err(primary.clone()), Err(cleanup)),
-            Err(CatalogError::VerificationAndCleanup {
-                primary: Box::new(primary),
-                cleanup: vec![CatalogCleanupFailure {
-                    operation: CatalogOperation::Rollback,
-                    diagnostic: Some(diagnostic),
-                }],
             })
         );
     }

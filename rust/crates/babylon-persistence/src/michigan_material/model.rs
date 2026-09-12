@@ -1,16 +1,16 @@
 //! One normalized physical-content model for regional and statewide campaigns.
 
-use super::{identity, MichiganDeliveryPresetV1};
+use super::{identity, MichiganDeliveryPreset};
 use babylon_material_circuit::{
-    CorridorIdV2, FinalDemandPrincipalIdV3, GoodIdV1, LogisticsNodeIdV2, OrderIdV1, ProcessIdV1,
-    RouteIdV2, SiteIdV1, UnitIdV1,
+    CorridorId, FinalDemandPrincipalId, GoodId, LogisticsNodeId, OrderId, ProcessId, RouteId,
+    SiteId, UnitId,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
-pub enum MichiganSiteRoleV2 {
+pub enum MichiganSiteRole {
     Production,
     Wholesale,
     Retail,
@@ -18,75 +18,75 @@ pub enum MichiganSiteRoleV2 {
 
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
-pub struct MichiganMaterialSiteV1 {
+pub struct MichiganMaterialSite {
     pub key: String,
     pub label: String,
     pub county_geoid: String,
     pub naics: String,
     pub sector_code: String,
-    pub role: MichiganSiteRoleV2,
+    pub role: MichiganSiteRole,
 }
-impl MichiganMaterialSiteV1 {
+impl MichiganMaterialSite {
     #[must_use]
-    pub fn id(&self) -> SiteIdV1 {
-        SiteIdV1::from_bytes(identity("site", &self.key))
+    pub fn id(&self) -> SiteId {
+        SiteId::from_bytes(identity("site", &self.key))
     }
     #[must_use]
-    pub fn node_id(&self) -> LogisticsNodeIdV2 {
-        LogisticsNodeIdV2::from_bytes(identity("node", &self.key))
+    pub fn node_id(&self) -> LogisticsNodeId {
+        LogisticsNodeId::from_bytes(identity("node", &self.key))
     }
 }
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
-pub struct MichiganMaterialGoodV1 {
+pub struct MichiganMaterialGood {
     pub key: String,
     pub label: String,
     pub unit_key: String,
     pub grams_per_unit: u64,
 }
-impl MichiganMaterialGoodV1 {
+impl MichiganMaterialGood {
     #[must_use]
-    pub fn id(&self) -> GoodIdV1 {
-        GoodIdV1::from_bytes(identity("good", &self.key))
+    pub fn id(&self) -> GoodId {
+        GoodId::from_bytes(identity("good", &self.key))
     }
     #[must_use]
-    pub fn unit_id(&self) -> UnitIdV1 {
-        UnitIdV1::from_bytes(identity("unit", &self.unit_key))
+    pub fn unit_id(&self) -> UnitId {
+        UnitId::from_bytes(identity("unit", &self.unit_key))
     }
 }
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
-pub struct MichiganMaterialInputV2 {
+pub struct MichiganMaterialInput {
     pub good_key: String,
     pub quantity_per_batch: u64,
     pub opening_quantity: u64,
 }
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
-pub struct MichiganMaterialProcessV1 {
+pub struct MichiganMaterialProcess {
     pub key: String,
     pub site_key: String,
     pub industry_code: String,
-    pub inputs: Vec<MichiganMaterialInputV2>,
+    pub inputs: Vec<MichiganMaterialInput>,
     pub output_good_key: String,
     pub output_quantity_per_batch: u64,
     pub capacity_batches_per_period: u64,
     pub labor_hours_per_batch: u64,
     pub opening_planned_batches: u64,
 }
-impl MichiganMaterialProcessV1 {
+impl MichiganMaterialProcess {
     #[must_use]
-    pub fn id(&self) -> ProcessIdV1 {
-        ProcessIdV1::from_bytes(identity("process", &self.key))
+    pub fn id(&self) -> ProcessId {
+        ProcessId::from_bytes(identity("process", &self.key))
     }
     #[must_use]
-    pub fn site_id(&self) -> SiteIdV1 {
-        SiteIdV1::from_bytes(identity("site", &self.site_key))
+    pub fn site_id(&self) -> SiteId {
+        SiteId::from_bytes(identity("site", &self.site_key))
     }
 }
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
-pub struct MichiganWorkforceSeedV1 {
+pub struct MichiganWorkforceSeed {
     pub key: String,
     pub site_key: String,
     pub process_keys: Vec<String>,
@@ -95,7 +95,7 @@ pub struct MichiganWorkforceSeedV1 {
     pub reserve: u64,
     pub previous_unretained_hours: u64,
 }
-impl MichiganWorkforceSeedV1 {
+impl MichiganWorkforceSeed {
     #[must_use]
     pub fn local_name(&self) -> String {
         format!("workforce-{}", self.key)
@@ -103,18 +103,18 @@ impl MichiganWorkforceSeedV1 {
 }
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
-pub struct MichiganStaffingDesignV1 {
+pub struct MichiganStaffingDesign {
     pub composition_id: String,
     pub role: String,
     pub evidence_class: String,
     pub placement: String,
     pub hours_per_worker_period: u64,
     pub retention_periods: u8,
-    pub pools: Vec<MichiganWorkforceSeedV1>,
+    pub pools: Vec<MichiganWorkforceSeed>,
 }
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
-pub enum MichiganMaterialPathV2 {
+pub enum MichiganMaterialPath {
     Local,
     Routed {
         travel_periods: u16,
@@ -125,66 +125,66 @@ pub enum MichiganMaterialPathV2 {
 }
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
-pub struct MichiganMaterialRouteV1 {
+pub struct MichiganMaterialRoute {
     pub key: String,
     pub supplier_site_key: String,
     pub buyer_site_key: String,
     pub good_key: String,
     pub ordered_quantity: u64,
-    pub path: MichiganMaterialPathV2,
+    pub path: MichiganMaterialPath,
 }
-impl MichiganMaterialRouteV1 {
+impl MichiganMaterialRoute {
     #[must_use]
-    pub fn id(&self) -> RouteIdV2 {
-        RouteIdV2::from_bytes(identity("route", &self.key))
+    pub fn id(&self) -> RouteId {
+        RouteId::from_bytes(identity("route", &self.key))
     }
     #[must_use]
-    pub fn order_id(&self) -> OrderIdV1 {
-        OrderIdV1::from_bytes(identity("order", &self.key))
+    pub fn order_id(&self) -> OrderId {
+        OrderId::from_bytes(identity("order", &self.key))
     }
 }
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
-pub struct MichiganMaterialCorridorV1 {
+pub struct MichiganMaterialCorridor {
     pub key: String,
     pub label: String,
     pub capacity_grams_per_period: u64,
 }
-impl MichiganMaterialCorridorV1 {
+impl MichiganMaterialCorridor {
     #[must_use]
-    pub fn id(&self) -> CorridorIdV2 {
-        CorridorIdV2::from_bytes(identity("corridor", &self.key))
+    pub fn id(&self) -> CorridorId {
+        CorridorId::from_bytes(identity("corridor", &self.key))
     }
 }
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
-pub struct MichiganMerchantV2 {
+pub struct MichiganMerchant {
     pub site_key: String,
     pub capacity_key: String,
     pub handling_hours_per_unit: BTreeMap<String, u64>,
 }
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
-pub struct MichiganFinalDemandV2 {
+pub struct MichiganFinalDemand {
     pub key: String,
     pub retailer_site_key: String,
     pub county_geoid: String,
     pub good_key: String,
     pub ordered_quantity: u64,
 }
-impl MichiganFinalDemandV2 {
+impl MichiganFinalDemand {
     #[must_use]
-    pub fn order_id(&self) -> OrderIdV1 {
-        OrderIdV1::from_bytes(identity("final-demand-order", &self.key))
+    pub fn order_id(&self) -> OrderId {
+        OrderId::from_bytes(identity("final-demand-order", &self.key))
     }
     #[must_use]
-    pub fn principal_id(&self) -> FinalDemandPrincipalIdV3 {
-        FinalDemandPrincipalIdV3::from_bytes(identity("final-demand-principal", &self.county_geoid))
+    pub fn principal_id(&self) -> FinalDemandPrincipalId {
+        FinalDemandPrincipalId::from_bytes(identity("final-demand-principal", &self.county_geoid))
     }
 }
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
-pub struct MichiganOwnerSourceV2 {
+pub struct MichiganOwnerSource {
     pub county_geoid: String,
     pub sector_code: String,
     pub county_source_file: String,
@@ -202,7 +202,7 @@ pub struct MichiganOwnerSourceV2 {
 }
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
-pub struct MichiganIndustryBaselineRowV1 {
+pub struct MichiganIndustryBaselineRow {
     pub area_fips: String,
     pub area_title: String,
     pub industry_code: String,
@@ -219,7 +219,7 @@ pub struct MichiganIndustryBaselineRowV1 {
 }
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
-pub struct MichiganRoadSourceV2 {
+pub struct MichiganRoadSource {
     pub pbf_sha256: String,
     pub pbf_bytes: u64,
     pub pbf_url: String,
@@ -233,7 +233,7 @@ pub struct MichiganRoadSourceV2 {
 }
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
-pub struct MichiganVehicleProfileV2 {
+pub struct MichiganVehicleProfile {
     pub gross_weight_kg: u64,
     pub height_mm: u64,
     pub width_mm: u64,
@@ -244,7 +244,7 @@ pub struct MichiganVehicleProfileV2 {
 }
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
-pub struct MichiganCountyTerminalV2 {
+pub struct MichiganCountyTerminal {
     pub county_geoid: String,
     pub node_id: i64,
     pub county_name: String,
@@ -260,7 +260,7 @@ pub struct MichiganCountyTerminalV2 {
 }
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
-pub struct MichiganPhysicalEdgeV2 {
+pub struct MichiganPhysicalEdge {
     pub id: String,
     pub way_id: i64,
     pub from_node: i64,
@@ -273,75 +273,75 @@ pub struct MichiganPhysicalEdgeV2 {
 }
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
-pub struct MichiganPhysicalCapacityGroupV2 {
+pub struct MichiganPhysicalCapacityGroup {
     pub key: String,
     pub label: String,
     pub edge_keys: Vec<String>,
 }
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
-pub struct MichiganPhysicalNetworkV2 {
-    pub source: MichiganRoadSourceV2,
-    pub profile: MichiganVehicleProfileV2,
+pub struct MichiganPhysicalNetwork {
+    pub source: MichiganRoadSource,
+    pub profile: MichiganVehicleProfile,
     pub terminal_source_pins: BTreeMap<String, String>,
-    pub terminal_policy: MichiganTerminalPolicyV2,
+    pub terminal_policy: MichiganTerminalPolicy,
     pub terminal_attachment_limit_meters: u64,
-    pub terminals: Vec<MichiganCountyTerminalV2>,
-    pub edges: Vec<MichiganPhysicalEdgeV2>,
-    pub capacity_groups: Vec<MichiganPhysicalCapacityGroupV2>,
+    pub terminals: Vec<MichiganCountyTerminal>,
+    pub edges: Vec<MichiganPhysicalEdge>,
+    pub capacity_groups: Vec<MichiganPhysicalCapacityGroup>,
 }
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
-pub struct MichiganCapacityOverrideV2 {
+pub struct MichiganCapacityOverride {
     pub capacity_key: String,
     pub grams_per_period: u64,
 }
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
-pub struct MichiganOpeningStockOverrideV2 {
+pub struct MichiganOpeningStockOverride {
     pub process_key: String,
     pub good_key: String,
     pub quantity: u64,
 }
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
-pub struct MichiganRouteOverrideV2 {
+pub struct MichiganRouteOverride {
     pub route_key: String,
-    pub path: MichiganMaterialPathV2,
+    pub path: MichiganMaterialPath,
 }
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
-pub struct MichiganInterventionV2 {
-    pub preset: MichiganDeliveryPresetV1,
-    pub capacities: Vec<MichiganCapacityOverrideV2>,
-    pub opening_stocks: Vec<MichiganOpeningStockOverrideV2>,
-    pub routes: Vec<MichiganRouteOverrideV2>,
+pub struct MichiganIntervention {
+    pub preset: MichiganDeliveryPreset,
+    pub capacities: Vec<MichiganCapacityOverride>,
+    pub opening_stocks: Vec<MichiganOpeningStockOverride>,
+    pub routes: Vec<MichiganRouteOverride>,
 }
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
-pub struct MichiganNormalizedContentV2 {
+pub struct MichiganNormalizedContent {
     pub schema: String,
     pub evidence_class: String,
     pub horizon_ticks: u64,
     pub tick_duration_days: u64,
     pub geographic_scale: String,
     pub terminal_output_disposition: String,
-    pub sites: Vec<MichiganMaterialSiteV1>,
-    pub goods: Vec<MichiganMaterialGoodV1>,
-    pub processes: Vec<MichiganMaterialProcessV1>,
-    pub routes: Vec<MichiganMaterialRouteV1>,
-    pub corridors: Vec<MichiganMaterialCorridorV1>,
-    pub staffing: MichiganStaffingDesignV1,
-    pub merchants: Vec<MichiganMerchantV2>,
-    pub final_demands: Vec<MichiganFinalDemandV2>,
-    pub owners: Vec<MichiganOwnerSourceV2>,
-    pub industry: Vec<MichiganIndustryBaselineRowV1>,
-    pub physical_network: Option<MichiganPhysicalNetworkV2>,
+    pub sites: Vec<MichiganMaterialSite>,
+    pub goods: Vec<MichiganMaterialGood>,
+    pub processes: Vec<MichiganMaterialProcess>,
+    pub routes: Vec<MichiganMaterialRoute>,
+    pub corridors: Vec<MichiganMaterialCorridor>,
+    pub staffing: MichiganStaffingDesign,
+    pub merchants: Vec<MichiganMerchant>,
+    pub final_demands: Vec<MichiganFinalDemand>,
+    pub owners: Vec<MichiganOwnerSource>,
+    pub industry: Vec<MichiganIndustryBaselineRow>,
+    pub physical_network: Option<MichiganPhysicalNetwork>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
-pub struct MichiganTerminalPolicyV2 {
+pub struct MichiganTerminalPolicy {
     pub terminal_evidence_class: String,
     pub anchor: String,
     pub attachment_limit_mm: u64,

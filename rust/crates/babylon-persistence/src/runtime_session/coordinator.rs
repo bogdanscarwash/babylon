@@ -6,12 +6,11 @@ use std::time::Duration;
 
 use super::input::{InputEvent, SessionInput};
 use super::{
-    emit, RuntimeSessionErrorCodeV3, RuntimeSessionRequestV3, RuntimeSessionResponseV3,
-    RuntimeSessionScopeV3, RuntimeSessionTargetV3, SessionBackend,
-    RUNTIME_SESSION_PROTOCOL_VERSION_V3,
+    emit, RuntimeSessionErrorCode, RuntimeSessionRequest, RuntimeSessionResponse,
+    RuntimeSessionScope, RuntimeSessionTarget, SessionBackend, RUNTIME_SESSION_PROTOCOL_VERSION,
 };
-use crate::archive_driver::{ArchiveDriverEventV1, ArchiveDriverRequestErrorV1, ArchiveDriverV1};
-use crate::CampaignId;
+use crate::archive_driver::{ArchiveDriver, ArchiveDriverEvent, ArchiveDriverRequestError};
+use crate::identity::CampaignId;
 
 mod active;
 use active::Active;
@@ -19,29 +18,29 @@ use active::Active;
 const EVENT_CAPACITY: usize = 8;
 const SHUTDOWN_GRACE: Duration = Duration::from_secs(150);
 const COMPLETION_CHECK: Duration = Duration::from_millis(100);
-type ArchiveEventSink = Box<dyn Fn(ArchiveDriverEventV1) -> bool + Send>;
+type ArchiveEventSink = Box<dyn Fn(ArchiveDriverEvent) -> bool + Send>;
 
 #[derive(Debug)]
 pub(super) enum SessionEvent {
     Input(InputEvent),
     Archive {
-        scope: RuntimeSessionScopeV3,
-        event: ArchiveDriverEventV1,
+        scope: RuntimeSessionScope,
+        event: ArchiveDriverEvent,
     },
 }
 
 pub(super) trait ArchiveControl {
-    fn refresh(&self, request_id: u64) -> Result<(), RuntimeSessionErrorCodeV3>;
+    fn refresh(&self, request_id: u64) -> Result<(), RuntimeSessionErrorCode>;
     fn stop(&self);
     fn finished(&self) -> bool;
-    fn join_finished(&mut self) -> Result<(), RuntimeSessionErrorCodeV3>;
+    fn join_finished(&mut self) -> Result<(), RuntimeSessionErrorCode>;
 }
-impl ArchiveControl for ArchiveDriverV1 {
-    fn refresh(&self, request_id: u64) -> Result<(), RuntimeSessionErrorCodeV3> {
+impl ArchiveControl for ArchiveDriver {
+    fn refresh(&self, request_id: u64) -> Result<(), RuntimeSessionErrorCode> {
         self.request_refresh(request_id)
             .map_err(|error| match error {
-                ArchiveDriverRequestErrorV1::Full => RuntimeSessionErrorCodeV3::StorageBusy,
-                ArchiveDriverRequestErrorV1::Stopped => RuntimeSessionErrorCodeV3::ArchiveRefused,
+                ArchiveDriverRequestError::Full => RuntimeSessionErrorCode::StorageBusy,
+                ArchiveDriverRequestError::Stopped => RuntimeSessionErrorCode::ArchiveRefused,
             })
     }
     fn stop(&self) {
@@ -50,9 +49,9 @@ impl ArchiveControl for ArchiveDriverV1 {
     fn finished(&self) -> bool {
         self.is_finished()
     }
-    fn join_finished(&mut self) -> Result<(), RuntimeSessionErrorCodeV3> {
+    fn join_finished(&mut self) -> Result<(), RuntimeSessionErrorCode> {
         match self.join_if_finished() {
-            Some(Err(_) | Ok(Err(_))) => Err(RuntimeSessionErrorCodeV3::ArchiveRefused),
+            Some(Err(_) | Ok(Err(_))) => Err(RuntimeSessionErrorCode::ArchiveRefused),
             Some(Ok(Ok(()))) | None => Ok(()),
         }
     }
@@ -68,21 +67,21 @@ pub(super) fn serve<I, W, B, D, F, G>(
     output: &mut W,
     backend: F,
     archive: G,
-) -> Result<(), RuntimeSessionErrorCodeV3>
+) -> Result<(), RuntimeSessionErrorCode>
 where
     I: BufRead + Send + 'static,
     W: Write,
     B: SessionBackend,
     D: ArchiveControl,
-    F: FnMut(&RuntimeSessionTargetV3) -> Result<(B, String), RuntimeSessionErrorCodeV3>,
-    G: FnMut(CampaignId, ArchiveEventSink) -> Result<D, RuntimeSessionErrorCodeV3>,
+    F: FnMut(&RuntimeSessionTarget) -> Result<(B, String), RuntimeSessionErrorCode>,
+    G: FnMut(CampaignId, ArchiveEventSink) -> Result<D, RuntimeSessionErrorCode>,
 {
     let (sender, events) = mpsc::sync_channel(EVENT_CAPACITY);
     let mut coordinator = Coordinator::new(output);
     emit(
         coordinator.output,
-        &RuntimeSessionResponseV3::Hello {
-            protocol_version: RUNTIME_SESSION_PROTOCOL_VERSION_V3,
+        &RuntimeSessionResponse::Hello {
+            protocol_version: RUNTIME_SESSION_PROTOCOL_VERSION,
             scope: coordinator.scope.clone(),
         },
     )?;
@@ -110,7 +109,7 @@ where
                 return coordinator.fail(None, code)
             }
             Err(mpsc::RecvTimeoutError::Disconnected) => {
-                return coordinator.fail(None, RuntimeSessionErrorCodeV3::PipeFailure)
+                return coordinator.fail(None, RuntimeSessionErrorCode::PipeFailure)
             }
             Err(mpsc::RecvTimeoutError::Timeout) => {}
         }
@@ -120,7 +119,7 @@ where
 
 struct Coordinator<'a, W: Write, B: SessionBackend, D: ArchiveControl> {
     output: &'a mut W,
-    scope: RuntimeSessionScopeV3,
+    scope: RuntimeSessionScope,
     active: Option<Active<B, D>>,
     last_request_id: u64,
 }
@@ -128,7 +127,7 @@ impl<'a, W: Write, B: SessionBackend, D: ArchiveControl> Coordinator<'a, W, B, D
     fn new(output: &'a mut W) -> Self {
         Self {
             output,
-            scope: RuntimeSessionScopeV3::default(),
+            scope: RuntimeSessionScope::default(),
             active: None,
             last_request_id: 0,
         }
@@ -137,11 +136,11 @@ impl<'a, W: Write, B: SessionBackend, D: ArchiveControl> Coordinator<'a, W, B, D
     fn refuse(
         &mut self,
         request_id: Option<u64>,
-        code: RuntimeSessionErrorCodeV3,
-    ) -> Result<(), RuntimeSessionErrorCodeV3> {
+        code: RuntimeSessionErrorCode,
+    ) -> Result<(), RuntimeSessionErrorCode> {
         emit(
             self.output,
-            &RuntimeSessionResponseV3::Error {
+            &RuntimeSessionResponse::Error {
                 request_id,
                 scope: self.scope.clone(),
                 code,
@@ -152,19 +151,19 @@ impl<'a, W: Write, B: SessionBackend, D: ArchiveControl> Coordinator<'a, W, B, D
     fn fail(
         &mut self,
         request_id: Option<u64>,
-        code: RuntimeSessionErrorCodeV3,
-    ) -> Result<(), RuntimeSessionErrorCodeV3> {
+        code: RuntimeSessionErrorCode,
+    ) -> Result<(), RuntimeSessionErrorCode> {
         self.refuse(request_id, code)?;
         Err(code)
     }
-    fn check_active_driver(&mut self) -> Result<(), RuntimeSessionErrorCodeV3> {
+    fn check_active_driver(&mut self) -> Result<(), RuntimeSessionErrorCode> {
         if let Some(active) = &mut self.active {
             if active.archive.finished() {
                 let code = active
                     .archive
                     .join_finished()
                     .err()
-                    .unwrap_or(RuntimeSessionErrorCodeV3::ArchiveRefused);
+                    .unwrap_or(RuntimeSessionErrorCode::ArchiveRefused);
                 return self.fail(None, code);
             }
         }
@@ -176,22 +175,22 @@ impl<'a, W: Write, B: SessionBackend, D: ArchiveControl> Coordinator<'a, W, B, D
         events: &Receiver<SessionEvent>,
         sender: &SyncSender<SessionEvent>,
         factories: &mut Factories<F, G>,
-    ) -> Result<Option<u64>, RuntimeSessionErrorCodeV3>
+    ) -> Result<Option<u64>, RuntimeSessionErrorCode>
     where
-        F: FnMut(&RuntimeSessionTargetV3) -> Result<(B, String), RuntimeSessionErrorCodeV3>,
-        G: FnMut(CampaignId, ArchiveEventSink) -> Result<D, RuntimeSessionErrorCodeV3>,
+        F: FnMut(&RuntimeSessionTarget) -> Result<(B, String), RuntimeSessionErrorCode>,
+        G: FnMut(CampaignId, ArchiveEventSink) -> Result<D, RuntimeSessionErrorCode>,
     {
-        let Ok(request) = serde_json::from_slice::<RuntimeSessionRequestV3>(bytes) else {
-            self.refuse(None, RuntimeSessionErrorCodeV3::InvalidRequest)?;
+        let Ok(request) = serde_json::from_slice::<RuntimeSessionRequest>(bytes) else {
+            self.refuse(None, RuntimeSessionErrorCode::InvalidRequest)?;
             return Ok(None);
         };
         let (version, request_id, scope) = request.header();
-        let refusal = if version != RUNTIME_SESSION_PROTOCOL_VERSION_V3 {
-            Some(RuntimeSessionErrorCodeV3::UnsupportedVersion)
+        let refusal = if version != RUNTIME_SESSION_PROTOCOL_VERSION {
+            Some(RuntimeSessionErrorCode::UnsupportedVersion)
         } else if *scope != self.scope {
-            Some(RuntimeSessionErrorCodeV3::SessionMismatch)
+            Some(RuntimeSessionErrorCode::SessionMismatch)
         } else if request_id <= self.last_request_id {
-            Some(RuntimeSessionErrorCodeV3::InvalidRequest)
+            Some(RuntimeSessionErrorCode::InvalidRequest)
         } else {
             None
         };
@@ -202,20 +201,20 @@ impl<'a, W: Write, B: SessionBackend, D: ArchiveControl> Coordinator<'a, W, B, D
         // Scope-valid IDs are consumed even when dispatch fails; switches never reset them.
         self.last_request_id = request_id;
         match request {
-            RuntimeSessionRequestV3::Stop { request_id, .. } => return Ok(Some(request_id)),
-            RuntimeSessionRequestV3::Switch { target, .. } => {
+            RuntimeSessionRequest::Stop { request_id, .. } => return Ok(Some(request_id)),
+            RuntimeSessionRequest::Switch { target, .. } => {
                 self.switch(request_id, &target, events, sender, factories)?;
             }
-            RuntimeSessionRequestV3::Advance { expected_tail, .. } => {
+            RuntimeSessionRequest::Advance { expected_tail, .. } => {
                 let result = self
                     .active
                     .as_mut()
-                    .ok_or(RuntimeSessionErrorCodeV3::CampaignAbsent)
+                    .ok_or(RuntimeSessionErrorCode::CampaignAbsent)
                     .and_then(|active| active.backend.advance(&expected_tail));
                 match result {
                     Ok(tail) => emit(
                         self.output,
-                        &RuntimeSessionResponseV3::Committed {
+                        &RuntimeSessionResponse::Committed {
                             request_id,
                             scope: self.scope.clone(),
                             tail,
@@ -224,11 +223,11 @@ impl<'a, W: Write, B: SessionBackend, D: ArchiveControl> Coordinator<'a, W, B, D
                     Err(code) => self.refuse(Some(request_id), code)?,
                 }
             }
-            RuntimeSessionRequestV3::RefreshArchive { .. } => {
+            RuntimeSessionRequest::RefreshArchive { .. } => {
                 let result = self
                     .active
                     .as_ref()
-                    .ok_or(RuntimeSessionErrorCodeV3::CampaignAbsent)
+                    .ok_or(RuntimeSessionErrorCode::CampaignAbsent)
                     .and_then(|active| active.archive.refresh(request_id));
                 if let Err(code) = result {
                     self.refuse(Some(request_id), code)?;
@@ -241,30 +240,30 @@ impl<'a, W: Write, B: SessionBackend, D: ArchiveControl> Coordinator<'a, W, B, D
     fn switch<F, G>(
         &mut self,
         request_id: u64,
-        target: &RuntimeSessionTargetV3,
+        target: &RuntimeSessionTarget,
         events: &Receiver<SessionEvent>,
         sender: &SyncSender<SessionEvent>,
         factories: &mut Factories<F, G>,
-    ) -> Result<(), RuntimeSessionErrorCodeV3>
+    ) -> Result<(), RuntimeSessionErrorCode>
     where
-        F: FnMut(&RuntimeSessionTargetV3) -> Result<(B, String), RuntimeSessionErrorCodeV3>,
-        G: FnMut(CampaignId, ArchiveEventSink) -> Result<D, RuntimeSessionErrorCodeV3>,
+        F: FnMut(&RuntimeSessionTarget) -> Result<(B, String), RuntimeSessionErrorCode>,
+        G: FnMut(CampaignId, ArchiveEventSink) -> Result<D, RuntimeSessionErrorCode>,
     {
         let campaign = match target.campaign() {
             Ok(campaign) => campaign,
             Err(code) => return self.refuse(Some(request_id), code),
         };
         let Some(epoch) = self.scope.epoch.checked_add(1) else {
-            return self.refuse(Some(request_id), RuntimeSessionErrorCodeV3::InvalidRequest);
+            return self.refuse(Some(request_id), RuntimeSessionErrorCode::InvalidRequest);
         };
         let previous_scope = self.scope.clone();
-        self.scope = RuntimeSessionScopeV3 {
+        self.scope = RuntimeSessionScope {
             epoch,
             campaign_id: Some(campaign.as_uuid().to_string()),
         };
         emit(
             self.output,
-            &RuntimeSessionResponseV3::Switching {
+            &RuntimeSessionResponse::Switching {
                 request_id,
                 previous_scope,
                 scope: self.scope.clone(),
@@ -295,7 +294,7 @@ impl<'a, W: Write, B: SessionBackend, D: ArchiveControl> Coordinator<'a, W, B, D
         // Driver reports can be queued, but this ACK is always flushed first.
         emit(
             self.output,
-            &RuntimeSessionResponseV3::Ready {
+            &RuntimeSessionResponse::Ready {
                 request_id,
                 scope: self.scope.clone(),
                 foundation_digest,
@@ -306,14 +305,14 @@ impl<'a, W: Write, B: SessionBackend, D: ArchiveControl> Coordinator<'a, W, B, D
 
     fn archive_event(
         &mut self,
-        scope: &RuntimeSessionScopeV3,
-        event: &ArchiveDriverEventV1,
-    ) -> Result<(), RuntimeSessionErrorCodeV3> {
+        scope: &RuntimeSessionScope,
+        event: &ArchiveDriverEvent,
+    ) -> Result<(), RuntimeSessionErrorCode> {
         if *scope != self.scope {
             return Ok(());
         }
-        if matches!(event, ArchiveDriverEventV1::Stopped) {
-            return self.fail(None, RuntimeSessionErrorCodeV3::ArchiveRefused);
+        if matches!(event, ArchiveDriverEvent::Stopped) {
+            return self.fail(None, RuntimeSessionErrorCode::ArchiveRefused);
         }
         if let Some(active) = &mut self.active {
             active.event(self.output, scope, event)?;
@@ -326,12 +325,12 @@ impl<'a, W: Write, B: SessionBackend, D: ArchiveControl> Coordinator<'a, W, B, D
         events: &Receiver<SessionEvent>,
         request_id: Option<u64>,
         grace: Duration,
-    ) -> Result<(), RuntimeSessionErrorCodeV3> {
+    ) -> Result<(), RuntimeSessionErrorCode> {
         self.retire(events, true, request_id, grace)?;
         if let Some(request_id) = request_id {
             emit(
                 self.output,
-                &RuntimeSessionResponseV3::Stopped {
+                &RuntimeSessionResponse::Stopped {
                     request_id,
                     scope: self.scope.clone(),
                 },
@@ -346,7 +345,7 @@ impl<'a, W: Write, B: SessionBackend, D: ArchiveControl> Coordinator<'a, W, B, D
         expose_progress: bool,
         request_id: Option<u64>,
         grace: Duration,
-    ) -> Result<(), RuntimeSessionErrorCodeV3> {
+    ) -> Result<(), RuntimeSessionErrorCode> {
         let Some(mut active) = self.active.take() else {
             return Ok(());
         };

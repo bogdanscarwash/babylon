@@ -1,16 +1,15 @@
 use super::*;
-use crate::{ArchiveWorkerV1, NullArchiveDossierProducerV1};
+use crate::{ArchiveWorker, NullArchiveDossierProducer};
 use std::cell::RefCell;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-fn progress(request_id: Option<u64>, durable_tick: u64) -> ArchiveDriverEventV1 {
-    ArchiveDriverEventV1::Progress {
+fn progress(request_id: Option<u64>, durable_tick: u64) -> ArchiveDriverEvent {
+    ArchiveDriverEvent::Progress {
         request_id,
         durable_tick,
         verified_tick: durable_tick,
-        retention_ready: true,
     }
 }
 
@@ -37,15 +36,15 @@ fn backpressure_preserves_manual_correlation_and_latest_automatic_scope() {
 #[test]
 fn recovered_automatic_progress_replaces_unsent_transient_error_not_manual_reply() {
     let mut outbox = run::Outbox::default();
-    let failure = ArchiveDriverEventV1::Failure {
+    let failure = ArchiveDriverEvent::Failure {
         request_id: Some(u64::MAX),
-        failure: ArchiveDriverFailureV1::Disconnected,
+        failure: ArchiveDriverFailure::Disconnected,
         retrying: true,
     };
     outbox.push(failure.clone());
-    outbox.push(ArchiveDriverEventV1::Failure {
+    outbox.push(ArchiveDriverEvent::Failure {
         request_id: None,
-        failure: ArchiveDriverFailureV1::Disconnected,
+        failure: ArchiveDriverFailure::Disconnected,
         retrying: true,
     });
     outbox.push(progress(None, 9));
@@ -59,17 +58,17 @@ fn recovered_automatic_progress_replaces_unsent_transient_error_not_manual_reply
 
 #[test]
 fn stop_refuses_before_connecting_or_minting_a_receipt() {
-    let cancellation = ArchiveWorkerCancellationV1::default();
+    let cancellation = ArchiveWorkerCancellation::default();
     cancellation.request_stop();
     let config = "host=192.0.2.1 port=1 dbname=not_a_live_target"
         .parse()
         .expect("config syntax");
-    let result = ArchiveWorkerV1::new(&config).sweep_cancellable(
+    let result = ArchiveWorker::new(&config).sweep_cancellable(
         CampaignId::from_uuid(uuid::Uuid::nil()),
-        &NullArchiveDossierProducerV1,
+        &NullArchiveDossierProducer,
         &cancellation,
     );
-    assert_eq!(result, Err(SemanticArchiveErrorV1::WorkerCanceled));
+    assert_eq!(result, Err(SemanticArchiveError::WorkerCanceled));
 }
 
 #[test]
@@ -83,20 +82,20 @@ fn full_commands_do_not_block_stop_or_try_to_join_active_worker() {
         }
         Ok(())
     });
-    let mut driver = ArchiveDriverV1 {
+    let mut driver = ArchiveDriver {
         requests: sender,
-        cancellation: ArchiveWorkerCancellationV1::default(),
+        cancellation: ArchiveWorkerCancellation::default(),
         thread: Some(handle),
     };
     assert_eq!(driver.request_refresh(1), Ok(()));
     assert_eq!(
         driver.request_refresh(2),
-        Err(ArchiveDriverRequestErrorV1::Full)
+        Err(ArchiveDriverRequestError::Full)
     );
     driver.request_stop();
     assert_eq!(
         driver.request_refresh(3),
-        Err(ArchiveDriverRequestErrorV1::Stopped)
+        Err(ArchiveDriverRequestError::Stopped)
     );
     assert!(driver.join_if_finished().is_none());
     release.store(true, Ordering::Release);
@@ -115,15 +114,15 @@ fn full_commands_do_not_block_stop_or_try_to_join_active_worker() {
 #[test]
 fn integrity_refusals_are_not_automatic_transport_retries() {
     for error in [
-        SemanticArchiveErrorV1::SchemaMismatch,
-        SemanticArchiveErrorV1::StoredPageMismatch,
-        SemanticArchiveErrorV1::ReceiptConflict,
-        SemanticArchiveErrorV1::GrantConflict,
-        SemanticArchiveErrorV1::ArtifactDigest,
+        SemanticArchiveError::SchemaMismatch,
+        SemanticArchiveError::StoredPageMismatch,
+        SemanticArchiveError::ReceiptConflict,
+        SemanticArchiveError::GrantConflict,
+        SemanticArchiveError::ArtifactDigest,
     ] {
         assert_eq!(
             run::classify(error.clone()),
-            ArchiveDriverFailureV1::Refused(error)
+            ArchiveDriverFailure::Refused(error)
         );
     }
 }
@@ -131,9 +130,9 @@ fn integrity_refusals_are_not_automatic_transport_retries() {
 #[test]
 fn fatal_refusal_survives_later_progress_until_delivery() {
     let mut outbox = run::Outbox::default();
-    let refusal = ArchiveDriverEventV1::Failure {
+    let refusal = ArchiveDriverEvent::Failure {
         request_id: None,
-        failure: ArchiveDriverFailureV1::Refused(SemanticArchiveErrorV1::StoredPageMismatch),
+        failure: ArchiveDriverFailure::Refused(SemanticArchiveError::StoredPageMismatch),
         retrying: false,
     };
     outbox.push(refusal.clone());

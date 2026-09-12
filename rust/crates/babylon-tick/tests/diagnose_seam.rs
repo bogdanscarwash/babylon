@@ -1,4 +1,4 @@
-//! `diagnose_content_set` — the structured, multi-error diagnostics seam
+//! `diagnose_content_set_sources` — the structured, multi-error diagnostics seam
 //! (#652 Task 3, plan §3.4). Unlike [`babylon_tick::run_once`]'s own
 //! `prepare_rules`, which stops at the FIRST failing stage, this function
 //! collects every INDEPENDENT failure a content set has — the `bsl-ls`
@@ -22,7 +22,7 @@
 //!    silently returning `None` from `spec_code()`, because its
 //!    `Composition` variant carried no `code`/`identity` fields at all.
 
-use babylon_tick::diagnose_content_set;
+use babylon_tick::{diagnose_content_set_sources, ContentRuleSource};
 
 const SCENARIO: &str = include_str!("../content/scenarios/two-classes.bscn");
 const RULE: &str = include_str!("../content/rules/fundamental-theorem.bsl");
@@ -113,62 +113,123 @@ const DUPLICATE_ID_WITH_ILLEGAL_PHASE: &str = r#"(rule economics/fundamental-the
 
 #[test]
 fn a_clean_content_set_diagnoses_empty() {
-    let errors = diagnose_content_set(SCENARIO, None, &[RULE]);
+    let errors = diagnose_content_set_sources(
+        SCENARIO,
+        None,
+        &[ContentRuleSource {
+            source_id: "rules/fundamental-theorem.bsl",
+            source: RULE,
+        }],
+    );
     assert!(errors.is_empty(), "{errors:?}");
 }
 
 #[test]
 fn a_scenario_with_a_duplicate_deffield_yields_one_e_load_001_entry() {
-    let errors = diagnose_content_set(D32_SINGLE_COLLISION_SCENARIO, None, &[D32_RULE]);
+    let errors = diagnose_content_set_sources(
+        D32_SINGLE_COLLISION_SCENARIO,
+        None,
+        &[ContentRuleSource {
+            source_id: "rules/d32-probe.bsl",
+            source: D32_RULE,
+        }],
+    );
     assert_eq!(errors.len(), 1, "{errors:?}");
-    assert_eq!(errors[0].spec_code(), Some("E-LOAD-001"));
+    assert_eq!(errors[0].error.spec_code(), Some("E-LOAD-001"));
 }
 
 #[test]
 fn two_independently_broken_rule_forms_yield_two_entries() {
-    let errors = diagnose_content_set(
+    let errors = diagnose_content_set_sources(
         SCENARIO,
         None,
-        &[BROKEN_RULE_FUEL, BROKEN_RULE_MATERIAL_BASIS],
+        &[
+            ContentRuleSource {
+                source_id: "rules/broken-fuel.bsl",
+                source: BROKEN_RULE_FUEL,
+            },
+            ContentRuleSource {
+                source_id: "rules/broken-material-basis.bsl",
+                source: BROKEN_RULE_MATERIAL_BASIS,
+            },
+        ],
     );
     assert_eq!(errors.len(), 2, "{errors:?}");
 }
 
 #[test]
 fn a_scenario_that_redeclares_an_implicit_strength_field_yields_a_structured_code_not_none() {
-    let errors = diagnose_content_set(D32_TWO_COLLISION_SCENARIO, None, &[D32_RULE]);
+    let errors = diagnose_content_set_sources(
+        D32_TWO_COLLISION_SCENARIO,
+        None,
+        &[ContentRuleSource {
+            source_id: "rules/d32-probe.bsl",
+            source: D32_RULE,
+        }],
+    );
     assert_eq!(errors.len(), 1, "{errors:?}");
-    assert_ne!(errors[0].spec_code(), None, "{errors:?}");
-    assert_eq!(errors[0].spec_code(), Some("E-LOAD-001"));
+    assert_ne!(errors[0].error.spec_code(), None, "{errors:?}");
+    assert_eq!(errors[0].error.spec_code(), Some("E-LOAD-001"));
 }
 
 #[test]
 fn a_bad_rule_does_not_hide_an_independent_phase_composition_failure() {
-    let errors = diagnose_content_set(SCENARIO, None, &[BROKEN_RULE_FUEL, ILLEGAL_PHASE_RULE]);
+    let errors = diagnose_content_set_sources(
+        SCENARIO,
+        None,
+        &[
+            ContentRuleSource {
+                source_id: "rules/broken-fuel.bsl",
+                source: BROKEN_RULE_FUEL,
+            },
+            ContentRuleSource {
+                source_id: "rules/illegal-phase.bsl",
+                source: ILLEGAL_PHASE_RULE,
+            },
+        ],
+    );
 
     assert_eq!(errors.len(), 2, "{errors:?}");
-    assert_eq!(errors[0].spec_code(), Some("E-PARSE-012"));
-    assert_eq!(errors[1].spec_code(), Some("E-LOAD-003"));
+    assert_eq!(errors[0].error.spec_code(), Some("E-PARSE-012"));
+    assert_eq!(errors[1].error.spec_code(), Some("E-LOAD-003"));
 }
 
 #[test]
 fn duplicate_rule_ids_across_sources_are_one_structured_e_load_001() {
-    let errors = diagnose_content_set(SCENARIO, None, &[RULE, RULE]);
+    let errors = diagnose_content_set_sources(
+        SCENARIO,
+        None,
+        &[
+            ContentRuleSource {
+                source_id: "rules/first.bsl",
+                source: RULE,
+            },
+            ContentRuleSource {
+                source_id: "rules/duplicate.bsl",
+                source: RULE,
+            },
+        ],
+    );
 
     assert_eq!(errors.len(), 1, "{errors:?}");
-    assert_eq!(errors[0].spec_code(), Some("E-LOAD-001"));
-    assert!(errors[0].to_string().contains("fundamental-theorem"));
+    assert_eq!(errors[0].error.spec_code(), Some("E-LOAD-001"));
+    assert!(errors[0].error.to_string().contains("fundamental-theorem"));
 }
 
 #[test]
 fn duplicate_rule_ids_suppress_phase_diagnostics_in_both_source_orders() {
-    for sources in [
-        [RULE, DUPLICATE_ID_WITH_ILLEGAL_PHASE],
-        [DUPLICATE_ID_WITH_ILLEGAL_PHASE, RULE],
-    ] {
-        let errors = diagnose_content_set(SCENARIO, None, &sources);
+    let regular = ContentRuleSource {
+        source_id: "rules/fundamental-theorem.bsl",
+        source: RULE,
+    };
+    let duplicate = ContentRuleSource {
+        source_id: "rules/duplicate-illegal-phase.bsl",
+        source: DUPLICATE_ID_WITH_ILLEGAL_PHASE,
+    };
+    for sources in [[regular, duplicate], [duplicate, regular]] {
+        let errors = diagnose_content_set_sources(SCENARIO, None, &sources);
 
         assert_eq!(errors.len(), 1, "{errors:?}");
-        assert_eq!(errors[0].spec_code(), Some("E-LOAD-001"));
+        assert_eq!(errors[0].error.spec_code(), Some("E-LOAD-001"));
     }
 }

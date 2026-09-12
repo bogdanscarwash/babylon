@@ -2,24 +2,26 @@
 //! The ordinary reader focus excludes this full four-preset, sixteen-period run.
 
 use super::{
-    advance_material_period, identity_hex, install_observer_economy_schema_v1,
-    install_reader_role_v1, CampaignId, CollectingSink, DisposableTarget, DurableMaterialRuntimeV3,
-    MichiganContentPresetV1, MichiganDeliveryPresetV1, NoTls, ObserverEconomyReaderV1,
-    ObserverVisibilityV1, OrderedPracticeActionBatchV1, Uuid,
+    advance_material_period, identity_hex, install_reader_role, provision_observer_role,
+    CampaignId, CollectingSink, DisposableTarget, DurableMaterialRuntime, MichiganContentPreset,
+    MichiganDeliveryPreset, NoTls, ObserverEconomyReader, ObserverVisibility,
+    OrderedPracticeActionBatch, Uuid,
 };
 use babylon_graph::hypergraph_store::HypergraphStore;
-use babylon_material_circuit::{GoodIdV1, MaterialCircuitStateV3, UnitIdV1};
+use babylon_material_circuit::{GoodId, MaterialCircuitState, UnitId};
 use babylon_persistence::{
-    michigan_material::{MichiganMaterialCatalogV1, MAX_MICHIGAN_CAPTURED_CONTENT_BYTES_V2},
-    ProductionCapacityKindV2, ProductionEvidenceDigestV6, ProductionOutboundKindV2,
-    ProductionSnapshotV2,
+    michigan_material::{MichiganMaterialCatalog, MAX_MICHIGAN_CAPTURED_CONTENT_BYTES},
+    production_observation::ProductionCapacityKind,
+    production_observation::ProductionOutboundKind,
+    production_observation::ProductionSnapshot,
+    ProductionEvidenceDigest,
 };
 use babylon_tick::{
-    material_replay::MaterialReplaySessionV3,
+    material_replay::MaterialReplaySession,
     material_world::{
-        decode_material_receipts_v4, MaterialTickReceiptsV4, MAX_MATERIAL_WORLD_REGISTER_BYTES_V3,
+        decode_material_receipts, MaterialTickReceipts, MAX_MATERIAL_WORLD_REGISTER_BYTES,
     },
-    replay_session::ReplayCommitDispositionV1,
+    replay_session::ReplayCommitDisposition,
 };
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -28,8 +30,8 @@ use std::{
     time::{Duration, Instant},
 };
 
-type Session = MaterialReplaySessionV3<HypergraphStore>;
-type Goods = BTreeMap<(GoodIdV1, UnitIdV1), u128>;
+type Session = MaterialReplaySession<HypergraphStore>;
+type Goods = BTreeMap<(GoodId, UnitId), u128>;
 const SOURCE_FILES: [&str; 4] = [
     "defines.toml",
     "statewide-sources.json",
@@ -121,10 +123,10 @@ struct Measurements {
 #[ignore = "requires actual qualified canonical siblings and the statewide_qualified PostgreSQL focus"]
 fn actual_statewide_sources_survive_four_persisted_sixteen_period_campaigns() {
     for (index, preset) in [
-        MichiganDeliveryPresetV1::StatewideBaseline,
-        MichiganDeliveryPresetV1::StatewideFreightConstraint,
-        MichiganDeliveryPresetV1::StatewidePackagingShortage,
-        MichiganDeliveryPresetV1::StatewideBoth,
+        MichiganDeliveryPreset::StatewideBaseline,
+        MichiganDeliveryPreset::StatewideFreightConstraint,
+        MichiganDeliveryPreset::StatewidePackagingShortage,
+        MichiganDeliveryPreset::StatewideBoth,
     ]
     .into_iter()
     .enumerate()
@@ -133,10 +135,10 @@ fn actual_statewide_sources_survive_four_persisted_sixteen_period_campaigns() {
     }
 }
 
-fn qualify_preset(delivery: MichiganDeliveryPresetV1, index: u128) {
+fn qualify_preset(delivery: MichiganDeliveryPreset, index: u128) {
     let began = Instant::now();
     let copies = SourceCopies::capture();
-    let captured = MichiganMaterialCatalogV1::load_for_preset(&copies.defines(), delivery)
+    let captured = MichiganMaterialCatalog::load_for_preset(&copies.defines(), delivery)
         .expect("New must admit the canonical qualified sources");
     let catalog = captured.with_preset(delivery).unwrap();
     let physical = catalog.physical_network().expect("actual road network");
@@ -145,7 +147,7 @@ fn qualify_preset(delivery: MichiganDeliveryPresetV1, index: u128) {
     assert!(!physical.edges.is_empty());
     assert_eq!(physical.terminals.len(), 83);
     assert_eq!(catalog.sites().len(), 397);
-    let preset = MichiganContentPresetV1::new_campaign(delivery);
+    let preset = MichiganContentPreset::new_campaign(delivery);
     let foundation = preset.create_foundation(&captured).unwrap();
     let foundation_digest = foundation.digest();
     let twin = preset.create_foundation(&captured).unwrap();
@@ -156,17 +158,16 @@ fn qualify_preset(delivery: MichiganDeliveryPresetV1, index: u128) {
         foundation_bytes: foundation.canonical_bytes().len(),
         ..Measurements::default()
     };
-    assert!(measured.captured_bytes < MAX_MICHIGAN_CAPTURED_CONTENT_BYTES_V2);
-    assert!(measured.foundation_bytes < MAX_MATERIAL_WORLD_REGISTER_BYTES_V3);
+    assert!(measured.captured_bytes < MAX_MICHIGAN_CAPTURED_CONTENT_BYTES);
+    assert!(measured.foundation_bytes < MAX_MATERIAL_WORLD_REGISTER_BYTES);
     let mut target = DisposableTarget::create();
     let campaign = CampaignId::from_uuid(Uuid::from_u128(29_800 + index));
-    let mut runtime =
-        DurableMaterialRuntimeV3::create(&target.writer, campaign, foundation).unwrap();
-    install_reader_role_v1(&target.writer).unwrap();
-    install_observer_economy_schema_v1(&target.writer).unwrap();
+    let mut runtime = DurableMaterialRuntime::create(&target.writer, campaign, foundation).unwrap();
+    install_reader_role(&target.writer).unwrap();
+    provision_observer_role(&target.writer).unwrap();
     let config = target.login("babylon_observer", "actualstatewide");
     let observer =
-        ObserverEconomyReaderV1::connect(&config, ObserverVisibilityV1::FullObserver).unwrap();
+        ObserverEconomyReader::connect(&config, ObserverVisibility::FullObserver).unwrap();
     let mut sql = target.writer.connect(NoTls).unwrap();
     measured.create_with_reference = began.elapsed();
     let mut held = Vec::new();
@@ -216,9 +217,7 @@ fn qualify_preset(delivery: MichiganDeliveryPresetV1, index: u128) {
             copies.remove();
         }
         if [1, 2, 16].contains(&period) {
-            assert!(
-                MichiganMaterialCatalogV1::load_for_preset(&copies.defines(), delivery).is_err()
-            );
+            assert!(MichiganMaterialCatalog::load_for_preset(&copies.defines(), delivery).is_err());
             reopen_runtime(
                 &mut runtime,
                 &target,
@@ -250,13 +249,13 @@ fn assert_qualified_totals(
     assert!(measured.dispatch_receipts > 0 && measured.arrival_receipts > 0);
     assert!(measured.local_transfer_receipts > 0 && measured.final_handoff_receipts > 0);
     assert!(measured.maximum_family_rows < 65_536);
-    assert!(measured.maximum_register_bytes < MAX_MATERIAL_WORLD_REGISTER_BYTES_V3);
-    assert!(measured.maximum_receipt_bytes < MAX_MATERIAL_WORLD_REGISTER_BYTES_V3);
+    assert!(measured.maximum_register_bytes < MAX_MATERIAL_WORLD_REGISTER_BYTES);
+    assert!(measured.maximum_receipt_bytes < MAX_MATERIAL_WORLD_REGISTER_BYTES);
     eprintln!("actual statewide PostgreSQL {preset}: {measured:?}");
 }
 
 fn reopen_runtime(
-    runtime: &mut DurableMaterialRuntimeV3,
+    runtime: &mut DurableMaterialRuntime,
     target: &DisposableTarget,
     campaign: CampaignId,
     foundation_digest: [u8; 32],
@@ -264,7 +263,7 @@ fn reopen_runtime(
 ) {
     let started = Instant::now();
     let reopened =
-        DurableMaterialRuntimeV3::open(&target.writer, campaign, foundation_digest).unwrap();
+        DurableMaterialRuntime::open(&target.writer, campaign, foundation_digest).unwrap();
     measured.resume += started.elapsed();
     assert_eq!(runtime.tail(), reopened.tail());
     assert_eq!(
@@ -279,21 +278,21 @@ fn reopen_runtime(
 }
 
 fn advance_pair(
-    runtime: &mut DurableMaterialRuntimeV3,
+    runtime: &mut DurableMaterialRuntime,
     reference: &mut Session,
     sql: &mut postgres::Client,
     campaign: CampaignId,
     measured: &mut Measurements,
-) -> MaterialTickReceiptsV4 {
+) -> MaterialTickReceipts {
     let began = Instant::now();
-    let actions = OrderedPracticeActionBatchV1::empty(
+    let actions = OrderedPracticeActionBatch::empty(
         reference.graph_session().session_identity().clone(),
         reference.completed_tick() + 1,
     )
     .unwrap();
     let prepared = reference.prepare_advance(&actions).unwrap();
     let bytes = prepared.material().receipt_bytes();
-    let receipts = decode_material_receipts_v4(bytes).unwrap();
+    let receipts = decode_material_receipts(bytes).unwrap();
     assert_goods_conserved(
         reference.material().state(),
         prepared.material().register().state(),
@@ -316,7 +315,7 @@ fn advance_pair(
     assert_eq!(row.get::<_, Vec<u8>>(1), bytes);
     reference
         .commit_prepared_and_publish(&mut CollectingSink::default(), prepared, |_| {
-            Ok::<_, ()>(ReplayCommitDispositionV1::Committed)
+            Ok::<_, ()>(ReplayCommitDisposition::Committed)
         })
         .unwrap();
     assert_eq!(
@@ -331,13 +330,13 @@ fn advance_pair(
 }
 
 fn observe(
-    observer: &ObserverEconomyReaderV1,
+    observer: &ObserverEconomyReader,
     campaign: CampaignId,
-    runtime: &DurableMaterialRuntimeV3,
-    catalog: &MichiganMaterialCatalogV1,
-    completed: Option<(&MaterialTickReceiptsV4, &BTreeMap<String, u64>)>,
+    runtime: &DurableMaterialRuntime,
+    catalog: &MichiganMaterialCatalog,
+    completed: Option<(&MaterialTickReceipts, &BTreeMap<String, u64>)>,
     measured: &mut Measurements,
-    held: &mut Vec<(u64, ProductionEvidenceDigestV6)>,
+    held: &mut Vec<(u64, ProductionEvidenceDigest)>,
 ) {
     let began = Instant::now();
     let snapshot = observer
@@ -396,8 +395,8 @@ fn observe(
 }
 
 fn witnessed_output(
-    rows: &ProductionSnapshotV2,
-    catalog: &MichiganMaterialCatalogV1,
+    rows: &ProductionSnapshot,
+    catalog: &MichiganMaterialCatalog,
     key: &str,
     unit: &str,
 ) -> u64 {
@@ -418,19 +417,17 @@ fn witnessed_output(
 }
 
 fn assert_qualified_witness(
-    rows: &ProductionSnapshotV2,
-    catalog: &MichiganMaterialCatalogV1,
+    rows: &ProductionSnapshot,
+    catalog: &MichiganMaterialCatalog,
     period: u64,
 ) {
     let freight = matches!(
         catalog.preset(),
-        MichiganDeliveryPresetV1::StatewideFreightConstraint
-            | MichiganDeliveryPresetV1::StatewideBoth
+        MichiganDeliveryPreset::StatewideFreightConstraint | MichiganDeliveryPreset::StatewideBoth
     );
     let packaging = matches!(
         catalog.preset(),
-        MichiganDeliveryPresetV1::StatewidePackagingShortage
-            | MichiganDeliveryPresetV1::StatewideBoth
+        MichiganDeliveryPreset::StatewidePackagingShortage | MichiganDeliveryPreset::StatewideBoth
     );
     if period == 1 {
         let bridge = catalog
@@ -493,7 +490,7 @@ fn assert_qualified_witness(
     }
 }
 
-fn assert_workforce(rows: &ProductionSnapshotV2, period: u64) {
+fn assert_workforce(rows: &ProductionSnapshot, period: u64) {
     let mut pools = BTreeSet::new();
     let mut labor = BTreeSet::new();
     for account in &rows.staffing_accounts {
@@ -531,7 +528,7 @@ fn assert_workforce(rows: &ProductionSnapshotV2, period: u64) {
     assert_eq!(labor.len(), pools.len());
 }
 
-fn assert_stock(rows: &ProductionSnapshotV2, state: &MaterialCircuitStateV3) {
+fn assert_stock(rows: &ProductionSnapshot, state: &MaterialCircuitState) {
     if let Some(balance) = &rows.material_balance {
         let mut principals = BTreeSet::new();
         for row in &balance.rows {
@@ -587,9 +584,9 @@ fn assert_stock(rows: &ProductionSnapshotV2, state: &MaterialCircuitStateV3) {
 }
 
 fn assert_final_demand(
-    rows: &ProductionSnapshotV2,
-    state: &MaterialCircuitStateV3,
-    receipts: Option<&MaterialTickReceiptsV4>,
+    rows: &ProductionSnapshot,
+    state: &MaterialCircuitState,
+    receipts: Option<&MaterialTickReceipts>,
 ) {
     let mut orders = BTreeSet::new();
     for account in &rows.final_demand_accounts {
@@ -642,12 +639,12 @@ fn assert_final_demand(
 }
 
 fn outbound_quantity(
-    receipts: &MaterialTickReceiptsV4,
-    kind: ProductionOutboundKindV2,
+    receipts: &MaterialTickReceipts,
+    kind: ProductionOutboundKind,
     id: &str,
 ) -> u128 {
     match kind {
-        ProductionOutboundKindV2::Delivery => receipts
+        ProductionOutboundKind::Delivery => receipts
             .dispatches
             .iter()
             .map(|r| (r.order_id, r.quantity))
@@ -660,7 +657,7 @@ fn outbound_quantity(
             .filter(|(order, _)| identity_hex(order.as_bytes()) == id)
             .map(|(_, quantity)| u128::from(quantity))
             .sum(),
-        ProductionOutboundKindV2::LocalFinalDemand => receipts
+        ProductionOutboundKind::LocalFinalDemand => receipts
             .local_fulfillments
             .iter()
             .filter(|r| identity_hex(r.order_id.as_bytes()) == id)
@@ -670,9 +667,9 @@ fn outbound_quantity(
 }
 
 fn assert_capacity(
-    rows: &ProductionSnapshotV2,
+    rows: &ProductionSnapshot,
     period: u64,
-    completed: Option<(&MaterialTickReceiptsV4, &BTreeMap<String, u64>)>,
+    completed: Option<(&MaterialTickReceipts, &BTreeMap<String, u64>)>,
 ) {
     let mut principals = BTreeSet::new();
     for account in &rows.freight_capacity_accounts {
@@ -713,7 +710,7 @@ fn assert_capacity(
                     u128::from(order.requested),
                     actual + u128::from(order.remaining_unshipped)
                 );
-                if account.kind == ProductionCapacityKindV2::Transport {
+                if account.kind == ProductionCapacityKind::Transport {
                     let route = rows
                         .routes
                         .iter()
@@ -731,7 +728,7 @@ fn assert_capacity(
     }
 }
 
-fn assert_merchant(rows: &ProductionSnapshotV2, receipts: Option<&MaterialTickReceiptsV4>) {
+fn assert_merchant(rows: &ProductionSnapshot, receipts: Option<&MaterialTickReceipts>) {
     let mut sites = BTreeSet::new();
     for account in &rows.merchant_handling_accounts {
         assert!(sites.insert(&account.site_id));
@@ -779,7 +776,7 @@ fn assert_merchant(rows: &ProductionSnapshotV2, receipts: Option<&MaterialTickRe
     }
 }
 
-fn inventory_and_transit(state: &MaterialCircuitStateV3) -> Goods {
+fn inventory_and_transit(state: &MaterialCircuitState) -> Goods {
     let mut totals = Goods::new();
     for row in &state.inventory {
         *totals.entry((row.good_id, row.unit_id)).or_default() += u128::from(row.quantity);
@@ -790,9 +787,9 @@ fn inventory_and_transit(state: &MaterialCircuitStateV3) -> Goods {
     totals
 }
 fn assert_goods_conserved(
-    opening: &MaterialCircuitStateV3,
-    closing: &MaterialCircuitStateV3,
-    receipts: &MaterialTickReceiptsV4,
+    opening: &MaterialCircuitState,
+    closing: &MaterialCircuitState,
+    receipts: &MaterialTickReceipts,
 ) {
     let mut available = inventory_and_transit(opening);
     let mut accounted = inventory_and_transit(closing);
@@ -838,10 +835,10 @@ fn assert_goods_conserved(
 }
 
 fn assert_history_and_preview(
-    observer: &ObserverEconomyReaderV1,
+    observer: &ObserverEconomyReader,
     target: &mut DisposableTarget,
     campaign: CampaignId,
-    held: &[(u64, ProductionEvidenceDigestV6)],
+    held: &[(u64, ProductionEvidenceDigest)],
     measured: &mut Measurements,
 ) {
     let began = Instant::now();
@@ -859,14 +856,13 @@ fn assert_history_and_preview(
     assert_eq!(observer.campaigns().unwrap()[0].durable_tick, 16);
     let preview_config = target.login("babylon_reader", "actualpreview");
     let preview =
-        ObserverEconomyReaderV1::connect(&preview_config, ObserverVisibilityV1::KnownPreview)
-            .unwrap();
+        ObserverEconomyReader::connect(&preview_config, ObserverVisibility::KnownPreview).unwrap();
     let snapshot = preview.snapshot(campaign, 16).unwrap();
     assert!(snapshot.production.is_none());
     assert!(snapshot.production_evidence_digest().unwrap().is_none());
 }
 
-fn maximum_rows(state: &MaterialCircuitStateV3) -> usize {
+fn maximum_rows(state: &MaterialCircuitState) -> usize {
     [
         state.site_logistics_nodes.len(),
         state.process_outputs.len(),

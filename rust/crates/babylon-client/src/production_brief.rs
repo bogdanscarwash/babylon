@@ -4,7 +4,9 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use babylon_persistence::{ProductionSiteV2, ProductionSnapshotV2};
+use babylon_persistence::{
+    production_observation::ProductionSite, production_observation::ProductionSnapshot,
+};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) enum DependencyDirection {
@@ -23,37 +25,16 @@ impl DependencyDirection {
 /// Recipe supplier declarations and committed route accounts identify real
 /// relations. Missing capability-scoped endpoints never become named links.
 pub(crate) fn dependency_sites<'a>(
-    site: &ProductionSiteV2,
-    snapshot: &'a ProductionSnapshotV2,
-) -> Vec<(DependencyDirection, &'a ProductionSiteV2)> {
+    site: &ProductionSite,
+    snapshot: &'a ProductionSnapshot,
+) -> Vec<(DependencyDirection, &'a ProductionSite)> {
     let mut links = BTreeSet::new();
-    for input in site.processes.iter().flat_map(|process| &process.inputs) {
-        for supplier in &input.supplier_site_ids {
-            links.insert((DependencyDirection::Upstream, supplier.as_str()));
+    for relation in crate::material_relations::declared_material_relations(snapshot) {
+        if relation.buyer == site.id {
+            links.insert((DependencyDirection::Upstream, relation.supplier));
         }
-    }
-    for buyer in &snapshot.sites {
-        if buyer
-            .processes
-            .iter()
-            .flat_map(|process| &process.inputs)
-            .any(|input| input.supplier_site_ids.contains(&site.id))
-        {
-            links.insert((DependencyDirection::Downstream, buyer.id.as_str()));
-        }
-    }
-    for route in &snapshot.routes {
-        if route.buyer_site_id == site.id {
-            links.insert((
-                DependencyDirection::Upstream,
-                route.supplier_site_id.as_str(),
-            ));
-        }
-        if route.supplier_site_id == site.id {
-            links.insert((
-                DependencyDirection::Downstream,
-                route.buyer_site_id.as_str(),
-            ));
+        if relation.supplier == site.id {
+            links.insert((DependencyDirection::Downstream, relation.buyer));
         }
     }
     links
@@ -68,15 +49,15 @@ pub(crate) fn dependency_sites<'a>(
         .collect()
 }
 
-fn unfinished_plan(site: &ProductionSiteV2) -> bool {
+fn unfinished_plan(site: &ProductionSite) -> bool {
     site.processes.iter().any(|process| matches!((process.produced_batches, process.planned_batches), (Some(done), Some(plan)) if done < plan))
 }
 
 /// Deterministic entry into an existing relation, without a strategic score.
 /// An unfulfilled committed plan comes first; otherwise choose a visible
 /// link between suppliers and buyers, then the first stable site identity.
-pub(crate) fn opening_site(snapshot: &ProductionSnapshotV2) -> Option<&ProductionSiteV2> {
-    let first = |predicate: &dyn Fn(&ProductionSiteV2) -> bool| {
+pub(crate) fn opening_site(snapshot: &ProductionSnapshot) -> Option<&ProductionSite> {
+    let first = |predicate: &dyn Fn(&ProductionSite) -> bool| {
         snapshot
             .sites
             .iter()
@@ -99,16 +80,16 @@ pub(crate) fn opening_site(snapshot: &ProductionSnapshotV2) -> Option<&Productio
 }
 
 /// Only the committed plan and output determine this label, never closing stock.
-pub(crate) fn committed_plan_status(site: &ProductionSiteV2) -> &'static str {
+pub(crate) fn committed_plan_status(site: &ProductionSite) -> &'static str {
     if site.processes.is_empty() {
         return match site.role {
-            babylon_persistence::ProductionSiteRoleV2::Wholesale => {
+            babylon_persistence::production_observation::ProductionSiteRole::Wholesale => {
                 "Wholesale / handling and onward distribution"
             }
-            babylon_persistence::ProductionSiteRoleV2::Retail => {
+            babylon_persistence::production_observation::ProductionSiteRole::Retail => {
                 "Retail / delivery to final demand"
             }
-            babylon_persistence::ProductionSiteRoleV2::Production => {
+            babylon_persistence::production_observation::ProductionSiteRole::Production => {
                 "No productive process disclosed"
             }
         };
@@ -130,7 +111,7 @@ pub(crate) fn committed_plan_status(site: &ProductionSiteV2) -> &'static str {
 }
 
 pub(crate) fn process_plan_status(
-    process: &babylon_persistence::ProductionProcessV2,
+    process: &babylon_persistence::production_observation::ProductionProcess,
 ) -> &'static str {
     match (process.produced_batches, process.planned_batches) {
         (None, None) => "Opening state; no committed production yet",
@@ -155,8 +136,8 @@ enum FlowFact {
 type RelationKey<'a> = (&'a str, &'a str, &'a str, &'a str);
 
 struct MaterialRelation<'a> {
-    supplier: &'a ProductionSiteV2,
-    buyer: &'a ProductionSiteV2,
+    supplier: &'a ProductionSite,
+    buyer: &'a ProductionSite,
     labels: BTreeSet<(&'a str, &'a str)>,
     requirement: bool,
     route_ids: BTreeSet<&'a str>,
@@ -164,7 +145,7 @@ struct MaterialRelation<'a> {
 }
 
 impl<'a> MaterialRelation<'a> {
-    fn new(supplier: &'a ProductionSiteV2, buyer: &'a ProductionSiteV2) -> Self {
+    fn new(supplier: &'a ProductionSite, buyer: &'a ProductionSite) -> Self {
         Self {
             supplier,
             buyer,
@@ -215,53 +196,33 @@ impl<'a> MaterialRelation<'a> {
 }
 
 fn material_relations(
-    snapshot: &ProductionSnapshotV2,
+    snapshot: &ProductionSnapshot,
 ) -> BTreeMap<RelationKey<'_>, MaterialRelation<'_>> {
     let mut relations = BTreeMap::new();
-    for buyer in &snapshot.sites {
-        for input in buyer.processes.iter().flat_map(|process| &process.inputs) {
-            for supplier_id in &input.supplier_site_ids {
-                let Some(supplier) = snapshot.sites.iter().find(|site| site.id == *supplier_id)
-                else {
-                    continue;
-                };
-                let key = (
-                    supplier.id.as_str(),
-                    buyer.id.as_str(),
-                    input.good_id.as_str(),
-                    input.unit_id.as_str(),
-                );
-                let relation = relations
-                    .entry(key)
-                    .or_insert_with(|| MaterialRelation::new(supplier, buyer));
-                relation.requirement = true;
-                relation.labels.insert((&input.good, &input.unit));
-            }
-        }
-    }
-    for route in &snapshot.routes {
+    for declared in crate::material_relations::declared_material_relations(snapshot) {
         let supplier = snapshot
             .sites
             .iter()
-            .find(|site| site.id == route.supplier_site_id);
-        let buyer = snapshot
-            .sites
-            .iter()
-            .find(|site| site.id == route.buyer_site_id);
+            .find(|site| site.id == declared.supplier);
+        let buyer = snapshot.sites.iter().find(|site| site.id == declared.buyer);
         let (Some(supplier), Some(buyer)) = (supplier, buyer) else {
             continue;
         };
         let key = (
-            supplier.id.as_str(),
-            buyer.id.as_str(),
-            route.good_id.as_str(),
-            route.unit_id.as_str(),
+            declared.supplier,
+            declared.buyer,
+            declared.good_id,
+            declared.unit_id,
         );
         let relation = relations
             .entry(key)
             .or_insert_with(|| MaterialRelation::new(supplier, buyer));
-        relation.labels.insert((&route.good, &route.unit));
-        relation.route_ids.insert(&route.id);
+        relation.labels.insert((declared.good, declared.unit));
+        let Some(route) = declared.route else {
+            relation.requirement = true;
+            continue;
+        };
+        relation.route_ids.insert(route.id.as_str());
         for (quantity, fact) in [
             (route.shipped, FlowFact::Shipped),
             (route.delivered, FlowFact::Delivered),
@@ -291,10 +252,10 @@ fn material_relations(
 /// The dependency button already names its endpoint. Its second line describes
 /// the disclosed material and flow without repeating the name or summing goods.
 pub(crate) fn dependency_flow_summary(
-    site: &ProductionSiteV2,
-    other: &ProductionSiteV2,
+    site: &ProductionSite,
+    other: &ProductionSite,
     direction: DependencyDirection,
-    snapshot: &ProductionSnapshotV2,
+    snapshot: &ProductionSnapshot,
 ) -> String {
     let relations = material_relations(snapshot);
     let relevant: Vec<_> = relations
@@ -323,7 +284,7 @@ pub(crate) fn dependency_flow_summary(
 }
 
 /// Keep the introduction brief; neighboring buttons carry material and flow.
-pub(crate) fn describe_brief(site: &ProductionSiteV2, snapshot: &ProductionSnapshotV2) -> String {
+pub(crate) fn describe_brief(site: &ProductionSite, snapshot: &ProductionSnapshot) -> String {
     let guidance = if dependency_sites(site, snapshot).is_empty() {
         "No material relationships disclosed."
     } else {
@@ -333,7 +294,7 @@ pub(crate) fn describe_brief(site: &ProductionSiteV2, snapshot: &ProductionSnaps
 }
 
 /// A bounded map of disclosed material relationships, with no cross-good totals.
-pub(crate) fn describe_overview(snapshot: &ProductionSnapshotV2) -> String {
+pub(crate) fn describe_overview(snapshot: &ProductionSnapshot) -> String {
     if snapshot.sites.is_empty() {
         return "No production cohorts are visible in this observation.".to_owned();
     }
@@ -362,52 +323,55 @@ pub(crate) fn describe_overview(snapshot: &ProductionSnapshotV2) -> String {
 mod tests {
     use super::*;
     use babylon_persistence::{
-        ProductionFreightV2, ProductionInputV1, ProductionLaborV1, ProductionRouteV2,
+        production_observation::ProductionFreight, production_observation::ProductionInput,
+        production_observation::ProductionLabor, production_observation::ProductionRoute,
     };
 
-    fn site(id: &str, suppliers: &[&str]) -> ProductionSiteV2 {
-        ProductionSiteV2 {
+    fn site(id: &str, suppliers: &[&str]) -> ProductionSite {
+        ProductionSite {
             id: id.into(),
             county_geoid: "26163".into(),
             name: format!("Cohort {id}"),
             industry_code: "331".into(),
             observed_employment: Some(999_999),
             inventory: Vec::new(),
-            role: babylon_persistence::ProductionSiteRoleV2::Production,
+            role: babylon_persistence::production_observation::ProductionSiteRole::Production,
             sector_code: "31-33".into(),
-            processes: vec![babylon_persistence::ProductionProcessV2 {
-                id: "fixture-process".into(),
-                name: "Fixture process".into(),
-                output_good_id: "output".into(),
-                output_unit_id: "kg".into(),
-                output_good: "steel".into(),
-                output_unit: "kg".into(),
-                output_per_batch: 10,
-                available_batches: 8,
-                planned_batches: Some(8),
-                produced_batches: Some(8),
-                inputs: suppliers
-                    .iter()
-                    .map(|supplier| ProductionInputV1 {
-                        good_id: (*supplier).into(),
-                        unit_id: "kg".into(),
-                        good: format!("Input {supplier}"),
-                        unit: "kg".into(),
-                        quantity_per_batch: 3,
-                        on_hand: 5,
-                        supplier_site_ids: vec![(*supplier).into()],
-                    })
-                    .collect(),
-                labor: vec![ProductionLaborV1 {
-                    unit: "labor-hours".into(),
-                    available: 7,
-                    quantity_per_batch: 2,
-                }],
-            }],
+            processes: vec![
+                babylon_persistence::production_observation::ProductionProcess {
+                    id: "fixture-process".into(),
+                    name: "Fixture process".into(),
+                    output_good_id: "output".into(),
+                    output_unit_id: "kg".into(),
+                    output_good: "steel".into(),
+                    output_unit: "kg".into(),
+                    output_per_batch: 10,
+                    available_batches: 8,
+                    planned_batches: Some(8),
+                    produced_batches: Some(8),
+                    inputs: suppliers
+                        .iter()
+                        .map(|supplier| ProductionInput {
+                            good_id: (*supplier).into(),
+                            unit_id: "kg".into(),
+                            good: format!("Input {supplier}"),
+                            unit: "kg".into(),
+                            quantity_per_batch: 3,
+                            on_hand: 5,
+                            supplier_site_ids: vec![(*supplier).into()],
+                        })
+                        .collect(),
+                    labor: vec![ProductionLabor {
+                        unit: "labor-hours".into(),
+                        available: 7,
+                        quantity_per_batch: 2,
+                    }],
+                },
+            ],
         }
     }
-    fn chain() -> ProductionSnapshotV2 {
-        ProductionSnapshotV2 {
+    fn chain() -> ProductionSnapshot {
+        ProductionSnapshot {
             content_authority_sha256: "a".repeat(64),
             road_source: None,
             physical_edges: Vec::new(),
@@ -565,11 +529,12 @@ mod tests {
         );
     }
 
-    fn route() -> ProductionRouteV2 {
-        ProductionRouteV2 {
+    fn route() -> ProductionRoute {
+        ProductionRoute {
             physical_edge_ids: Vec::new(),
             distance_mm: None,
-            transport_kind: babylon_persistence::ProductionRouteTransportV2::Staged,
+            transport_kind:
+                babylon_persistence::production_observation::ProductionRouteTransport::Staged,
             grams_per_unit: 1000,
             stages: Vec::new(),
             id: "route-a-b".into(),
@@ -589,8 +554,8 @@ mod tests {
         }
     }
 
-    fn freight() -> ProductionFreightV2 {
-        ProductionFreightV2 {
+    fn freight() -> ProductionFreight {
+        ProductionFreight {
             current_stage_index: 0,
             grams_per_unit: 1000,
             mass_grams: 1000,

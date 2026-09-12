@@ -4,7 +4,7 @@
 
 mod lifecycle;
 
-use babylon_persistence::CampaignId;
+use babylon_persistence::identity::CampaignId;
 use bevy::prelude::*;
 
 /// The two explicitly distinct read capabilities in the observer product.

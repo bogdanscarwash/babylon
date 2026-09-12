@@ -1,5 +1,5 @@
 use babylon_client::observer::{ObservationContext, ObserverSession, Perspective, SessionPhase};
-use babylon_persistence::CampaignId;
+use babylon_persistence::identity::CampaignId;
 use uuid::Uuid;
 
 fn session() -> ObserverSession {

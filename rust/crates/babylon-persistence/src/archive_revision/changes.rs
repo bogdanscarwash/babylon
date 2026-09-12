@@ -3,23 +3,22 @@
 use std::collections::BTreeMap;
 
 use super::record::RevisionRecord;
-use super::ArchiveAtomChangeV2;
-use crate::{ArchiveAtomV1, ArchiveAtomValueV1, SemanticArchiveErrorV1};
+use super::ArchiveAtomChange;
+use crate::{ArchiveAtom, ArchiveAtomValue, SemanticArchiveError};
 
 /// One page has at most 513 atoms, so a complete difference has at most 1,026 rows.
 pub(super) fn between(
     previous: Option<&RevisionRecord>,
     next: &RevisionRecord,
-) -> Result<Vec<ArchiveAtomChangeV2>, SemanticArchiveErrorV1> {
+) -> Result<Vec<ArchiveAtomChange>, SemanticArchiveError> {
     next.validate()?;
     if let Some(previous) = previous {
         previous.validate()?;
         if previous.source.campaign_id() != next.source.campaign_id()
             || previous.subject != next.subject
-            || (previous.effective_tick, previous.origin.tag())
-                >= (next.effective_tick, next.origin.tag())
+            || previous.effective_tick >= next.effective_tick
         {
-            return Err(SemanticArchiveErrorV1::StoredPageMismatch);
+            return Err(SemanticArchiveError::StoredPageMismatch);
         }
     }
     let before = previous.map_or_else(|| Ok(BTreeMap::new()), |page| indexed(&page.atoms))?;
@@ -28,7 +27,7 @@ pub(super) fn between(
     for (principal, before) in before {
         let current = after.remove(&principal);
         if current.is_none_or(|after| !same_assertion(before, after)) {
-            changes.push(ArchiveAtomChangeV2 {
+            changes.push(ArchiveAtomChange {
                 publication_tick: next.effective_tick,
                 signal_key: before.signal_key().to_owned(),
                 before: Some(before.clone()),
@@ -36,7 +35,7 @@ pub(super) fn between(
             });
         }
     }
-    changes.extend(after.into_values().map(|atom| ArchiveAtomChangeV2 {
+    changes.extend(after.into_values().map(|atom| ArchiveAtomChange {
         publication_tick: next.effective_tick,
         signal_key: atom.signal_key().to_owned(),
         before: None,
@@ -46,9 +45,9 @@ pub(super) fn between(
     Ok(changes)
 }
 
-type AtomIndex<'a> = BTreeMap<(u8, &'a str, &'a str), &'a ArchiveAtomV1>;
+type AtomIndex<'a> = BTreeMap<(u8, &'a str, &'a str), &'a ArchiveAtom>;
 
-fn indexed(atoms: &[ArchiveAtomV1]) -> Result<AtomIndex<'_>, SemanticArchiveErrorV1> {
+fn indexed(atoms: &[ArchiveAtom]) -> Result<AtomIndex<'_>, SemanticArchiveError> {
     let mut result = BTreeMap::new();
     for (position, atom) in atoms.iter().enumerate() {
         let (key, target) = atom_key(atom);
@@ -60,16 +59,16 @@ fn indexed(atoms: &[ArchiveAtomV1]) -> Result<AtomIndex<'_>, SemanticArchiveErro
             1
         };
         if result.insert((role, key, target), atom).is_some() {
-            return Err(SemanticArchiveErrorV1::StoredPageMismatch);
+            return Err(SemanticArchiveError::StoredPageMismatch);
         }
     }
     Ok(result)
 }
 
-fn atom_key(atom: &ArchiveAtomV1) -> (&str, &str) {
+fn atom_key(atom: &ArchiveAtom) -> (&str, &str) {
     let target = if super::record::is_link(atom) {
         match atom.value() {
-            ArchiveAtomValueV1::Text(target) => target.as_str(),
+            ArchiveAtomValue::Text(target) => target.as_str(),
             _ => "",
         }
     } else {
@@ -78,7 +77,7 @@ fn atom_key(atom: &ArchiveAtomV1) -> (&str, &str) {
     (atom.signal_key(), target)
 }
 
-fn change_key(change: &ArchiveAtomChangeV2) -> (&str, &str) {
+fn change_key(change: &ArchiveAtomChange) -> (&str, &str) {
     change
         .after
         .as_ref()
@@ -86,7 +85,7 @@ fn change_key(change: &ArchiveAtomChangeV2) -> (&str, &str) {
         .map_or(("", ""), atom_key)
 }
 
-fn same_assertion(left: &ArchiveAtomV1, right: &ArchiveAtomV1) -> bool {
+fn same_assertion(left: &ArchiveAtom, right: &ArchiveAtom) -> bool {
     left.signal_key() == right.signal_key()
         && left.grant_key() == right.grant_key()
         && left.evidence_class() == right.evidence_class()

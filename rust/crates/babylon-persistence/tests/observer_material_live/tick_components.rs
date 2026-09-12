@@ -1,7 +1,7 @@
 //! Exact committed component access belongs exclusively to the full observer.
 
 use super::*;
-use babylon_persistence::SemanticArchiveReaderErrorV1;
+use babylon_persistence::SemanticArchiveReaderError;
 use postgres::GenericClient;
 
 const RELATIONS: [(&str, &str); 24] = [
@@ -80,13 +80,12 @@ const FOUNDATION_CAMPAIGN: u128 = 41_003;
 
 fn prepared_target() -> DisposableTarget {
     let target = DisposableTarget::create();
-    // The observer's existing economy schema depends on Archive relations
-    // installed by the normal campaign foundation path.
+    // Keep a second admitted campaign available for the marker-scope mutation.
     drop(
-        DurableMaterialRuntimeV3::create(
+        DurableMaterialRuntime::create(
             &target.writer,
             CampaignId::from_uuid(Uuid::from_u128(FOUNDATION_CAMPAIGN)),
-            MichiganContentPresetV1::new_campaign(MichiganDeliveryPresetV1::Standard)
+            MichiganContentPreset::new_campaign(MichiganDeliveryPreset::Standard)
                 .create_foundation(&crate::test_support::catalog())
                 .unwrap(),
         )
@@ -96,8 +95,8 @@ fn prepared_target() -> DisposableTarget {
 }
 
 fn install(target: &DisposableTarget) {
-    install_reader_role_v1(&target.writer).unwrap();
-    install_observer_economy_schema_v1(&target.writer).unwrap();
+    install_reader_role(&target.writer).unwrap();
+    provision_observer_role(&target.writer).unwrap();
 }
 
 fn rows(client: &mut impl GenericClient, relation: &str, campaign: CampaignId) -> Vec<String> {
@@ -117,13 +116,13 @@ fn rows(client: &mut impl GenericClient, relation: &str, campaign: CampaignId) -
 
 #[test]
 #[ignore = "requires the disposable PostgreSQL harness; independent clone ownership"]
-fn exact_rows_require_the_matching_v3_commit_marker() {
+fn exact_rows_require_the_matching_commit_marker() {
     let mut target = prepared_target();
     let campaign = CampaignId::from_uuid(Uuid::from_u128(41_001));
-    let mut runtime = DurableMaterialRuntimeV3::create(
+    let mut runtime = DurableMaterialRuntime::create(
         &target.writer,
         campaign,
-        MichiganContentPresetV1::new_campaign(MichiganDeliveryPresetV1::Standard)
+        MichiganContentPreset::new_campaign(MichiganDeliveryPreset::Standard)
             .create_foundation(&crate::test_support::catalog())
             .unwrap(),
     )
@@ -158,15 +157,37 @@ fn exact_rows_require_the_matching_v3_commit_marker() {
         populated >= 12,
         "real replay must exercise multiple row families"
     );
-    // These corruptions exist only within rolled-back fixture transactions.
-    // They isolate each part of the SQL marker predicate without changing saves.
+    // Unsupported layouts are refused by the current schema before a view can
+    // observe them. The failed write and rollback preserve the exact marker.
+    let marker_before = rows(&mut writer, "babylon_state.tick_commit", campaign);
+    let mut tx = writer.transaction().unwrap();
+    let error = tx
+        .execute(
+            "UPDATE babylon_state.tick_commit SET envelope_layout_version=2 WHERE campaign_id=$1::uuid",
+            &[campaign.as_uuid()],
+        )
+        .unwrap_err();
+    assert_eq!(
+        error.code(),
+        Some(&postgres::error::SqlState::CHECK_VIOLATION)
+    );
+    assert_eq!(
+        error.as_db_error().unwrap().constraint(),
+        Some("tick_commit_envelope_layout_v3")
+    );
+    tx.rollback().unwrap();
+    assert_eq!(
+        rows(&mut writer, "babylon_state.tick_commit", campaign),
+        marker_before
+    );
+    // These remaining corruptions exist only in rolled-back fixture transactions.
+    // They isolate each reachable SQL marker predicate without changing saves.
     let wrong_campaign = format!(
         "UPDATE babylon_state.tick_commit SET campaign_id='{}'::uuid WHERE campaign_id=$1::uuid",
         Uuid::from_u128(FOUNDATION_CAMPAIGN)
     );
     for mutation in [
         "DELETE FROM babylon_state.tick_commit WHERE campaign_id=$1::uuid",
-        "UPDATE babylon_state.tick_commit SET envelope_layout_version=2 WHERE campaign_id=$1::uuid",
         "UPDATE babylon_state.tick_commit SET resolve_tick=resolve_tick+1 WHERE campaign_id=$1::uuid",
         wrong_campaign.as_str(),
     ] {
@@ -198,16 +219,16 @@ fn assert_sql_denied(config: &Config, relation: &str) {
 }
 
 fn assert_preview_refused(
-    known: &ObserverEconomyReaderV1,
-    archive: &SemanticArchiveReaderV1,
+    known: &ObserverEconomyReader,
+    archive: &SemanticArchiveReader,
     campaign: CampaignId,
 ) {
     assert_eq!(
         known.snapshot(campaign, 0),
-        Err(ObserverEconomyErrorV1::Authority)
+        Err(ObserverEconomyError::Authority)
     );
     let error = archive.committed_tick_status(campaign).unwrap_err();
-    let SemanticArchiveReaderErrorV1::WriterAuthorityRefused(held) = error else {
+    let SemanticArchiveReaderError::WriterAuthorityRefused(held) = error else {
         panic!("expected exact Archive privilege refusal, got {error:?}");
     };
     for (relation, view) in RELATIONS {
@@ -226,20 +247,19 @@ fn full_observer_requires_every_view_and_preview_refuses_all_grant_paths() {
     let observer_config = target.login("babylon_observer", "fullcomponents");
     let known_config = target.login("babylon_reader", "knowncomponents");
     let observer =
-        ObserverEconomyReaderV1::connect(&observer_config, ObserverVisibilityV1::FullObserver)
-            .unwrap();
-    let known = ObserverEconomyReaderV1::connect(&known_config, ObserverVisibilityV1::KnownPreview)
-        .unwrap();
-    let archive = SemanticArchiveReaderV1::new(&known_config).unwrap();
+        ObserverEconomyReader::connect(&observer_config, ObserverVisibility::FullObserver).unwrap();
+    let known =
+        ObserverEconomyReader::connect(&known_config, ObserverVisibility::KnownPreview).unwrap();
+    let archive = SemanticArchiveReader::new(&known_config).unwrap();
     let absent = CampaignId::from_uuid(Uuid::from_u128(41_002));
     let mut writer = target.writer.connect(NoTls).unwrap();
     assert_eq!(
         known.snapshot(absent, 0),
-        Err(ObserverEconomyErrorV1::CampaignAbsent)
+        Err(ObserverEconomyError::CampaignAbsent)
     );
     assert_eq!(
         observer.snapshot(absent, 0),
-        Err(ObserverEconomyErrorV1::CampaignAbsent)
+        Err(ObserverEconomyError::CampaignAbsent)
     );
     assert_eq!(archive.committed_tick_status(absent).unwrap(), None);
     for (relation, view) in RELATIONS {
@@ -252,7 +272,7 @@ fn full_observer_requires_every_view_and_preview_refuses_all_grant_paths() {
             .unwrap();
         assert_eq!(
             observer.snapshot(absent, 0),
-            Err(ObserverEconomyErrorV1::Authority),
+            Err(ObserverEconomyError::Authority),
             "{view}"
         );
         writer
@@ -283,7 +303,7 @@ fn full_observer_requires_every_view_and_preview_refuses_all_grant_paths() {
         }
         assert_eq!(
             known.snapshot(absent, 0),
-            Err(ObserverEconomyErrorV1::CampaignAbsent)
+            Err(ObserverEconomyError::CampaignAbsent)
         );
         assert_eq!(archive.committed_tick_status(absent).unwrap(), None);
     }
@@ -291,75 +311,48 @@ fn full_observer_requires_every_view_and_preview_refuses_all_grant_paths() {
 
 #[test]
 #[ignore = "requires the disposable PostgreSQL harness; independent clone ownership"]
-fn schema_identity_rejects_source_definition_and_partial_install_drift() {
-    let target = prepared_target();
+fn observer_provisioning_refuses_changed_or_missing_component_views_without_repair() {
+    let target = DisposableTarget::create();
     install(&target);
     let mut writer = target.writer.connect(NoTls).unwrap();
-    let marker = writer.query_one(
-        "SELECT migration_sha256, view_definitions FROM public.observer_tick_components_schema_v1 WHERE singleton", &[],
-    ).unwrap();
-    let digest: String = marker.get(0);
-    let definitions: Vec<String> = marker.get(1);
-    assert_eq!(digest.len(), 64);
-    assert_eq!(definitions.len(), RELATIONS.len());
-    install(&target);
-    let repeated = writer.query_one(
-        "SELECT migration_sha256, view_definitions FROM public.observer_tick_components_schema_v1 WHERE singleton", &[],
-    ).unwrap();
-    assert_eq!(repeated.get::<_, String>(0), digest);
-    assert_eq!(repeated.get::<_, Vec<String>>(1), definitions);
-    writer
-        .execute(
-            "UPDATE public.observer_tick_components_schema_v1 SET migration_sha256=$1",
-            &[&"0".repeat(64)],
-        )
-        .unwrap();
+    let current_state = |writer: &mut postgres::Client| {
+        let row = writer
+            .query_one(
+                "SELECT schema_sha256, CASE \
+                 WHEN pg_catalog.to_regclass('public.v_observer_graph_node_v1') IS NULL THEN NULL \
+                 ELSE pg_catalog.pg_get_viewdef( \
+                     pg_catalog.to_regclass('public.v_observer_graph_node_v1'), false) END \
+                 FROM babylon_meta.current_schema WHERE singleton",
+                &[],
+            )
+            .unwrap();
+        (row.get::<_, Vec<u8>>(0), row.get::<_, Option<String>>(1))
+    };
+    let admitted = current_state(&mut writer);
     assert_eq!(
-        install_observer_economy_schema_v1(&target.writer),
-        Err(ObserverEconomyErrorV1::SchemaDrift)
+        admitted.0,
+        babylon_persistence::current_schema_sha256().to_vec()
     );
-    writer
-        .execute(
-            "UPDATE public.observer_tick_components_schema_v1 SET migration_sha256=$1",
-            &[&digest],
-        )
-        .unwrap();
-    let original: String = writer
-        .query_one(
-            "SELECT pg_catalog.pg_get_viewdef('public.v_observer_graph_node_v1'::regclass, false)",
-            &[],
-        )
-        .unwrap()
-        .get(0);
+    assert!(admitted.1.is_some());
     writer.batch_execute(
         "CREATE OR REPLACE VIEW public.v_observer_graph_node_v1 AS SELECT component.* FROM babylon_state.graph_node_v1 component WHERE false",
     ).unwrap();
+    let altered = current_state(&mut writer);
+    assert_eq!(altered.0, admitted.0);
+    assert_ne!(altered.1, admitted.1);
     assert_eq!(
-        install_observer_economy_schema_v1(&target.writer),
-        Err(ObserverEconomyErrorV1::SchemaDrift)
+        provision_observer_role(&target.writer),
+        Err(ObserverEconomyError::SchemaDrift)
     );
-    writer
-        .batch_execute(&format!(
-            "CREATE OR REPLACE VIEW public.v_observer_graph_node_v1 AS {original}"
-        ))
-        .unwrap();
-    install(&target);
+    assert_eq!(current_state(&mut writer), altered);
     writer
         .batch_execute("DROP VIEW public.v_observer_graph_node_v1")
         .unwrap();
+    let absent = current_state(&mut writer);
+    assert_eq!(absent, (admitted.0, None));
     assert_eq!(
-        install_observer_economy_schema_v1(&target.writer),
-        Err(ObserverEconomyErrorV1::SchemaDrift)
+        provision_observer_role(&target.writer),
+        Err(ObserverEconomyError::SchemaDrift)
     );
-    writer.batch_execute(&format!(
-        "CREATE VIEW public.v_observer_graph_node_v1 AS {original}; GRANT SELECT ON public.v_observer_graph_node_v1 TO babylon_observer"
-    )).unwrap();
-    install(&target);
-    writer
-        .batch_execute("DROP TABLE public.observer_tick_components_schema_v1")
-        .unwrap();
-    assert_eq!(
-        install_observer_economy_schema_v1(&target.writer),
-        Err(ObserverEconomyErrorV1::SchemaDrift)
-    );
+    assert_eq!(current_state(&mut writer), absent);
 }

@@ -1,6 +1,6 @@
 [package]
 name = "babylon-client"
-description = "Program 28 B0 — the Bevy client scaffold: window, palette, in-process engine link"
+description = "Durable campaign observer and headless Archive commands"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -31,11 +31,8 @@ path = "src/main.rs"
 dynamic_linking = ["bevy/dynamic_linking"]
 
 [dependencies]
-bevy = { version = "0.18", features = ["pan_camera", "webp"] }
+bevy = { version = "0.18", features = ["webp"] }
 babylon-kernel = { path = "../babylon-kernel" }
-babylon-tick = { path = "../babylon-tick" }
-babylon-graph = { path = "../babylon-graph" }
-babylon-bsl = { path = "../babylon-bsl" }
 # PER-23 Slice 3 (ADR249 R9-R11): the headless dossier CLI reads the
 # fog-safe reader surface — the confined read-only Archive projection, never
 # game state, and never a writer path.
@@ -52,12 +49,13 @@ uuid = "1.24"
 log = "0.4"
 
 [dev-dependencies]
+babylon-tick = { path = "../babylon-tick" }
+babylon-graph = { path = "../babylon-graph" }
+babylon-bsl = { path = "../babylon-bsl" }
 # PER-23 Slice 3 live proof: the dossier CLI test clones the disposable
 # runtime template, commits real ticks, installs the Archive + reader-role
 # schemas, and drives the built binary against a confined login — the same
 # harness shape as babylon-persistence's reader_role_live, self-contained
 # per crate.
-babylon-persistence = { path = "../babylon-persistence" }
 babylon-practice-contract = { path = "../babylon-practice-contract" }
 postgres = { version = "=0.19.14", features = ["with-uuid-1"] }
-serde_json = "1"

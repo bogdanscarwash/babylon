@@ -19,7 +19,7 @@
 //! ```
 
 use babylon_graph::allocator_state::AllocatorCursors;
-use babylon_kernel::sha256_of;
+use babylon_kernel::content_digest::sha256_of;
 
 const WORLD_HASH_LAYOUT_VERSION: u32 = 1;
 const WORLD_HASH_DOMAIN: &[u8] = b"babylon.world-state\0";
@@ -75,7 +75,7 @@ mod tests {
     use babylon_graph::memory::MemoryGraph;
     use babylon_graph::state_hash::CanonicalState;
     use babylon_graph::substrate::GraphSubstrate;
-    use babylon_kernel::sha256_of;
+    use babylon_kernel::content_digest::sha256_of;
 
     fn seeded_world<G: GraphSubstrate + Default>(reverse_writes: bool) -> G {
         let mut graph = G::default();

@@ -1,11 +1,11 @@
 //! Behavioral proof for situated organizational practice over relational territory.
 
-use babylon_bsl::compose_declaration_preludes;
+use babylon_bsl::scenario::compose_declaration_preludes;
 use babylon_bsl::structural_verbs::CollectingSink;
 use babylon_graph::hypergraph_store::HypergraphStore;
 use babylon_graph::substrate::{GraphSubstrate, NodeId};
-use babylon_kernel::SessionId;
-use babylon_tick::TickSession;
+use babylon_kernel::replay::ReplaySessionId;
+use babylon_tick::diagnostic::RuleDiagnosticSession;
 
 const SCENARIO: &str = include_str!("../content/scenarios/organization-foundation.bscn");
 const PACK: &str = include_str!("../content/rules/organization.bsl");
@@ -24,26 +24,29 @@ const COUNTY_B: NodeId = NodeId(6);
 const COUNTY_C: NodeId = NodeId(7);
 const COUNTY_D: NodeId = NodeId(9);
 
-fn attribute(session: &TickSession<HypergraphStore>, node: NodeId, field: &str) -> f64 {
+fn attribute(session: &RuleDiagnosticSession<HypergraphStore>, node: NodeId, field: &str) -> f64 {
     session
         .graph()
         .node_attribute(node, field)
         .unwrap_or_else(|error| panic!("node {node:?} declares {field}: {error:?}"))
 }
 
-fn capacity(session: &TickSession<HypergraphStore>, territory: NodeId) -> f64 {
+fn capacity(session: &RuleDiagnosticSession<HypergraphStore>, territory: NodeId) -> f64 {
     attribute(session, territory, "territory/rooted-capacity")
 }
 
-fn rooted_work(session: &TickSession<HypergraphStore>, territory: NodeId) -> f64 {
+fn rooted_work(session: &RuleDiagnosticSession<HypergraphStore>, territory: NodeId) -> f64 {
     attribute(session, territory, "territory/rooted-work-inbox")
 }
 
-fn membership(session: &TickSession<HypergraphStore>) -> f64 {
+fn membership(session: &RuleDiagnosticSession<HypergraphStore>) -> f64 {
     attribute(session, READING_GROUP, "organization/membership-share")
 }
 
-fn local_base_population(session: &TickSession<HypergraphStore>, territory: NodeId) -> f64 {
+fn local_base_population(
+    session: &RuleDiagnosticSession<HypergraphStore>,
+    territory: NodeId,
+) -> f64 {
     session
         .graph()
         .edge_attribute(
@@ -65,20 +68,22 @@ fn rooted_practice_requires_a_shared_presence_and_tenancy_territory() {
         remote_base_scenario, SCENARIO,
         "the social base must move outside the organization's presence"
     );
-    let mut local = TickSession::new_with_prelude(
+    let mut local = RuleDiagnosticSession::new(
         SCENARIO,
-        &practice_prelude(),
+        Some(&practice_prelude()),
         PACK,
         HypergraphStore::new(),
-        SessionId::new("organization-local-social-base").expect("literal is non-empty"),
+        ReplaySessionId::try_from("organization-local-social-base").expect("literal is non-empty"),
+        babylon_kernel::replay::ReplaySeed::new(0),
     )
     .expect("the local-base world loads");
-    let mut remote = TickSession::new_with_prelude(
+    let mut remote = RuleDiagnosticSession::new(
         &remote_base_scenario,
-        &practice_prelude(),
+        Some(&practice_prelude()),
         PACK,
         HypergraphStore::new(),
-        SessionId::new("organization-remote-social-base").expect("literal is non-empty"),
+        ReplaySessionId::try_from("organization-remote-social-base").expect("literal is non-empty"),
+        babylon_kernel::replay::ReplaySeed::new(0),
     )
     .expect("the remote-base world loads");
     let mut local_sink = CollectingSink::default();
@@ -103,20 +108,23 @@ fn a_nonparticipating_presence_does_not_dilute_rooted_work() {
         remote_branch_scenario, SCENARIO,
         "the organization must gain a remote branch"
     );
-    let mut local_only = TickSession::new_with_prelude(
+    let mut local_only = RuleDiagnosticSession::new(
         SCENARIO,
-        &practice_prelude(),
+        Some(&practice_prelude()),
         PACK,
         HypergraphStore::new(),
-        SessionId::new("organization-local-mean").expect("literal is non-empty"),
+        ReplaySessionId::try_from("organization-local-mean").expect("literal is non-empty"),
+        babylon_kernel::replay::ReplaySeed::new(0),
     )
     .expect("the local-only world loads");
-    let mut with_remote_branch = TickSession::new_with_prelude(
+    let mut with_remote_branch = RuleDiagnosticSession::new(
         &remote_branch_scenario,
-        &practice_prelude(),
+        Some(&practice_prelude()),
         PACK,
         HypergraphStore::new(),
-        SessionId::new("organization-local-mean-with-remote").expect("literal is non-empty"),
+        ReplaySessionId::try_from("organization-local-mean-with-remote")
+            .expect("literal is non-empty"),
+        babylon_kernel::replay::ReplaySeed::new(0),
     )
     .expect("the remote-branch world loads");
     let mut local_sink = CollectingSink::default();
@@ -154,12 +162,14 @@ fn a_nonparticipating_presence_does_not_dilute_rooted_work() {
 
 #[test]
 fn rooted_capacity_does_not_self_replicate_without_fresh_practice() {
-    let mut session = TickSession::new_with_prelude(
+    let mut session = RuleDiagnosticSession::new(
         SCENARIO,
-        &practice_prelude(),
+        Some(&practice_prelude()),
         PACK,
         HypergraphStore::new(),
-        SessionId::new("organization-practice-conformance").expect("literal is non-empty"),
+        ReplaySessionId::try_from("organization-practice-conformance")
+            .expect("literal is non-empty"),
+        babylon_kernel::replay::ReplaySeed::new(0),
     )
     .expect("the organization practice world loads");
     let mut sink = CollectingSink::default();
@@ -189,12 +199,14 @@ fn rooted_capacity_does_not_self_replicate_without_fresh_practice() {
 
 #[test]
 fn unique_low_buffer_corridor_relays_more_capacity_than_reroutable_corridor() {
-    let mut session = TickSession::new_with_prelude(
+    let mut session = RuleDiagnosticSession::new(
         SCENARIO,
-        &practice_prelude(),
+        Some(&practice_prelude()),
         PACK,
         HypergraphStore::new(),
-        SessionId::new("organization-circulation-bottleneck").expect("literal is non-empty"),
+        ReplaySessionId::try_from("organization-circulation-bottleneck")
+            .expect("literal is non-empty"),
+        babylon_kernel::replay::ReplaySeed::new(0),
     )
     .expect("the organization practice world loads");
     let mut sink = CollectingSink::default();
@@ -214,12 +226,13 @@ fn unique_low_buffer_corridor_relays_more_capacity_than_reroutable_corridor() {
 
 #[test]
 fn one_seeded_action_is_divided_across_the_organizations_branches() {
-    let mut one_branch = TickSession::new_with_prelude(
+    let mut one_branch = RuleDiagnosticSession::new(
         SCENARIO,
-        &practice_prelude(),
+        Some(&practice_prelude()),
         PACK,
         HypergraphStore::new(),
-        SessionId::new("organization-one-branch").expect("literal is non-empty"),
+        ReplaySessionId::try_from("organization-one-branch").expect("literal is non-empty"),
+        babylon_kernel::replay::ReplaySeed::new(0),
     )
     .expect("the one-branch organization world loads");
     let two_branch_scenario = SCENARIO.replace(
@@ -233,12 +246,13 @@ fn one_seeded_action_is_divided_across_the_organizations_branches() {
         two_branch_scenario, SCENARIO,
         "the second branch must be inserted"
     );
-    let mut two_branches = TickSession::new_with_prelude(
+    let mut two_branches = RuleDiagnosticSession::new(
         &two_branch_scenario,
-        &practice_prelude(),
+        Some(&practice_prelude()),
         PACK,
         HypergraphStore::new(),
-        SessionId::new("organization-two-branches").expect("literal is non-empty"),
+        ReplaySessionId::try_from("organization-two-branches").expect("literal is non-empty"),
+        babylon_kernel::replay::ReplaySeed::new(0),
     )
     .expect("the two-branch organization world loads");
     let mut one_branch_sink = CollectingSink::default();
@@ -278,20 +292,23 @@ fn practice_requires_presence_with_the_matching_material_embedding() {
         matched_workplace, workplace_practice,
         "the presence relation must become a workplace embedding"
     );
-    let mut mismatched = TickSession::new_with_prelude(
+    let mut mismatched = RuleDiagnosticSession::new(
         &workplace_practice,
-        &practice_prelude(),
+        Some(&practice_prelude()),
         PACK,
         HypergraphStore::new(),
-        SessionId::new("organization-mismatched-embedding").expect("literal is non-empty"),
+        ReplaySessionId::try_from("organization-mismatched-embedding")
+            .expect("literal is non-empty"),
+        babylon_kernel::replay::ReplaySeed::new(0),
     )
     .expect("the mismatched-embedding world loads");
-    let mut matched = TickSession::new_with_prelude(
+    let mut matched = RuleDiagnosticSession::new(
         &matched_workplace,
-        &practice_prelude(),
+        Some(&practice_prelude()),
         PACK,
         HypergraphStore::new(),
-        SessionId::new("organization-matched-embedding").expect("literal is non-empty"),
+        ReplaySessionId::try_from("organization-matched-embedding").expect("literal is non-empty"),
+        babylon_kernel::replay::ReplaySeed::new(0),
     )
     .expect("the matched-embedding world loads");
     let mut mismatched_sink = CollectingSink::default();
@@ -322,12 +339,13 @@ fn practice_requires_presence_with_the_matching_material_embedding() {
 
 #[test]
 fn situated_practice_builds_capacity_without_direct_membership_or_care() {
-    let mut session = TickSession::new_with_prelude(
+    let mut session = RuleDiagnosticSession::new(
         SCENARIO,
-        &practice_prelude(),
+        Some(&practice_prelude()),
         PACK,
         HypergraphStore::new(),
-        SessionId::new("organization-situated-practice").expect("literal is non-empty"),
+        ReplaySessionId::try_from("organization-situated-practice").expect("literal is non-empty"),
+        babylon_kernel::replay::ReplaySeed::new(0),
     )
     .expect("the organization practice world loads");
     let mut sink = CollectingSink::default();

@@ -1,7 +1,7 @@
 //! Rust authority over the fixed Detroit-Windsor administrative dossier.
 
 use babylon_rtd::{
-    canonical_draft_bytes, parse_draft_json, parse_vector_corpus, seal_draft, RtdVectorCaseV1,
+    canonical_draft_bytes, parse_draft_json, parse_vector_corpus, seal_draft, RtdVectorCase,
 };
 
 const CONTROL: &[u8] =
@@ -41,7 +41,7 @@ fn administrative_control_is_the_shared_rust_vector() {
         if index == cases.len() {
             break;
         }
-        if let RtdVectorCaseV1::Valid {
+        if let RtdVectorCase::Valid {
             case_id,
             draft_json,
             projection_hash,
@@ -68,7 +68,7 @@ fn administrative_control_is_the_shared_rust_vector() {
 #[test]
 fn extraction_ledger_bytes_are_pinned() {
     assert_eq!(
-        babylon_kernel::sha256_of(EXTRACTION_LEDGER),
+        babylon_kernel::content_digest::sha256_of(EXTRACTION_LEDGER),
         EXTRACTION_LEDGER_SHA256
     );
 }

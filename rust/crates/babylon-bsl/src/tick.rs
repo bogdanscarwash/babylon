@@ -80,8 +80,8 @@ use crate::intrinsic_host::{
     draw_finite_kernel_ticket, DrawContext, DrawIdentityContext, IntrinsicCallCtx, IntrinsicHost,
 };
 use crate::probability::{
-    evaluate_kernel_masses, forecast_event_likelihoods as exact_pushforward, BranchProjectionV1,
-    EventLikelihoodV1, KernelInstanceIdentityV1, KernelRealizationV1, FINITE_KERNEL_DRAW_BASE,
+    evaluate_kernel_masses, forecast_event_likelihoods as exact_pushforward, BranchProjection,
+    EventLikelihood, KernelInstanceIdentity, KernelRealization, FINITE_KERNEL_DRAW_BASE,
 };
 use crate::reader::{Atom, SExpr};
 use crate::rule_pipeline::LoadedRule;
@@ -89,12 +89,11 @@ use crate::structural_verbs::{EffectExecutor, EventSink};
 use crate::typecheck::TypeEnv;
 use crate::types::{BslType, EnumRegistry};
 use crate::write_log::WriteObserver;
-use babylon_graph::stable_element::{StableElementKeyV1, StableElementResolverV1};
+use babylon_graph::stable_element::{StableElementKey, StableElementResolver};
 use babylon_graph::state_hash::CanonicalState;
 use babylon_graph::substrate::{GraphSubstrate, NodeId};
 use babylon_graph::working_copy::DetachedCopy;
-use babylon_kernel::replay::{RngDomainV2, RngSeedContext};
-use babylon_kernel::SessionId;
+use babylon_kernel::replay::{RngDomain, RngSeedContext};
 use std::collections::HashMap;
 
 /// Why a tick would not run.
@@ -136,20 +135,20 @@ pub struct TickOutcome {
     /// How many passed the guard and had their effects executed.
     pub fired: usize,
     /// Successful choices in subject encounter order.
-    pub kernel_realizations: Vec<KernelRealizationV1>,
+    pub kernel_realizations: Vec<KernelRealization>,
     /// Stable subject provenance aligned one-for-one with emitted events.
-    pub event_provenance: Vec<EmittedEventProvenanceV1>,
+    pub event_provenance: Vec<EmittedEventProvenance>,
 }
 
 /// Stable carrier provenance for one emitted event.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct EmittedEventProvenanceV1 {
+pub struct EmittedEventProvenance {
     /// Graph-owned stable subject identity; never inferred from payload.
-    pub subject: StableElementKeyV1,
+    pub subject: StableElementKey,
 }
 
 /// Read-only dependencies for one bounded detached-state forecast.
-pub struct ForecastContextV1<'a> {
+pub struct ForecastContext<'a> {
     /// Declared field types.
     pub types: &'a TypeEnv,
     /// Closed enum declarations.
@@ -162,8 +161,6 @@ pub struct ForecastContextV1<'a> {
     pub defines: &'a DefinesEnv,
     /// Tick whose calendar bindings are evaluated.
     pub tick: i64,
-    /// Closed vocabulary, when the content set declares one.
-    pub vocabulary: Option<&'a crate::vocabulary::ClosedVocabulary>,
 }
 
 /// The defines environment §4.2 names — coefficients by qualified name, the
@@ -362,7 +359,7 @@ fn bind_subject(
                 return Err(err(format!(
                     "binding `{}`: unservable source reached the subject loop —                      check_sources_servable and bind_subject have drifted",
                     binding.name
-                )))
+                )));
             }
         };
         // T3 #491, OQ-J: a `currency`-declared field lives in the substrate's
@@ -652,50 +649,21 @@ fn check_sources_servable(bindings: &[BindingDecl], defines: &DefinesEnv) -> Res
 /// the guard does not evaluate to a `Bool`, evaluation or collection fails,
 /// or a collected write fails to apply.
 ///
-/// # Private deterministic draw context
-///
-/// The loaded contract's governed rule id, `node_content_ids`, and `session`
-/// carry no weight of their own here — `run_tick` only forwards the latter
-/// two to `collect_pass`, which builds one
-/// [`crate::intrinsic_host::DrawContext`] per subject. Amendment AJ permits
-/// only a compiled finite kernel to consume that context; BSL authors cannot
-/// invoke a draw. The rule identity has no parallel caller-supplied seam:
-/// the loaded contract also owns observed write attribution.
-///
-/// `node_content_ids: Option<&HashMap<NodeId, String>>` fixes the standard
-/// hasher rather than generalizing over `S: BuildHasher` (`clippy::
-/// implicit_hasher`'s own preferred fix, and this crate's own precedent —
-/// `bind_environment`/`resolve_expr_bindings`, `rule_pipeline.rs`):
-/// unlike those two, this reference is stored VERBATIM into
-/// [`crate::intrinsic_host::DrawIdentityContext::V1`], which crosses
-/// the [`IntrinsicHost`] trait boundary — generalizing here would cascade
-/// the hasher type parameter through `DrawContext`, `IntrinsicCallCtx`,
-/// `EvalEnv`, and every `IntrinsicHost` impl for a map that, in every
-/// production call site (`babylon_bsl::scenario::invert_content_ids`), is
-/// always the default `HashMap::new()`/`RandomState` — a caller-supplied
-/// alternate hasher is not a real requirement here, so the wide
-/// generalization would buy nothing (§ Simplicity, no abstraction for
-/// single-use code).
-///
-/// **`Option`, not a bare reference (review round 2, #576 I2).** `None`
-/// means "no scenario was hydrated in this call path" (this crate's own
-/// hand-built `MemoryGraph` fixtures); `Some(map)` means "hydrated", even
-/// when `map` is empty — see [`crate::intrinsic_host::DrawContext::
-/// node_content_ids`]'s own doc for the failure scenario the type
-/// distinction closes that an `is_empty()`-gated bare reference could not.
+/// Every execution supplies an explicit replay seed and sealed graph identities.
+/// Only a compiled finite kernel can consume draws from that context.
 #[allow(clippy::too_many_arguments, clippy::implicit_hasher)]
-pub fn run_tick(
+pub fn run_tick<G: GraphSubstrate + CanonicalState>(
     loaded: &LoadedRule,
     types: &TypeEnv,
     enums: &EnumRegistry,
     host: &dyn IntrinsicHost,
-    graph: &mut dyn GraphSubstrate,
+    graph: &mut G,
     sink: &mut dyn EventSink,
     costs: &crate::fuel::IntrinsicCosts,
     defines: &DefinesEnv,
     tick: i64,
-    node_content_ids: Option<&HashMap<NodeId, String>>,
-    session: &SessionId,
+    rng_seed: RngSeedContext<'_>,
+    stable_resolver: &StableElementResolver,
     // The scenario's closed vocabulary, when one was declared — the D29
     // owner-kind filter `subject_type_of` applies (Community port train,
     // Task 6). `None` is the registry-free unit-test lane, where the
@@ -703,6 +671,9 @@ pub fn run_tick(
     // before this parameter existed.
     vocabulary: Option<&crate::vocabulary::ClosedVocabulary>,
 ) -> Result<TickOutcome, TickError> {
+    stable_resolver
+        .validate_topology(graph)
+        .map_err(|error| err(format!("sealed topology refused: {error:?}")))?;
     run_tick_with_observer(
         loaded,
         types,
@@ -713,9 +684,8 @@ pub fn run_tick(
         costs,
         defines,
         tick,
-        node_content_ids,
-        RngSeedContext::V1 { session },
-        None,
+        rng_seed,
+        stable_resolver,
         vocabulary,
         None,
     )
@@ -741,25 +711,17 @@ pub fn run_tick_observed<G>(
     costs: &crate::fuel::IntrinsicCosts,
     defines: &DefinesEnv,
     tick: i64,
-    node_content_ids: Option<&HashMap<NodeId, String>>,
     rng_seed: RngSeedContext<'_>,
-    stable_resolver: Option<&StableElementResolverV1>,
+    stable_resolver: &StableElementResolver,
     vocabulary: Option<&crate::vocabulary::ClosedVocabulary>,
     observer: &mut dyn WriteObserver,
 ) -> Result<TickOutcome, TickError>
 where
     G: GraphSubstrate + CanonicalState,
 {
-    if matches!(rng_seed, RngSeedContext::V2 { .. }) {
-        let resolver = stable_resolver.ok_or_else(|| {
-            err("finite-kernel V2 requires a sealed StableElementResolverV1".to_owned())
-        })?;
-        resolver.validate_topology(graph).map_err(|error| {
-            err(format!(
-                "finite-kernel V2 sealed topology refused: {error:?}"
-            ))
-        })?;
-    }
+    stable_resolver
+        .validate_topology(graph)
+        .map_err(|error| err(format!("sealed topology refused: {error:?}")))?;
     run_tick_with_observer(
         loaded,
         types,
@@ -770,7 +732,6 @@ where
         costs,
         defines,
         tick,
-        node_content_ids,
         rng_seed,
         stable_resolver,
         vocabulary,
@@ -789,9 +750,8 @@ fn run_tick_with_observer(
     costs: &crate::fuel::IntrinsicCosts,
     defines: &DefinesEnv,
     tick: i64,
-    node_content_ids: Option<&HashMap<NodeId, String>>,
     rng_seed: RngSeedContext<'_>,
-    stable_resolver: Option<&StableElementResolverV1>,
+    stable_resolver: &StableElementResolver,
     vocabulary: Option<&crate::vocabulary::ClosedVocabulary>,
     observer: Option<&mut dyn WriteObserver>,
 ) -> Result<TickOutcome, TickError> {
@@ -818,7 +778,6 @@ fn run_tick_with_observer(
         costs,
         defines,
         tick,
-        node_content_ids,
         rng_seed,
         stable_resolver,
     )?;
@@ -827,18 +786,13 @@ fn run_tick_with_observer(
     // source order inner) — `graph` is mutable again, `collect_pass`'s
     // immutable borrow having already ended. ----
     if let Some(observer) = observer {
-        let mut applier = EffectExecutor::observed(
-            types,
-            enums,
-            None,
-            loaded.contract.rule_id.as_str(),
-            observer,
-        );
+        let mut applier =
+            EffectExecutor::observed(types, enums, loaded.contract.rule_id.as_str(), observer);
         for write in &all_pending {
             applier.apply_pending_write(write, graph)?;
         }
     } else {
-        let mut applier = EffectExecutor::new(types, enums, None);
+        let mut applier = EffectExecutor::new(types, enums);
         for write in &all_pending {
             applier.apply_pending_write(write, graph)?;
         }
@@ -889,10 +843,6 @@ fn run_tick_with_observer(
 /// [`TickError`] if a rule reads a coefficient `defines` does not hold, a
 /// required field was never written, the guard does not evaluate to a
 /// `Bool`, or collection fails.
-///
-/// `node_content_ids`'s fixed (non-generalized) hasher: see [`run_tick`]'s
-/// own doc — the same reasoning applies verbatim, one level down the call
-/// stack.
 #[allow(
     clippy::too_many_arguments,
     clippy::implicit_hasher,
@@ -912,21 +862,16 @@ fn collect_pass(
     costs: &crate::fuel::IntrinsicCosts,
     defines: &DefinesEnv,
     tick: i64,
-    // Private deterministic draw context: `loaded.contract.rule_id` is
-    // `domain`, `node_content_ids`
-    // resolves `subject` (and any `it`/`:as` element `eval_intrinsic` meets)
-    // to a Task-3 content id, and `session` is `DrawContext`'s own non-
-    // operand half (D69). All three are constant for the whole rule; only
-    // `subject` varies per iteration below.
-    node_content_ids: Option<&HashMap<NodeId, String>>,
+    // The rule's domain and explicit replay inputs are fixed across subjects.
+    // The sealed resolver identifies each subject and active query element.
     rng_seed: RngSeedContext<'_>,
-    stable_resolver: Option<&StableElementResolverV1>,
+    stable_resolver: &StableElementResolver,
 ) -> Result<
     (
         Vec<crate::structural_verbs::PendingWrite>,
         usize,
-        Vec<KernelRealizationV1>,
-        Vec<EmittedEventProvenanceV1>,
+        Vec<KernelRealization>,
+        Vec<EmittedEventProvenance>,
     ),
     TickError,
 > {
@@ -945,8 +890,8 @@ fn collect_pass(
              non-negative tick, and III.7/III.11 forbid silently wrapping it"
         ))
     })?;
-    let replay_rule =
-        replay_rule_identity(rng_seed, stable_resolver, loaded.contract.rule_id.as_str())?;
+    let domain = RngDomain::try_from(loaded.contract.rule_id.as_str())
+        .map_err(|error| err(format!("firing-rule domain refused: {error:?}")))?;
 
     for subject in subjects {
         let mut values = bind_subject(
@@ -969,83 +914,16 @@ fn collect_pass(
         // happened to exist, which is not a property of the rule.
         let mut fuel = loaded.declared_fuel;
 
-        // The private draw carrier uses THIS subject's stable content
-        // identity, never its `NodeId` handle — keying
-        // on the handle would be replay-deterministic but insertion-
-        // history-dependent (plan §3.4), the exact butterfly ADR176 r20
-        // forbids.
-        //
-        // **Review round 2 (#576 I2): `node_content_ids` is `Option`-typed,
-        // not `is_empty()`-gated.** `None` is the actual, observed shape of
-        // every hand-built `MemoryGraph` fixture in this crate's own tests
-        // (none go through scenario hydration) — there, a `NodeId`'s own
-        // `Debug` rendering stands in, honestly: no scenario means no
-        // declared name, not a hydration bug. Against `Some(map)` a miss is
-        // a hard `TickError`, `map.is_empty()` or not — see
-        // `evaluator::element_content_id`'s own doc for the full
-        // cross-file invariant this closes: every scenario-hydrated
-        // `NodeId` is named (`scenario::invert_content_ids`), and the only
-        // OTHER way to mint one — the six graph-shape verbs,
-        // `structural_verbs::DEFERRED_SHAPE_VERBS` — is refused
-        // unconditionally at load (`check_no_deferred_shape_verbs`,
-        // `rule_pipeline.rs:269`), a gate a NAMED FUTURE TASK will lift.
-        // Whoever lifts it must also update `node_content_ids` for any
-        // mid-tick-minted node, or this hard error is the trip wire that
-        // catches the gap — the alternative (an unconditional fallback)
-        // would have silently fed a raw, insertion-order-dependent
-        // `NodeId` handle into the finite-kernel draw key, precisely the
-        // ADR176 r20 butterfly the content-id design exists to prevent.
-        //
-        // `Cow` (review round 2, #576 M2): the found-in-map arm BORROWS
-        // straight out of `node_content_ids` (which outlives this loop)
-        // instead of allocating a fresh `String` per subject per rule per
-        // tick — only the Debug-rendering fallback arm allocates.
-        let v1_subject = match rng_seed {
-            RngSeedContext::V1 { .. } => Some(v1_subject_identity(*subject, node_content_ids)?),
-            RngSeedContext::V2 { .. } => None,
-        };
-        let stable_subject = match rng_seed {
-            RngSeedContext::V1 { .. } => None,
-            RngSeedContext::V2 { .. } => {
-                let (_, resolver) = replay_rule
-                    .as_ref()
-                    .expect("V2 rule identity checked before subject loop");
-                Some(
-                    resolver
-                        .node_key(*subject)
-                        .map_err(|error| {
-                            err(format!(
-                                "V2 subject has no sealed stable identity: {error:?}"
-                            ))
-                        })?
-                        .clone(),
-                )
-            }
-        };
-        let identity = match rng_seed {
-            RngSeedContext::V1 { session } => DrawIdentityContext::V1 {
-                session,
-                domain: loaded.contract.rule_id.as_str(),
-                subject: v1_subject
-                    .as_deref()
-                    .expect("V1 always resolves its subject"),
-                node_content_ids,
-            },
-            RngSeedContext::V2 { session, seed } => {
-                let (domain, resolver) = replay_rule
-                    .as_ref()
-                    .expect("V2 rule identity checked before subject loop");
-                DrawIdentityContext::V2 {
-                    session,
-                    seed,
-                    domain: domain.clone(),
-                    resolver,
-                    subject: stable_subject
-                        .as_ref()
-                        .expect("V2 stable subject resolved above")
-                        .clone(),
-                }
-            }
+        let stable_subject = stable_resolver
+            .node_key(*subject)
+            .map_err(|error| err(format!("subject has no sealed stable identity: {error:?}")))?
+            .clone();
+        let identity = DrawIdentityContext {
+            session: rng_seed.session,
+            seed: rng_seed.seed,
+            domain: domain.clone(),
+            resolver: stable_resolver,
+            subject: stable_subject.clone(),
         };
         let draw_context = DrawContext {
             identity,
@@ -1107,7 +985,7 @@ fn collect_pass(
                 other => {
                     return Err(err(format!(
                         "a (when …) guard must evaluate to Bool, got {other:?}"
-                    )))
+                    )));
                 }
             }
         }
@@ -1120,7 +998,7 @@ fn collect_pass(
         // registry through this specific construction site would change
         // nothing observable (Task 8, Organization foundation plan — see
         // `EffectExecutor`'s own field doc).
-        let mut executor = EffectExecutor::new(types, enums, None);
+        let mut executor = EffectExecutor::new(types, enums);
         let events_before = collected_events.events.len();
         let pending = if let Some(kernel) = &loaded.kernel {
             charge(&mut fuel, FINITE_KERNEL_DRAW_BASE)?;
@@ -1130,23 +1008,13 @@ fn collect_pass(
                 active_elements: Vec::new(),
             };
             let draw = draw_finite_kernel_ticket(&kernel.sample, kernel.slot, &call_context)?;
-            let (session, seed) = match rng_seed {
-                RngSeedContext::V2 { session, seed } => (session, seed),
-                RngSeedContext::V1 { .. } => {
-                    return Err(err(
-                        "finite-kernel realization requires the sealed V2 replay path; V1 has no signed replay seed",
-                    ));
-                }
-            };
-            let instance = KernelInstanceIdentityV1 {
+            let RngSeedContext { session, seed } = rng_seed;
+            let instance = KernelInstanceIdentity {
                 replay_session: session.as_bytes().to_vec(),
                 replay_seed: seed.to_be_bytes(),
                 tick,
                 rule_id: loaded.contract.rule_id.clone(),
-                subject: stable_subject
-                    .as_ref()
-                    .expect("a V2 choice has a stable subject")
-                    .clone(),
+                subject: stable_subject.clone(),
                 active_elements: Vec::new(),
             };
             let realization = crate::probability::realize_kernel(&instance, kernel, &masses, draw)
@@ -1171,12 +1039,10 @@ fn collect_pass(
         } else {
             executor.collect_effects(effects, &env, host, &mut collected_events, &mut fuel)?
         };
-        if let Some(subject_identity) = stable_subject {
-            for _ in events_before..collected_events.events.len() {
-                event_provenance.push(EmittedEventProvenanceV1 {
-                    subject: subject_identity.clone(),
-                });
-            }
+        for _ in events_before..collected_events.events.len() {
+            event_provenance.push(EmittedEventProvenance {
+                subject: stable_subject.clone(),
+            });
         }
         all_pending.extend(pending);
         fired += 1;
@@ -1192,7 +1058,7 @@ fn collect_pass(
 fn collect_selected_kernel_effects(
     executor: &mut EffectExecutor<'_>,
     effects: &[SExpr],
-    kernel: &crate::probability::FiniteKernelV1,
+    kernel: &crate::probability::FiniteKernel,
     selected: usize,
     env: &EvalEnv<'_>,
     host: &dyn IntrinsicHost,
@@ -1224,48 +1090,6 @@ fn collect_selected_kernel_effects(
     Ok(pending)
 }
 
-fn replay_rule_identity<'a>(
-    rng_seed: RngSeedContext<'_>,
-    resolver: Option<&'a StableElementResolverV1>,
-    rule_id: &str,
-) -> Result<Option<(RngDomainV2, &'a StableElementResolverV1)>, TickError> {
-    match rng_seed {
-        RngSeedContext::V1 { .. } => Ok(None),
-        RngSeedContext::V2 { .. } => {
-            let domain = RngDomainV2::try_from(rule_id).map_err(|error| {
-                err(format!(
-                    "finite-kernel V2 firing-rule domain refused: {error:?}"
-                ))
-            })?;
-            let stable = resolver.ok_or_else(|| {
-                err("finite-kernel V2 requires a sealed StableElementResolverV1".to_owned())
-            })?;
-            Ok(Some((domain, stable)))
-        }
-    }
-}
-
-fn v1_subject_identity(
-    subject: NodeId,
-    node_content_ids: Option<&HashMap<NodeId, String>>,
-) -> Result<std::borrow::Cow<'_, str>, TickError> {
-    let Some(map) = node_content_ids else {
-        return Ok(std::borrow::Cow::Owned(format!("{subject:?}")));
-    };
-    map.get(&subject)
-        .map(|content_id| std::borrow::Cow::Borrowed(content_id.as_str()))
-        .ok_or_else(|| {
-            err(format!(
-                "subject {subject:?} carries no Task-3 content id, but \
-                 node_content_ids IS hydrated ({} entries) — a hydration bug: every \
-                 scenario-hydrated node is named (scenario::invert_content_ids), so a \
-                 NodeId reaching here means something minted a node outside hydration \
-                 without recording its content id (review round 2, #576 I2)",
-                map.len()
-            ))
-        })
-}
-
 /// Forecast one adjacent finite kernel/projection pair for one subject by
 /// exact detached-state enumeration.
 ///
@@ -1288,8 +1112,8 @@ pub fn forecast_event_likelihoods<G>(
     kernel_index: usize,
     pre_choice: &G,
     subject: NodeId,
-    context: &ForecastContextV1<'_>,
-) -> Result<Vec<EventLikelihoodV1>, TickError>
+    context: &ForecastContext<'_>,
+) -> Result<Vec<EventLikelihood>, TickError>
 where
     G: GraphSubstrate + DetachedCopy,
 {
@@ -1380,7 +1204,7 @@ where
         // deliberately discard it.  Emits inside a branch are already a
         // loader refusal.
         let mut ignored_mechanic_events = crate::structural_verbs::CollectingSink::default();
-        let mut mechanic_executor = EffectExecutor::new(context.types, context.enums, None);
+        let mut mechanic_executor = EffectExecutor::new(context.types, context.enums);
         let pending = collect_selected_kernel_effects(
             &mut mechanic_executor,
             mechanic_effects,
@@ -1440,8 +1264,7 @@ where
         };
         let mut event_sink = crate::structural_verbs::CollectingSink::default();
         if emits {
-            let mut projection_executor =
-                EffectExecutor::new(context.types, context.enums, context.vocabulary);
+            let mut projection_executor = EffectExecutor::new(context.types, context.enums);
             let writes = projection_executor.collect_effects(
                 projection_effects,
                 &projection_env,
@@ -1455,7 +1278,7 @@ where
                 ));
             }
         }
-        branch_projections.push(BranchProjectionV1 {
+        branch_projections.push(BranchProjection {
             outcome: branch.member.clone(),
             event_types: event_sink
                 .events
@@ -1469,30 +1292,79 @@ where
 }
 
 #[cfg(test)]
+pub(crate) fn fixture_resolver<G: CanonicalState + GraphSubstrate>(
+    graph: &G,
+    names: Option<&HashMap<NodeId, String>>,
+) -> StableElementResolver {
+    let nodes = names.cloned().unwrap_or_else(|| {
+        graph
+            .all_nodes()
+            .into_iter()
+            .map(|(id, _)| (id, format!("node-{}", id.0)))
+            .collect()
+    });
+    let hyperedges = graph
+        .all_hyperedges()
+        .into_iter()
+        .map(|(id, _, _)| (id, format!("hyperedge-{}", id.0)))
+        .collect();
+    StableElementResolver::seal(graph, "fixture/rule", &nodes, &hyperedges)
+        .expect("explicit fixture identities seal")
+}
+
+#[cfg(test)]
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn run_fixture_rule<G: GraphSubstrate + CanonicalState>(
+    loaded: &LoadedRule,
+    types: &TypeEnv,
+    enums: &EnumRegistry,
+    host: &dyn IntrinsicHost,
+    graph: &mut G,
+    sink: &mut dyn EventSink,
+    costs: &crate::fuel::IntrinsicCosts,
+    defines: &DefinesEnv,
+    tick: i64,
+    names: Option<&HashMap<NodeId, String>>,
+    session: &babylon_kernel::replay::ReplaySessionId,
+    vocabulary: Option<&crate::vocabulary::ClosedVocabulary>,
+) -> Result<TickOutcome, TickError> {
+    let resolver = fixture_resolver(graph, names);
+    run_tick(
+        loaded,
+        types,
+        enums,
+        host,
+        graph,
+        sink,
+        costs,
+        defines,
+        tick,
+        RngSeedContext {
+            session,
+            seed: babylon_kernel::replay::ReplaySeed::new(0),
+        },
+        &resolver,
+        vocabulary,
+    )
+}
+
+#[cfg(test)]
 mod tests {
     use super::{
-        bind_field_value, check_sources_servable, run_tick, run_tick_observed,
-        subject_type_of_bindings, DefinesEnv,
+        bind_field_value, check_sources_servable, fixture_resolver, run_fixture_rule,
+        run_tick_observed, subject_type_of_bindings, DefinesEnv,
     };
     use crate::bindings::{BindSource, BindingDecl};
     use crate::evaluator::Value;
     use crate::types::EnumRegistry;
     use crate::write_log::CollectingWriteLog;
     use babylon_kernel::replay::RngSeedContext;
-    use babylon_kernel::SessionId;
     use std::collections::HashMap;
 
-    /// The private draw seam's session/content-id parameters for this
-    /// module's own hand-built `MemoryGraph`
-    /// fixtures — none of them go through scenario hydration, so there is
-    /// no Task-3 `node_content_ids` map to thread; `None` exercises
-    /// `element_content_id`/`collect_pass`'s documented NodeId-Debug
-    /// fallback (`evaluator::element_content_id`'s own doc), which is
-    /// correct here precisely because these nodes were never named
-    /// (review round 2, #576 I2: `None`, not an empty map — see
-    /// `crate::intrinsic_host::DrawIdentityContext::V1`'s own doc).
-    fn test_session() -> SessionId {
-        SessionId::new("tick-test-session").expect("literal is non-empty")
+    /// Explicit deterministic identity for these sealed fixtures.
+    fn test_session() -> babylon_kernel::replay::ReplaySessionId {
+        babylon_kernel::replay::ReplaySessionId::try_from("tick-test-session")
+            .expect("literal is non-empty")
     }
 
     fn field(name: &str, qname: &str) -> BindingDecl {
@@ -1791,6 +1663,7 @@ mod tests {
         let mut sink = crate::structural_verbs::CollectingSink::default();
         let mut write_log = CollectingWriteLog::new();
 
+        let resolver = fixture_resolver(&graph, None);
         run_tick_observed(
             &loaded,
             &fixture.types,
@@ -1801,11 +1674,11 @@ mod tests {
             &fixture.intrinsics,
             &DefinesEnv::new(),
             1,
-            None,
-            RngSeedContext::V1 {
+            RngSeedContext {
                 session: &test_session(),
+                seed: babylon_kernel::replay::ReplaySeed::new(0),
             },
-            None,
+            &resolver,
             None,
             &mut write_log,
         )
@@ -1867,7 +1740,7 @@ mod tests {
         );
 
         let mut sink = crate::structural_verbs::CollectingSink::default();
-        run_tick(
+        run_fixture_rule(
             &loaded,
             &fixture.types,
             &fixture.enums,
@@ -1974,7 +1847,7 @@ mod tests {
         );
 
         let mut sink = crate::structural_verbs::CollectingSink::default();
-        let outcome = run_tick(
+        let outcome = run_fixture_rule(
             &loaded,
             &fixture.types,
             &fixture.enums,
@@ -2073,7 +1946,7 @@ mod tests {
         );
 
         let mut sink = crate::structural_verbs::CollectingSink::default();
-        let outcome = run_tick(
+        let outcome = run_fixture_rule(
             &loaded,
             &fixture.types,
             &fixture.enums,
@@ -2134,7 +2007,7 @@ mod tests {
         );
 
         let mut sink = crate::structural_verbs::CollectingSink::default();
-        let err = run_tick(
+        let err = run_fixture_rule(
             &loaded,
             &fixture.types,
             &fixture.enums,
@@ -2186,7 +2059,7 @@ mod tests {
         );
 
         let mut sink = crate::structural_verbs::CollectingSink::default();
-        let err = run_tick(
+        let err = run_fixture_rule(
             &loaded,
             &fixture.types,
             &fixture.enums,
@@ -2303,7 +2176,7 @@ mod tests {
         );
 
         let mut sink = crate::structural_verbs::CollectingSink::default();
-        let outcome = run_tick(
+        let outcome = run_fixture_rule(
             &loaded,
             &fixture.types,
             &fixture.enums,
@@ -2390,173 +2263,5 @@ mod tests {
         let message = err.to_string();
         assert!(message.contains("emit"), "{message}");
         assert!(message.contains("BareUpperIdent"), "{message}");
-    }
-
-    // ============================ Review round 1 (#576): the
-    // `collect_pass` subject-content-id fallback gate. Review round 2
-    // (#576 I2) sharpened it from `is_empty()`-value-distinct to
-    // `Option`-type-distinct — the SAME gate as
-    // `evaluator::element_content_id`'s own — see that function's doc for
-    // the full cross-file invariant.
-
-    /// (b) The `None` (never-hydrated) fixture path still works — this is
-    /// already the shape every OTHER test in this module exercises (all
-    /// pass `None` for `node_content_ids`, per `Fixture`'s own hand-built
-    /// `MemoryGraph`), but this test names the property directly rather
-    /// than leaving it implicit: a subject `NodeId` with no hydration map
-    /// at all is served (the `NodeId`'s own `Debug` rendering), not
-    /// refused.
-    #[test]
-    fn a_never_hydrated_node_content_ids_still_serves_the_debug_rendering_fallback() {
-        use babylon_graph::memory::MemoryGraph;
-        use babylon_graph::substrate::GraphSubstrate;
-
-        let mut graph = MemoryGraph::new();
-        let org = graph.add_node("ORGANIZATION").unwrap();
-        graph.update_node(org, "organization/kind", 0.0).unwrap();
-
-        let fixture = org_kind_fixture();
-        let loaded = fixture.load(
-            r#"(rule organization/kind-probe
-  :role mechanic :evidence derived :material-basis "the state's coercive organs are a distinct material kind; content can see the difference (spec Q1)"
-  :fuel 64
-  (bindings
-    (binding kind :field organization/kind))
-  (when (= kind OrgKind/STATE_APPARATUS))
-  (effects
-    (emit EventType/RUPTURE (probe 1))))"#,
-            "organization/kind-probe.bsl",
-        );
-        let mut sink = crate::structural_verbs::CollectingSink::default();
-        let outcome = run_tick(
-            &loaded,
-            &fixture.types,
-            &fixture.enums,
-            &crate::intrinsic_host::EmptyIntrinsicHost,
-            &mut graph,
-            &mut sink,
-            &fixture.intrinsics,
-            &DefinesEnv::new(),
-            1,
-            None,
-            &test_session(),
-            None,
-        )
-        .expect("a never-hydrated (None) node_content_ids must still serve the Debug-rendering fallback");
-        assert_eq!(outcome.fired, 1);
-    }
-
-    /// (a) The error fires: a subject `NodeId` missing from a `Some`-hydrated
-    /// `node_content_ids` map is a hard `TickError`, never a silent
-    /// fallback — the review's own recommended fix. The map holds an
-    /// entry, just not for `org` (the actual subject) — the
-    /// hydration-bug shape a lifted `DEFERRED_SHAPE_VERBS` gate would one
-    /// day produce for real.
-    #[test]
-    fn a_subject_missing_from_a_hydrated_node_content_ids_map_is_a_hard_tick_error() {
-        use babylon_graph::memory::MemoryGraph;
-        use babylon_graph::substrate::GraphSubstrate;
-
-        let mut graph = MemoryGraph::new();
-        let org = graph.add_node("ORGANIZATION").unwrap();
-        graph.update_node(org, "organization/kind", 0.0).unwrap();
-
-        let fixture = org_kind_fixture();
-        let loaded = fixture.load(
-            r#"(rule organization/kind-probe
-  :role mechanic :evidence derived :material-basis "the state's coercive organs are a distinct material kind; content can see the difference (spec Q1)"
-  :fuel 64
-  (bindings
-    (binding kind :field organization/kind))
-  (when (= kind OrgKind/STATE_APPARATUS))
-  (effects
-    (emit EventType/RUPTURE (probe 1))))"#,
-            "organization/kind-probe.bsl",
-        );
-        let mut sink = crate::structural_verbs::CollectingSink::default();
-        // Hydrated (`Some`), but keyed to a DIFFERENT NodeId than `org` —
-        // the exact shape a hydration bug (a node minted without its
-        // content id recorded) would produce.
-        let non_empty_but_missing_subject = HashMap::from([(
-            babylon_graph::substrate::NodeId(999),
-            "someone-else".to_owned(),
-        )]);
-        let err = run_tick(
-            &loaded,
-            &fixture.types,
-            &fixture.enums,
-            &crate::intrinsic_host::EmptyIntrinsicHost,
-            &mut graph,
-            &mut sink,
-            &fixture.intrinsics,
-            &DefinesEnv::new(),
-            1,
-            Some(&non_empty_but_missing_subject),
-            &test_session(),
-            None,
-        )
-        .unwrap_err();
-        assert!(err.to_string().contains("hydration bug"), "{err}");
-    }
-
-    /// (c) **The distinguishing case review round 2 (#576 I2) exists to
-    /// prove.** A `Some(map)` where `map` is EMPTY — modeling a caller that
-    /// pre-populated its own graph (a save load, a Bevy-side world build)
-    /// and handed it to `run_tick` alongside a declarations-only scenario
-    /// (`node_count == 0`, per `scenario.rs::load_scenario`'s own body
-    /// loop). Under the PRE-I2 `is_empty()` gate this was
-    /// indistinguishable from "never hydrated" and SILENTLY fed the raw
-    /// `NodeId`'s `Debug` rendering into `stable_key` — exactly the
-    /// insertion-order-dependent butterfly ADR176 r20 forbids, with no
-    /// error and no failing test. Under the `Option`-typed gate,
-    /// `Some(empty_map)` unambiguously means "hydrated", so the SAME
-    /// subject-missing error fires as it would against a non-empty map —
-    /// loud, not silent.
-    #[test]
-    fn a_subject_against_a_hydrated_but_empty_node_content_ids_map_is_a_hard_tick_error_not_a_silent_handle(
-    ) {
-        use babylon_graph::memory::MemoryGraph;
-        use babylon_graph::substrate::GraphSubstrate;
-
-        let mut graph = MemoryGraph::new();
-        let org = graph.add_node("ORGANIZATION").unwrap();
-        graph.update_node(org, "organization/kind", 0.0).unwrap();
-
-        let fixture = org_kind_fixture();
-        let loaded = fixture.load(
-            r#"(rule organization/kind-probe
-  :role mechanic :evidence derived :material-basis "the state's coercive organs are a distinct material kind; content can see the difference (spec Q1)"
-  :fuel 64
-  (bindings
-    (binding kind :field organization/kind))
-  (when (= kind OrgKind/STATE_APPARATUS))
-  (effects
-    (emit EventType/RUPTURE (probe 1))))"#,
-            "organization/kind-probe.bsl",
-        );
-        let mut sink = crate::structural_verbs::CollectingSink::default();
-        // A REAL hydration (`Some`) that happens to hold zero entries — the
-        // declarations-only-scenario shape, never the never-hydrated one.
-        let hydrated_but_empty: HashMap<babylon_graph::substrate::NodeId, String> = HashMap::new();
-        let err = run_tick(
-            &loaded,
-            &fixture.types,
-            &fixture.enums,
-            &crate::intrinsic_host::EmptyIntrinsicHost,
-            &mut graph,
-            &mut sink,
-            &fixture.intrinsics,
-            &DefinesEnv::new(),
-            1,
-            Some(&hydrated_but_empty),
-            &test_session(),
-            None,
-        )
-        .unwrap_err();
-        assert!(
-            err.to_string().contains("hydration bug"),
-            "a Some(empty map) miss must hard-error exactly like a Some(non-empty map) miss, \
-             never silently fall back to the NodeId's own Debug rendering: {err}"
-        );
     }
 }

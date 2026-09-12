@@ -2,7 +2,7 @@
 //! keep administrative exemptions outside every gameplay gate.
 
 use babylon_client::decision_surface::{
-    contract_for, DecisionSurfaceContract, DecisionSurfaceRole, DeclaredSurface, SurfaceActionV1,
+    contract_for, DecisionSurfaceContract, DecisionSurfaceRole, DeclaredSurface, SurfaceAction,
     SurfaceId, SHIPPED_SURFACE_MANIFEST,
 };
 use bevy::asset::AssetPlugin;
@@ -13,41 +13,14 @@ use bevy::time::TimeUpdateStrategy;
 use std::collections::HashSet;
 use std::time::Duration;
 
-fn conformance_app() -> App {
-    let mut app = App::new();
-    app.add_plugins((
-        MinimalPlugins,
-        AssetPlugin::default(),
-        ImagePlugin::default(),
-        bevy::text::TextPlugin,
-        TexturePlugin,
-    ));
-    app.add_plugins((
-        babylon_client::visual_assets::VisualAssetsPlugin,
-        babylon_client::visual_assets::VisualPresentationPlugin,
-    ));
-    app.add_plugins(babylon_client::map::MapPlugin);
-    app.add_plugins(babylon_client::loop_ui::TickLoopPlugin);
-    // Retained graph-viewer conformance composition, including its dossier.
-    app.add_plugins(babylon_client::ui::dossier_card::DossierCardPlugin);
-    app.insert_resource(babylon_client::story::SelectedStory(
-        babylon_client::story::counties(),
-    ));
-    app.insert_resource(TimeUpdateStrategy::ManualDuration(Duration::ZERO));
-    app.finish();
-    app.update(); // Startup.
-    app.world_mut()
-        .resource_mut::<babylon_client::map::SelectedCounty>()
-        .0 = Some(0);
-    app.update(); // Exercise the selection-outline spawn path too.
-    app
-}
-
 fn observer_app() -> App {
     use babylon_client::observer::{ObserverSession, SessionPhase};
     use babylon_client::observer_io::ObserverSet;
     use babylon_client::observer_ui::{ObserverFrame, ObserverUiState};
-    use babylon_persistence::{CampaignId, ObserverEconomySnapshotV1, ObserverVisibilityV1};
+    use babylon_persistence::{
+        identity::CampaignId, observer_reader::ObserverEconomySnapshot,
+        observer_reader::ObserverVisibility,
+    };
 
     let campaign = CampaignId::from_uuid(uuid::Uuid::nil());
     let mut session = ObserverSession::new(campaign);
@@ -88,14 +61,14 @@ fn observer_app() -> App {
         .insert_resource(babylon_client::ui::dossier_card::DossierCampaignId(
             campaign,
         ))
-        .insert_resource(ObserverFrame(Some(ObserverEconomySnapshotV1 {
+        .insert_resource(ObserverFrame(Some(ObserverEconomySnapshot {
             campaign_id: campaign.as_uuid().to_string(),
             resolve_tick: 1,
             foundation_digest: "f".repeat(64),
             nominal_world_hash: Some("c".repeat(64)),
             tick_content_hash: Some("a".repeat(64)),
             envelope_digest: Some("d".repeat(64)),
-            visibility: ObserverVisibilityV1::FullObserver,
+            visibility: ObserverVisibility::FullObserver,
             counties: Vec::new(),
             production: Some(production_observation()),
         })))
@@ -130,36 +103,39 @@ fn observer_app() -> App {
     app
 }
 
-fn production_observation() -> babylon_persistence::ProductionSnapshotV2 {
+fn production_observation() -> babylon_persistence::production_observation::ProductionSnapshot {
     use babylon_persistence::{
-        ProductionEventV1, ProductionFreightV2, ProductionRouteV2, ProductionSiteV2,
-        ProductionSnapshotV2,
+        production_observation::ProductionEvent, production_observation::ProductionFreight,
+        production_observation::ProductionRoute, production_observation::ProductionSite,
+        production_observation::ProductionSnapshot,
     };
-    let site = |id: &str| ProductionSiteV2 {
+    let site = |id: &str| ProductionSite {
         id: id.into(),
         county_geoid: "26163".into(),
         name: format!("Surface fixture {id}"),
         industry_code: "331".into(),
         observed_employment: None,
         inventory: Vec::new(),
-        role: babylon_persistence::ProductionSiteRoleV2::Production,
+        role: babylon_persistence::production_observation::ProductionSiteRole::Production,
         sector_code: "31-33".into(),
-        processes: vec![babylon_persistence::ProductionProcessV2 {
-            id: "fixture-process".into(),
-            name: "Fixture process".into(),
-            output_good_id: "a".repeat(64),
-            output_unit_id: "b".repeat(64),
-            output_good: "sheet".into(),
-            output_unit: "kg".into(),
-            output_per_batch: 1,
-            available_batches: 10,
-            planned_batches: Some(10),
-            produced_batches: Some(10),
-            inputs: Vec::new(),
-            labor: Vec::new(),
-        }],
+        processes: vec![
+            babylon_persistence::production_observation::ProductionProcess {
+                id: "fixture-process".into(),
+                name: "Fixture process".into(),
+                output_good_id: "a".repeat(64),
+                output_unit_id: "b".repeat(64),
+                output_good: "sheet".into(),
+                output_unit: "kg".into(),
+                output_per_batch: 1,
+                available_batches: 10,
+                planned_batches: Some(10),
+                produced_batches: Some(10),
+                inputs: Vec::new(),
+                labor: Vec::new(),
+            },
+        ],
     };
-    ProductionSnapshotV2 {
+    ProductionSnapshot {
         physical_edges: Vec::new(),
         content_authority_sha256: "a".repeat(64),
         road_source: None,
@@ -172,10 +148,11 @@ fn production_observation() -> babylon_persistence::ProductionSnapshotV2 {
         scenario_label: "Read-only surface fixture".into(),
         horizon_period: 16,
         sites: vec![site("source"), site("destination")],
-        routes: vec![ProductionRouteV2 {
+        routes: vec![ProductionRoute {
             physical_edge_ids: Vec::new(),
             distance_mm: None,
-            transport_kind: babylon_persistence::ProductionRouteTransportV2::Staged,
+            transport_kind:
+                babylon_persistence::production_observation::ProductionRouteTransport::Staged,
             grams_per_unit: 1000,
             stages: Vec::new(),
             id: "route".into(),
@@ -193,7 +170,7 @@ fn production_observation() -> babylon_persistence::ProductionSnapshotV2 {
             realized: 0,
             backlog: 0,
         }],
-        freight: vec![ProductionFreightV2 {
+        freight: vec![ProductionFreight {
             current_stage_index: 0,
             grams_per_unit: 1000,
             mass_grams: 1000,
@@ -209,7 +186,7 @@ fn production_observation() -> babylon_persistence::ProductionSnapshotV2 {
             dispatch_period: 1,
             arrival_period: 2,
         }],
-        events: vec![ProductionEventV1 {
+        events: vec![ProductionEvent {
             id: "dispatch".into(),
             period: 1,
             subject_site_ids: vec!["source".into(), "destination".into()],
@@ -257,9 +234,9 @@ fn manifest_is_unique_exhaustive_and_valid() {
 #[test]
 fn gameplay_contract_requires_every_decision_field() {
     const PRESENT: &[&str] = &["declared"];
-    const ACTIONS: &[SurfaceActionV1] = &[SurfaceActionV1::available("declared")];
+    const ACTIONS: &[SurfaceAction] = &[SurfaceAction::available("declared")];
     let complete = DecisionSurfaceContract {
-        id: SurfaceId::CountyMap,
+        id: SurfaceId::ObserverShell,
         role: DecisionSurfaceRole::Gameplay,
         decision_question: Some("What should I do here next period?"),
         visible_signals: PRESENT,
@@ -313,14 +290,14 @@ fn gameplay_contract_requires_every_decision_field() {
 #[test]
 fn gameplay_contract_rejects_blank_entries_in_every_required_list() {
     const PRESENT: &[&str] = &["declared"];
-    const ACTIONS: &[SurfaceActionV1] = &[SurfaceActionV1::available("declared")];
+    const ACTIONS: &[SurfaceAction] = &[SurfaceAction::available("declared")];
     const CONTAINS_BLANK: &[&str] = &["declared", " \t\n"];
-    const CONTAINS_BLANK_ACTION: &[SurfaceActionV1] = &[
-        SurfaceActionV1::available("declared"),
-        SurfaceActionV1::available(" \t\n"),
+    const CONTAINS_BLANK_ACTION: &[SurfaceAction] = &[
+        SurfaceAction::available("declared"),
+        SurfaceAction::available(" \t\n"),
     ];
     let complete = DecisionSurfaceContract {
-        id: SurfaceId::CountyMap,
+        id: SurfaceId::ObserverShell,
         role: DecisionSurfaceRole::Gameplay,
         decision_question: Some("What should I do here next period?"),
         visible_signals: PRESENT,
@@ -366,40 +343,11 @@ fn gameplay_contract_rejects_blank_entries_in_every_required_list() {
 }
 
 #[test]
-fn admin_inspector_manifest_matches_its_pre_tick_rendering() {
-    const PRE_TICK_REPORT: &str = "tick report \u{2014} not yet run";
-    const ROSTER_STATUS: &str = "roster \u{2014} no county selected";
-
-    let contract = contract_for(SurfaceId::AdminInspector);
-    assert!(contract.visible_signals.contains(&PRE_TICK_REPORT));
-    assert!(contract.visible_signals.contains(&ROSTER_STATUS));
-
-    let mut app = conformance_app();
-    app.world_mut()
-        .resource_mut::<babylon_client::map::SelectedCounty>()
-        .0 = None;
-    app.world_mut()
-        .resource_mut::<babylon_client::ui::admin::AdminPanelVisible>()
-        .0 = true;
-    app.update();
-
-    let world = app.world_mut();
-    let mut query =
-        world.query_filtered::<&Text, With<babylon_client::ui::admin::AdminPanelText>>();
-    let rendered = &query
-        .single(world)
-        .expect("exactly one admin inspector text entity")
-        .0;
-    assert!(rendered.contains(PRE_TICK_REPORT), "got {rendered:?}");
-    assert!(rendered.contains(ROSTER_STATUS), "got {rendered:?}");
-}
-
-#[test]
 fn admin_exemptions_never_satisfy_gameplay_gates() {
     const PRESENT: &[&str] = &["declared"];
-    const ACTIONS: &[SurfaceActionV1] = &[SurfaceActionV1::available("declared")];
+    const ACTIONS: &[SurfaceAction] = &[SurfaceAction::available("declared")];
     let exempt_gameplay = DecisionSurfaceContract {
-        id: SurfaceId::CountyMap,
+        id: SurfaceId::ObserverShell,
         role: DecisionSurfaceRole::Gameplay,
         decision_question: Some("Looks complete, but is exempt"),
         visible_signals: PRESENT,
@@ -414,7 +362,7 @@ fn admin_exemptions_never_satisfy_gameplay_gates() {
     assert!(!exempt_gameplay.satisfies_gameplay_gate());
 
     let disguised_admin = DecisionSurfaceContract {
-        id: SurfaceId::CountyMap,
+        id: SurfaceId::ObserverShell,
         role: DecisionSurfaceRole::AdminDebug,
         decision_question: Some("Looks complete, but is administrative"),
         visible_signals: PRESENT,
@@ -437,9 +385,7 @@ fn admin_exemptions_never_satisfy_gameplay_gates() {
 
 #[test]
 fn every_shipped_visual_entity_declares_a_manifest_surface() {
-    let mut conformance = conformance_app();
     let mut observer = observer_app();
-    let conformance_ids = visual_surface_ids(conformance.world_mut());
     let observer_ids = visual_surface_ids(observer.world_mut());
     let observer_surfaces = HashSet::from([
         SurfaceId::TitleLockup,
@@ -448,22 +394,7 @@ fn every_shipped_visual_entity_declares_a_manifest_surface() {
         SurfaceId::ObserverProduction,
     ]);
     assert_eq!(observer_ids, observer_surfaces);
-    assert_eq!(
-        conformance_ids,
-        SurfaceId::ALL
-            .into_iter()
-            .filter(|id| !matches!(id, SurfaceId::ObserverShell | SurfaceId::ObserverProduction))
-            .collect(),
-        "the retained conformance composition must still instantiate all of its surfaces"
-    );
-    assert_eq!(
-        conformance_ids
-            .union(&observer_ids)
-            .copied()
-            .collect::<HashSet<_>>(),
-        SurfaceId::ALL.into_iter().collect(),
-        "the actual observer and retained conformance compositions cover the full manifest"
-    );
+    assert_eq!(observer_ids, SurfaceId::ALL.into_iter().collect());
 
     let world = observer.world_mut();
     let mesh_surfaces: HashSet<_> = world
@@ -514,7 +445,7 @@ fn visual_surface_ids(world: &mut World) -> HashSet<SurfaceId> {
                 "shipped county-map entity {entity:?} has no DecisionSurfaceContract declaration"
             )
         });
-        assert_eq!(declared.id, SurfaceId::CountyMap);
+        assert_eq!(declared.id, SurfaceId::ObserverShell);
     }
 
     let mut mesh_query = world.query::<(Entity, &Mesh3d, Option<&DeclaredSurface>)>();
@@ -545,9 +476,9 @@ fn current_client_cannot_claim_a_gameplay_gate() {
 /// sentence the rendered card seals with.
 #[test]
 fn county_dossier_is_gameplay_role_but_gate_ineligible_until_an_action_opens() {
-    use babylon_client::decision_surface::ActionAvailabilityV1;
+    use babylon_client::decision_surface::ActionAvailability;
 
-    const OPEN: &[SurfaceActionV1] = &[SurfaceActionV1::available("investigate")];
+    const OPEN: &[SurfaceAction] = &[SurfaceAction::available("investigate")];
 
     let contract = contract_for(SurfaceId::CountyDossier);
     assert_eq!(contract.role, DecisionSurfaceRole::Gameplay);
@@ -572,12 +503,12 @@ fn county_dossier_is_gameplay_role_but_gate_ineligible_until_an_action_opens() {
     };
     assert_eq!(investigate.name(), "investigate");
     match investigate.availability() {
-        ActionAvailabilityV1::Unavailable(reason) => assert_eq!(
+        ActionAvailability::Unavailable(reason) => assert_eq!(
             reason,
             babylon_client::ui::dossier_compose::INVESTIGATE_UNAVAILABLE_REASON,
             "the manifest seal and the card's R6 placeholder seal are one sentence"
         ),
-        ActionAvailabilityV1::Available => {
+        ActionAvailability::Available => {
             panic!("investigate must be visibly unavailable until Gate 5")
         }
     }

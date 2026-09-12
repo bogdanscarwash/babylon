@@ -1,9 +1,9 @@
-use babylon_kernel::replay::{ReplaySeed, ReplaySessionIdV1};
+use babylon_kernel::content_digest::ContentDigest;
+use babylon_kernel::replay::{ReplaySeed, ReplaySessionId};
 use babylon_kernel::tick_content_hash::{
-    OrderedPracticeActionBatchDigestV1, PreparedEnvironmentDigestV1, RefDigestV1,
-    StableWorldDigestV1, TickContentPartsV1, TickContentPreimageV1, TickPayloadDigestV1,
+    OrderedPracticeActionBatchDigest, PreparedEnvironmentDigest, RefDigest, StableWorldDigest,
+    TickContentParts, TickContentPreimage, TickPayloadDigest,
 };
-use babylon_kernel::ContentDigest;
 
 const SESSION: &str = "s:PER-60/alpha";
 const RESOLVE_TICK: u64 = 0x0102_0304_0506_0708;
@@ -12,32 +12,32 @@ const SECTION_TAG_OFFSETS: [usize; 10] = [25, 46, 55, 72, 141, 178, 215, 252, 28
 const LAYOUT_OFFSETS: [usize; 11] = [21, 26, 56, 60, 73, 142, 179, 216, 253, 290, 327];
 
 fn compose(
-    session: &ReplaySessionIdV1,
+    session: &ReplaySessionId,
     resolve_tick: u64,
     seed: i64,
     content_bytes: [u8; 2],
     digest_bytes: [u8; 6],
-) -> TickContentPreimageV1 {
+) -> TickContentPreimage {
     let content = ContentDigest {
         defines_hash: [content_bytes[0]; 32],
         rules_hash: [content_bytes[1]; 32],
     };
-    TickContentPreimageV1::compose(&TickContentPartsV1 {
+    TickContentPreimage::compose(&TickContentParts {
         session,
         resolve_tick,
         seed: ReplaySeed::new(seed),
         content: &content,
-        reference: RefDigestV1::from_bytes([digest_bytes[0]; 32]),
-        prepared: PreparedEnvironmentDigestV1::from_bytes([digest_bytes[1]; 32]),
-        prior_world: StableWorldDigestV1::from_bytes([digest_bytes[2]; 32]),
-        actions: OrderedPracticeActionBatchDigestV1::from_bytes([digest_bytes[3]; 32]),
-        result_world: StableWorldDigestV1::from_bytes([digest_bytes[4]; 32]),
-        payload: TickPayloadDigestV1::from_bytes([digest_bytes[5]; 32]),
+        reference: RefDigest::from_bytes([digest_bytes[0]; 32]),
+        prepared: PreparedEnvironmentDigest::from_bytes([digest_bytes[1]; 32]),
+        prior_world: StableWorldDigest::from_bytes([digest_bytes[2]; 32]),
+        actions: OrderedPracticeActionBatchDigest::from_bytes([digest_bytes[3]; 32]),
+        result_world: StableWorldDigest::from_bytes([digest_bytes[4]; 32]),
+        payload: TickPayloadDigest::from_bytes([digest_bytes[5]; 32]),
     })
     .expect("the bounded asymmetric vector composes")
 }
 
-fn asymmetric_preimage(session: &ReplaySessionIdV1) -> TickContentPreimageV1 {
+fn asymmetric_preimage(session: &ReplaySessionId) -> TickContentPreimage {
     compose(
         session,
         RESOLVE_TICK,
@@ -55,7 +55,7 @@ fn assert_digest_section(bytes: &[u8], tag_offset: usize, tag: u8, fill: u8) {
 
 #[test]
 fn outer_composer_matches_the_exact_ten_section_vector() {
-    let session = ReplaySessionIdV1::try_from(SESSION).expect("fixture session is valid");
+    let session = ReplaySessionId::try_from(SESSION).expect("fixture session is valid");
     let preimage = asymmetric_preimage(&session);
 
     assert_eq!(preimage.as_bytes().len(), 349 + SESSION.len());
@@ -89,8 +89,8 @@ fn outer_composer_matches_the_exact_ten_section_vector() {
 
 #[test]
 fn every_outer_input_changes_the_tick_content_hash() {
-    let session = ReplaySessionIdV1::try_from(SESSION).expect("fixture session is valid");
-    let other_session = ReplaySessionIdV1::try_from("s:PER-60/beta").expect("valid mutation");
+    let session = ReplaySessionId::try_from(SESSION).expect("fixture session is valid");
+    let other_session = ReplaySessionId::try_from("s:PER-60/beta").expect("valid mutation");
     let baseline = asymmetric_preimage(&session).digest();
     let mutations = [
         asymmetric_preimage(&other_session),
@@ -173,14 +173,14 @@ fn every_outer_input_changes_the_tick_content_hash() {
 
 #[test]
 fn every_layout_version_is_hash_covered() {
-    let session = ReplaySessionIdV1::try_from(SESSION).expect("fixture session is valid");
+    let session = ReplaySessionId::try_from(SESSION).expect("fixture session is valid");
     let baseline = asymmetric_preimage(&session);
 
     for offset in LAYOUT_OFFSETS {
         let mut mutation = baseline.as_bytes().to_vec();
         mutation[offset + 3] ^= 1;
         assert_ne!(
-            babylon_kernel::sha256_of(&mutation),
+            babylon_kernel::content_digest::sha256_of(&mutation),
             *baseline.digest().as_bytes()
         );
     }

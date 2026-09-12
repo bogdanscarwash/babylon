@@ -2,83 +2,55 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use babylon_kernel::sha256_of;
+use babylon_kernel::content_digest::sha256_of;
 use minijinja::{context, Environment, UndefinedBehavior};
 use postgres::types::FromSqlOwned;
 use postgres::{Config, GenericClient, IsolationLevel, NoTls, Row};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest as _, Sha256};
 
-use crate::archive_revision::emission::{ArchiveEmissionLinkV2, ArchiveEmissionManifestV2};
+use crate::archive_revision::emission::{ArchiveEmissionLink, ArchiveEmissionManifest};
 use crate::identity::CampaignId;
-use crate::migration_manifest::SCHEMA_ADVISORY_LOCK_KEY;
-use crate::postgres_diagnostic::PostgresDiagnosticV1;
+use crate::postgres_diagnostic::PostgresDiagnostic;
 
-/// Exact additive schema used by the semantic Archive worker.
-pub const SEMANTIC_ARCHIVE_SCHEMA_V1_SQL: &str =
-    include_str!("../migrations/semantic_archive_v1.sql");
-/// Exact additive atom schema consumed by the semantic Archive worker
-/// (ADR249 R1/R2); these bytes fold into [`archive_worker_contract_sha256_v1`].
-pub const ARCHIVE_ATOM_SCHEMA_V1_SQL: &str = include_str!("../migrations/archive_atom_v1.sql");
-/// Receipt-processing status view; page bytes and their source ticks stay immutable.
-pub const ARCHIVE_VERIFICATION_SCHEMA_V1_SQL: &str =
-    include_str!("../migrations/archive_verification_v1.sql");
-const ARCHIVE_PAGE_TEMPLATE_V1: &str = include_str!("archive_page_v1.md.j2");
+/// Current Archive schema installed atomically with the material runtime schema.
+pub const CURRENT_ARCHIVE_SCHEMA_SQL: &str = include_str!("../migrations/current_archive.sql");
+const ARCHIVE_PAGE_TEMPLATE: &str = include_str!("archive_page_v1.md.j2");
 const MAX_ID_BYTES: usize = 128;
 const MAX_TEXT_BYTES: usize = 4_096;
 pub(crate) const MAX_SIGNALS: usize = 256;
 pub(crate) const MAX_LINKS: usize = 256;
 const MAX_KNOWLEDGE_GRANTS: usize = 65_535;
 pub(crate) const MAX_PAGE_BYTES: usize = 1_048_576;
-const ARCHIVE_SCHEMA_CONTRACT_ID: &str = "babylon.semantic-archive-schema.v1";
-const ARCHIVE_ATOM_SCHEMA_CONTRACT_ID: &str = "babylon.archive-atom-schema.v1";
-const ARCHIVE_WORKER_DOMAIN_V1: &[u8] = b"babylon.semantic-archive-worker.v1\0";
-const ARCHIVE_DIRTY_BATCH_DOMAIN_V1: &[u8] = b"babylon.semantic-archive-dirty-batch.v1\0";
-const ARCHIVE_KNOWLEDGE_DOMAIN_V1: &[u8] = b"babylon.semantic-archive-knowledge.v1\0";
-const ARCHIVE_ATOM_DOMAIN_V1: &[u8] = b"babylon.semantic-archive-atom.v1\0";
-const ARCHIVE_SCHEMA_MARKERS_SQL_V1: &str = "SELECT \
-    pg_catalog.to_regclass('babylon_meta.semantic_archive_schema_v1') IS NOT NULL, \
-    pg_catalog.to_regclass('babylon_meta.archive_knowledge_grant_v1') IS NOT NULL, \
-    pg_catalog.to_regclass('babylon_meta.archive_receipt_consumption_v1') IS NOT NULL, \
-    pg_catalog.to_regclass('babylon_meta.archive_page_v1') IS NOT NULL, \
-    EXISTS (\
-        SELECT 1 FROM pg_catalog.pg_constraint \
-        WHERE conname = 'archive_page_v1_campaign_id_source_resolve_tick_fkey' \
-          AND conrelid = pg_catalog.to_regclass('babylon_meta.archive_page_v1') \
-          AND confrelid = pg_catalog.to_regclass('babylon_state.archive_dirty_receipt_v1')\
-    )";
-const ARCHIVE_ATOM_SCHEMA_MARKERS_SQL_V1: &str = "SELECT \
-    pg_catalog.to_regclass('babylon_meta.archive_atom_schema_v1') IS NOT NULL, \
-    pg_catalog.to_regclass('babylon_meta.archive_atom_v1') IS NOT NULL, \
-    pg_catalog.to_regclass('babylon_meta.archive_page_atom_v1') IS NOT NULL, \
-    pg_catalog.to_regclass('public.v_archive_page_known_v1') IS NOT NULL, \
-    pg_catalog.to_regclass('public.v_archive_atom_visible') IS NOT NULL, \
-    pg_catalog.to_regclass('public.v_county_card_atoms') IS NOT NULL";
+const ARCHIVE_WORKER_DOMAIN: &[u8] = b"babylon.semantic-archive-worker.v1\0";
+const ARCHIVE_DIRTY_BATCH_DOMAIN: &[u8] = b"babylon.semantic-archive-dirty-batch.v1\0";
+const ARCHIVE_KNOWLEDGE_DOMAIN: &[u8] = b"babylon.semantic-archive-knowledge.v1\0";
+const ARCHIVE_ATOM_DOMAIN: &[u8] = b"babylon.semantic-archive-atom.v1\0";
 /// SQL-only knowledge boundary used before any template receives values.
 /// Page-subject knowledge only: seeded concept grants widen the grant table's
 /// subject domain (ADR249 R3/R12) but never enter the page knowledge snapshot.
-pub const ARCHIVE_KNOWLEDGE_SQL_V1: &str = "SELECT subject_kind, subject_id, grant_key, \
+pub const ARCHIVE_KNOWLEDGE_SQL: &str = "SELECT subject_kind, subject_id, grant_key, \
     granted_tick, provenance_source_id, provenance_locator \
     FROM babylon_meta.archive_knowledge_grant_v1 \
     WHERE campaign_id = $1::uuid AND granted_tick <= $2 \
       AND subject_kind IN ('county', 'place') \
     ORDER BY subject_kind, subject_id, grant_key LIMIT $3";
 /// SHA-256 of the pinned strict `MiniJinja` page template.
-pub const ARCHIVE_PAGE_TEMPLATE_SHA256_V1: [u8; 32] = [
+pub const ARCHIVE_PAGE_TEMPLATE_SHA256: [u8; 32] = [
     0xd7, 0x90, 0x43, 0x79, 0xcf, 0x09, 0xf4, 0x1d, 0xb6, 0xab, 0xea, 0x91, 0x46, 0x5b, 0x5f, 0xe6,
     0xe8, 0x04, 0x86, 0x7c, 0xf8, 0x76, 0xbd, 0x44, 0xa0, 0x9f, 0xe6, 0x3b, 0xa9, 0x75, 0x51, 0x08,
 ];
 
 /// Closed semantic page kinds in the first Archive slice.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
-pub enum ArchiveSubjectKindV1 {
+pub enum ArchiveSubjectKind {
     /// United States county identified by five-digit Census FIPS.
     County,
     /// Census-designated place identified by seven-digit place GEOID.
     Place,
 }
 
-impl ArchiveSubjectKindV1 {
+impl ArchiveSubjectKind {
     /// Stable storage and page-path spelling.
     #[must_use]
     pub const fn as_str(self) -> &'static str {
@@ -91,33 +63,33 @@ impl ArchiveSubjectKindV1 {
 
 /// Stable semantic Archive page identity.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
-pub struct ArchivePageRefV1 {
-    kind: ArchiveSubjectKindV1,
+pub struct ArchivePageRef {
+    kind: ArchiveSubjectKind,
     id: String,
 }
 
-impl ArchivePageRefV1 {
+impl ArchivePageRef {
     /// Construct one exact county or place identity.
     ///
     /// # Errors
     /// Refuses the wrong digit width or an unbounded identity.
-    pub fn try_new(kind: ArchiveSubjectKindV1, id: String) -> Result<Self, SemanticArchiveErrorV1> {
+    pub fn try_new(kind: ArchiveSubjectKind, id: String) -> Result<Self, SemanticArchiveError> {
         let expected = match kind {
-            ArchiveSubjectKindV1::County => 5,
-            ArchiveSubjectKindV1::Place => 7,
+            ArchiveSubjectKind::County => 5,
+            ArchiveSubjectKind::Place => 7,
         };
         if id.len() != expected
             || id.len() > MAX_ID_BYTES
             || !id.bytes().all(|byte| byte.is_ascii_digit())
         {
-            return Err(SemanticArchiveErrorV1::InvalidIdentity);
+            return Err(SemanticArchiveError::InvalidIdentity);
         }
         Ok(Self { kind, id })
     }
 
     /// Return the closed subject kind.
     #[must_use]
-    pub const fn kind(&self) -> ArchiveSubjectKindV1 {
+    pub const fn kind(&self) -> ArchiveSubjectKind {
         self.kind
     }
 
@@ -134,31 +106,31 @@ impl ArchivePageRefV1 {
 
 /// Known page identity and safe player-facing title.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct ArchiveSubjectV1 {
-    page_ref: ArchivePageRefV1,
+pub struct ArchiveSubject {
+    page_ref: ArchivePageRef,
     title: String,
 }
 
-impl ArchiveSubjectV1 {
+impl ArchiveSubject {
     /// Construct one page subject.
     ///
     /// # Errors
     /// Refuses an invalid identity or unsafe title.
     pub fn try_new(
-        kind: ArchiveSubjectKindV1,
+        kind: ArchiveSubjectKind,
         id: String,
         title: String,
-    ) -> Result<Self, SemanticArchiveErrorV1> {
+    ) -> Result<Self, SemanticArchiveError> {
         validate_text(&title)?;
         Ok(Self {
-            page_ref: ArchivePageRefV1::try_new(kind, id)?,
+            page_ref: ArchivePageRef::try_new(kind, id)?,
             title,
         })
     }
 
     /// Borrow the stable page reference.
     #[must_use]
-    pub const fn page_ref(&self) -> &ArchivePageRefV1 {
+    pub const fn page_ref(&self) -> &ArchivePageRef {
         &self.page_ref
     }
 
@@ -171,33 +143,33 @@ impl ArchiveSubjectV1 {
 
 /// One player-visible source locator.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
-pub struct ArchiveCitationV1 {
+pub struct ArchiveCitation {
     source_id: String,
     locator: String,
 }
 
 #[derive(Deserialize)]
-struct UnvalidatedArchiveCitationV1 {
+struct UnvalidatedArchiveCitation {
     source_id: String,
     locator: String,
 }
 
-impl<'de> Deserialize<'de> for ArchiveCitationV1 {
+impl<'de> Deserialize<'de> for ArchiveCitation {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: serde::Deserializer<'de>,
     {
-        let citation = UnvalidatedArchiveCitationV1::deserialize(deserializer)?;
+        let citation = UnvalidatedArchiveCitation::deserialize(deserializer)?;
         Self::try_new(citation.source_id, citation.locator).map_err(serde::de::Error::custom)
     }
 }
 
-impl ArchiveCitationV1 {
+impl ArchiveCitation {
     /// Construct a bounded source citation.
     ///
     /// # Errors
     /// Refuses an empty, NUL-containing, or unbounded component.
-    pub fn try_new(source_id: String, locator: String) -> Result<Self, SemanticArchiveErrorV1> {
+    pub fn try_new(source_id: String, locator: String) -> Result<Self, SemanticArchiveError> {
         validate_text(&source_id)?;
         validate_text(&locator)?;
         Ok(Self { source_id, locator })
@@ -218,14 +190,14 @@ impl ArchiveCitationV1 {
 
 /// One knowledge-grant-addressable semantic signal.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct ArchiveSignalV1 {
+pub struct ArchiveSignal {
     grant_key: String,
     label: String,
     value: String,
-    citation: ArchiveCitationV1,
+    citation: ArchiveCitation,
 }
 
-impl ArchiveSignalV1 {
+impl ArchiveSignal {
     /// Construct one bounded signal.
     ///
     /// # Errors
@@ -234,8 +206,8 @@ impl ArchiveSignalV1 {
         grant_key: String,
         label: String,
         value: String,
-        citation: ArchiveCitationV1,
-    ) -> Result<Self, SemanticArchiveErrorV1> {
+        citation: ArchiveCitation,
+    ) -> Result<Self, SemanticArchiveError> {
         validate_key(&grant_key)?;
         validate_text(&label)?;
         validate_text(&value)?;
@@ -269,27 +241,27 @@ impl ArchiveSignalV1 {
 
     /// Borrow the pinned provenance citation.
     #[must_use]
-    pub const fn citation(&self) -> &ArchiveCitationV1 {
+    pub const fn citation(&self) -> &ArchiveCitation {
         &self.citation
     }
 }
 
 /// One outbound semantic page link.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct ArchiveLinkV1 {
-    target: ArchivePageRefV1,
+pub struct ArchiveLink {
+    target: ArchivePageRef,
     known_label: String,
 }
 
-impl ArchiveLinkV1 {
+impl ArchiveLink {
     /// Construct one outbound link whose label may be shown only when known.
     ///
     /// # Errors
     /// Refuses an unsafe label.
     pub fn try_new(
-        target: ArchivePageRefV1,
+        target: ArchivePageRef,
         known_label: String,
-    ) -> Result<Self, SemanticArchiveErrorV1> {
+    ) -> Result<Self, SemanticArchiveError> {
         validate_text(&known_label)?;
         Ok(Self {
             target,
@@ -299,7 +271,7 @@ impl ArchiveLinkV1 {
 
     /// Borrow the exact link target identity.
     #[must_use]
-    pub const fn target(&self) -> &ArchivePageRefV1 {
+    pub const fn target(&self) -> &ArchivePageRef {
         &self.target
     }
 
@@ -312,34 +284,34 @@ impl ArchiveLinkV1 {
 
 /// One receipt-bound page refresh requested by the semantic worker.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct ArchivePageInputV1 {
-    subject: ArchiveSubjectV1,
+pub struct ArchivePageInput {
+    subject: ArchiveSubject,
     verified_tick: u64,
     tick_content_hash: [u8; 32],
     decision_question: String,
-    signals: Vec<ArchiveSignalV1>,
-    links: Vec<ArchiveLinkV1>,
+    signals: Vec<ArchiveSignal>,
+    links: Vec<ArchiveLink>,
 }
 
-impl ArchivePageInputV1 {
+impl ArchivePageInput {
     /// Construct one bounded dirty-subject work item.
     ///
     /// # Errors
     /// Refuses synthetic tick zero, duplicate keys, or unbounded collections.
     pub fn try_new(
-        subject: ArchiveSubjectV1,
+        subject: ArchiveSubject,
         verified_tick: u64,
         tick_content_hash: [u8; 32],
         decision_question: String,
-        signals: Vec<ArchiveSignalV1>,
-        links: Vec<ArchiveLinkV1>,
-    ) -> Result<Self, SemanticArchiveErrorV1> {
+        signals: Vec<ArchiveSignal>,
+        links: Vec<ArchiveLink>,
+    ) -> Result<Self, SemanticArchiveError> {
         if verified_tick == 0 || verified_tick > i64::MAX as u64 {
-            return Err(SemanticArchiveErrorV1::InvalidVerifiedTick);
+            return Err(SemanticArchiveError::InvalidVerifiedTick);
         }
         validate_text(&decision_question)?;
         if signals.len() > MAX_SIGNALS || links.len() > MAX_LINKS {
-            return Err(SemanticArchiveErrorV1::CollectionBound);
+            return Err(SemanticArchiveError::CollectionBound);
         }
         let signal_keys = signals
             .iter()
@@ -350,7 +322,7 @@ impl ArchivePageInputV1 {
             .map(|link| &link.target)
             .collect::<BTreeSet<_>>();
         if signal_keys.len() != signals.len() || link_targets.len() != links.len() {
-            return Err(SemanticArchiveErrorV1::DuplicateKey);
+            return Err(SemanticArchiveError::DuplicateKey);
         }
         Ok(Self {
             subject,
@@ -364,7 +336,7 @@ impl ArchivePageInputV1 {
 
     /// Borrow the page subject.
     #[must_use]
-    pub const fn subject(&self) -> &ArchiveSubjectV1 {
+    pub const fn subject(&self) -> &ArchiveSubject {
         &self.subject
     }
 
@@ -388,29 +360,29 @@ impl ArchivePageInputV1 {
 
     /// Borrow the ordered grant-keyed signals.
     #[must_use]
-    pub fn signals(&self) -> &[ArchiveSignalV1] {
+    pub fn signals(&self) -> &[ArchiveSignal] {
         &self.signals
     }
 
     /// Borrow the ordered outbound links.
     #[must_use]
-    pub fn links(&self) -> &[ArchiveLinkV1] {
+    pub fn links(&self) -> &[ArchiveLink] {
         &self.links
     }
 }
 
 /// Exact SQL-derived knowledge grants supplied to the pure renderer.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct ArchiveKnowledgeV1 {
-    grants: BTreeMap<(ArchivePageRefV1, String), ArchiveKnowledgeGrantV1>,
+pub struct ArchiveKnowledge {
+    grants: BTreeMap<(ArchivePageRef, String), ArchiveKnowledgeGrant>,
 }
 
-impl ArchiveKnowledgeV1 {
+impl ArchiveKnowledge {
     /// Validate an exact SQL grant result.
     ///
     /// # Errors
     /// Refuses duplicate rows or a malformed key or citation.
-    pub fn try_new(grants: Vec<ArchiveKnowledgeGrantV1>) -> Result<Self, SemanticArchiveErrorV1> {
+    pub fn try_new(grants: Vec<ArchiveKnowledgeGrant>) -> Result<Self, SemanticArchiveError> {
         let mut indexed = BTreeMap::new();
         for grant in grants {
             validate_key(&grant.grant_key)?;
@@ -418,29 +390,29 @@ impl ArchiveKnowledgeV1 {
             validate_text(grant.citation.locator())?;
             let key = (grant.page_ref.clone(), grant.grant_key.clone());
             if indexed.insert(key, grant).is_some() {
-                return Err(SemanticArchiveErrorV1::DuplicateGrant);
+                return Err(SemanticArchiveError::DuplicateGrant);
             }
         }
         Ok(Self { grants: indexed })
     }
 
-    pub(crate) fn knows_subject(&self, page_ref: &ArchivePageRefV1) -> bool {
+    pub(crate) fn knows_subject(&self, page_ref: &ArchivePageRef) -> bool {
         self.grant(page_ref, "subject").is_some()
     }
 
-    pub(crate) fn knows_field(&self, page_ref: &ArchivePageRefV1, grant_key: &str) -> bool {
+    pub(crate) fn knows_field(&self, page_ref: &ArchivePageRef, grant_key: &str) -> bool {
         self.grant(page_ref, grant_key).is_some()
     }
 
     pub(crate) fn grant(
         &self,
-        page_ref: &ArchivePageRefV1,
+        page_ref: &ArchivePageRef,
         grant_key: &str,
-    ) -> Option<&ArchiveKnowledgeGrantV1> {
+    ) -> Option<&ArchiveKnowledgeGrant> {
         self.grants.get(&(page_ref.clone(), grant_key.to_owned()))
     }
 
-    pub(crate) fn rows(&self) -> impl Iterator<Item = &ArchiveKnowledgeGrantV1> {
+    pub(crate) fn rows(&self) -> impl Iterator<Item = &ArchiveKnowledgeGrant> {
         self.grants.values()
     }
 
@@ -448,7 +420,7 @@ impl ArchiveKnowledgeV1 {
     #[must_use]
     pub fn sha256(&self) -> [u8; 32] {
         let mut hasher = Sha256::new();
-        hasher.update(ARCHIVE_KNOWLEDGE_DOMAIN_V1);
+        hasher.update(ARCHIVE_KNOWLEDGE_DOMAIN);
         hash_len(&mut hasher, self.grants.len());
         for ((page_ref, grant_key), grant) in &self.grants {
             hash_page_ref(&mut hasher, page_ref);
@@ -462,14 +434,14 @@ impl ArchiveKnowledgeV1 {
 
 /// One rendered, searchable, citation-bearing page artifact.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct RenderedArchivePageV1 {
+pub struct RenderedArchivePage {
     markdown: String,
     search_text: String,
-    citations: Vec<ArchiveCitationV1>,
+    citations: Vec<ArchiveCitation>,
     sha256: [u8; 32],
 }
 
-impl RenderedArchivePageV1 {
+impl RenderedArchivePage {
     /// Borrow exact UTF-8 Markdown bytes.
     #[must_use]
     pub fn markdown(&self) -> &str {
@@ -484,7 +456,7 @@ impl RenderedArchivePageV1 {
 
     /// Borrow the exact provenance citations for the known page material.
     #[must_use]
-    pub fn citations(&self) -> &[ArchiveCitationV1] {
+    pub fn citations(&self) -> &[ArchiveCitation] {
         &self.citations
     }
 
@@ -496,21 +468,21 @@ impl RenderedArchivePageV1 {
 }
 
 /// Pinned strict `MiniJinja` rendering authority.
-pub struct FogSafeArchiveRendererV1 {
+pub struct FogSafeArchiveRenderer {
     environment: Environment<'static>,
 }
 
-impl FogSafeArchiveRendererV1 {
+impl FogSafeArchiveRenderer {
     /// Compile the one embedded template with strict undefined behavior.
     ///
     /// # Errors
-    /// Returns [`SemanticArchiveErrorV1::Template`] for checked-in syntax drift.
-    pub fn new() -> Result<Self, SemanticArchiveErrorV1> {
+    /// Returns [`SemanticArchiveError::Template`] for checked-in syntax drift.
+    pub fn new() -> Result<Self, SemanticArchiveError> {
         let mut environment = Environment::empty();
         environment.set_undefined_behavior(UndefinedBehavior::Strict);
         environment
-            .add_template("archive-page-v1", ARCHIVE_PAGE_TEMPLATE_V1)
-            .map_err(|_| SemanticArchiveErrorV1::Template)?;
+            .add_template("archive-page-v1", ARCHIVE_PAGE_TEMPLATE)
+            .map_err(|_| SemanticArchiveError::Template)?;
         Ok(Self { environment })
     }
 
@@ -520,21 +492,21 @@ impl FogSafeArchiveRendererV1 {
     /// Refuses an unknown subject or any strict template failure.
     pub fn render(
         &self,
-        input: &ArchivePageInputV1,
-        knowledge: &ArchiveKnowledgeV1,
-    ) -> Result<RenderedArchivePageV1, SemanticArchiveErrorV1> {
+        input: &ArchivePageInput,
+        knowledge: &ArchiveKnowledge,
+    ) -> Result<RenderedArchivePage, SemanticArchiveError> {
         self.render_with_emission(input, knowledge)
             .map(|(page, _)| page)
     }
 
     pub(crate) fn render_with_emission(
         &self,
-        input: &ArchivePageInputV1,
-        knowledge: &ArchiveKnowledgeV1,
-    ) -> Result<(RenderedArchivePageV1, ArchiveEmissionManifestV2), SemanticArchiveErrorV1> {
+        input: &ArchivePageInput,
+        knowledge: &ArchiveKnowledge,
+    ) -> Result<(RenderedArchivePage, ArchiveEmissionManifest), SemanticArchiveError> {
         let subject_grant = knowledge
             .grant(input.subject.page_ref(), "subject")
-            .ok_or(SemanticArchiveErrorV1::UnknownSubject)?;
+            .ok_or(SemanticArchiveError::UnknownSubject)?;
         let signals = input
             .signals
             .iter()
@@ -545,7 +517,7 @@ impl FogSafeArchiveRendererV1 {
             .links
             .iter()
             .map(|link| {
-                ArchiveEmissionLinkV2::try_new(
+                ArchiveEmissionLink::try_new(
                     link.target.clone(),
                     knowledge
                         .knows_subject(&link.target)
@@ -553,7 +525,7 @@ impl FogSafeArchiveRendererV1 {
                 )
             })
             .collect::<Result<Vec<_>, _>>()?;
-        let emission = ArchiveEmissionManifestV2::try_new(
+        let emission = ArchiveEmissionManifest::try_new(
             subject_grant.citation.clone(),
             input.decision_question.clone(),
             signals,
@@ -570,20 +542,20 @@ impl FogSafeArchiveRendererV1 {
 
     pub(crate) fn render_emission(
         &self,
-        subject: &ArchiveSubjectV1,
+        subject: &ArchiveSubject,
         verified_tick: u64,
         source_hash: &[u8; 32],
-        emission: &ArchiveEmissionManifestV2,
-    ) -> Result<RenderedArchivePageV1, SemanticArchiveErrorV1> {
+        emission: &ArchiveEmissionManifest,
+    ) -> Result<RenderedArchivePage, SemanticArchiveError> {
         let signals = emission
             .signals()
             .iter()
-            .map(TemplateSignalV1::from)
+            .map(TemplateSignal::from)
             .collect::<Vec<_>>();
         let links = emission
             .links()
             .iter()
-            .map(|link| TemplateLinkV1 {
+            .map(|link| TemplateLink {
                 page_key: link.target().page_key(),
                 known_label: link.known_label(),
             })
@@ -592,7 +564,7 @@ impl FogSafeArchiveRendererV1 {
         let template = self
             .environment
             .get_template("archive-page-v1")
-            .map_err(|_| SemanticArchiveErrorV1::Template)?;
+            .map_err(|_| SemanticArchiveError::Template)?;
         let markdown = template
             .render(context! {
                 subject_key => subject.page_ref().page_key(),
@@ -603,14 +575,14 @@ impl FogSafeArchiveRendererV1 {
                 signals => signals,
                 links => links,
             })
-            .map_err(|_| SemanticArchiveErrorV1::Template)?;
+            .map_err(|_| SemanticArchiveError::Template)?;
         let search_text = emission.search_text(subject);
         let citations = emission.citations();
         if markdown.len() > MAX_PAGE_BYTES || search_text.len() > MAX_PAGE_BYTES {
-            return Err(SemanticArchiveErrorV1::CollectionBound);
+            return Err(SemanticArchiveError::CollectionBound);
         }
         let sha256 = sha256_of(markdown.as_bytes());
-        Ok(RenderedArchivePageV1 {
+        Ok(RenderedArchivePage {
             markdown,
             search_text,
             citations,
@@ -621,25 +593,25 @@ impl FogSafeArchiveRendererV1 {
     /// Return the checked-in template identity.
     #[must_use]
     pub const fn template_sha256(&self) -> [u8; 32] {
-        ARCHIVE_PAGE_TEMPLATE_SHA256_V1
+        ARCHIVE_PAGE_TEMPLATE_SHA256
     }
 }
 
 /// One bounded batch bound to a single committed dirty receipt.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct ArchiveDirtyBatchV1 {
+pub struct ArchiveDirtyBatch {
     resolve_tick: u64,
     tick_content_hash: [u8; 32],
-    pages: Vec<ArchivePageInputV1>,
+    pages: Vec<ArchivePageInput>,
 }
 
-impl ArchiveDirtyBatchV1 {
+impl ArchiveDirtyBatch {
     /// Maximum number of dirty pages consumed from one committed receipt.
     pub const MAX_PAGES: usize = 256;
 
     /// Borrow the ordered page inputs bound to this receipt.
     #[must_use]
-    pub fn pages(&self) -> &[ArchivePageInputV1] {
+    pub fn pages(&self) -> &[ArchivePageInput] {
         &self.pages
     }
 
@@ -662,25 +634,25 @@ impl ArchiveDirtyBatchV1 {
     pub fn try_new(
         resolve_tick: u64,
         tick_content_hash: [u8; 32],
-        pages: Vec<ArchivePageInputV1>,
-    ) -> Result<Self, SemanticArchiveErrorV1> {
+        pages: Vec<ArchivePageInput>,
+    ) -> Result<Self, SemanticArchiveError> {
         if resolve_tick == 0 || resolve_tick > i64::MAX as u64 {
-            return Err(SemanticArchiveErrorV1::InvalidVerifiedTick);
+            return Err(SemanticArchiveError::InvalidVerifiedTick);
         }
         if pages.len() > Self::MAX_PAGES {
-            return Err(SemanticArchiveErrorV1::CollectionBound);
+            return Err(SemanticArchiveError::CollectionBound);
         }
         let subjects = pages
             .iter()
             .map(|page| page.subject.page_ref())
             .collect::<BTreeSet<_>>();
         if subjects.len() != pages.len() {
-            return Err(SemanticArchiveErrorV1::DuplicateKey);
+            return Err(SemanticArchiveError::DuplicateKey);
         }
         if pages.iter().any(|page| {
             page.verified_tick != resolve_tick || page.tick_content_hash != tick_content_hash
         }) {
-            return Err(SemanticArchiveErrorV1::ReceiptMismatch);
+            return Err(SemanticArchiveError::ReceiptMismatch);
         }
         Ok(Self {
             resolve_tick,
@@ -693,7 +665,7 @@ impl ArchiveDirtyBatchV1 {
     #[must_use]
     pub fn sha256(&self) -> [u8; 32] {
         let mut hasher = Sha256::new();
-        hasher.update(ARCHIVE_DIRTY_BATCH_DOMAIN_V1);
+        hasher.update(ARCHIVE_DIRTY_BATCH_DOMAIN);
         hasher.update(self.resolve_tick.to_be_bytes());
         hasher.update(self.tick_content_hash);
         hash_len(&mut hasher, self.pages.len());
@@ -706,29 +678,29 @@ impl ArchiveDirtyBatchV1 {
 
 /// One append-only SQL knowledge grant.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct ArchiveKnowledgeGrantV1 {
-    pub(crate) page_ref: ArchivePageRefV1,
+pub struct ArchiveKnowledgeGrant {
+    pub(crate) page_ref: ArchivePageRef,
     pub(crate) grant_key: String,
     pub(crate) granted_tick: u64,
-    pub(crate) citation: ArchiveCitationV1,
+    pub(crate) citation: ArchiveCitation,
 }
 
-impl ArchiveKnowledgeGrantV1 {
+impl ArchiveKnowledgeGrant {
     /// Construct one subject (`subject`) or field grant.
     ///
     /// # Errors
     /// Refuses an unsafe key or a tick outside `PostgreSQL` `BIGINT`.
     pub fn try_new(
-        page_ref: ArchivePageRefV1,
+        page_ref: ArchivePageRef,
         grant_key: String,
         granted_tick: u64,
-        citation: ArchiveCitationV1,
-    ) -> Result<Self, SemanticArchiveErrorV1> {
+        citation: ArchiveCitation,
+    ) -> Result<Self, SemanticArchiveError> {
         validate_key(&grant_key)?;
         validate_text(citation.source_id())?;
         validate_text(citation.locator())?;
         if granted_tick > i64::MAX as u64 {
-            return Err(SemanticArchiveErrorV1::InvalidVerifiedTick);
+            return Err(SemanticArchiveError::InvalidVerifiedTick);
         }
         Ok(Self {
             page_ref,
@@ -739,18 +711,9 @@ impl ArchiveKnowledgeGrantV1 {
     }
 }
 
-/// Idempotent schema-install result.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum ArchiveSchemaDispositionV1 {
-    /// The exact additive schema committed now.
-    Installed,
-    /// The exact contract marker and all relations already existed.
-    AlreadyCurrent,
-}
-
 /// Idempotent receipt-consumption result.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum ArchiveMaterializeDispositionV1 {
+pub enum ArchiveMaterializeDisposition {
     /// This invocation consumed and rendered the receipt.
     Applied,
     /// The exact batch, worker, and knowledge snapshot already consumed the receipt.
@@ -759,7 +722,7 @@ pub enum ArchiveMaterializeDispositionV1 {
 
 /// How one materialization pass relates to the receipt's consumption row.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum ArchiveMaterializeModeV1 {
+pub enum ArchiveMaterializeMode {
     /// The receipt's full dirty set drained: write the pages and claim the
     /// consumption row so `verified_tick` may advance past it.
     Consume,
@@ -772,23 +735,23 @@ pub enum ArchiveMaterializeModeV1 {
 
 /// One persisted page result from an applied batch.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct MaterializedArchivePageV1 {
-    pub(crate) page_ref: ArchivePageRefV1,
-    pub(crate) page: RenderedArchivePageV1,
+pub struct MaterializedArchivePage {
+    pub(crate) page_ref: ArchivePageRef,
+    pub(crate) page: RenderedArchivePage,
     pub(crate) persisted: bool,
-    pub(crate) atoms: ArchiveAtomMintV1,
+    pub(crate) atoms: ArchiveAtomMint,
 }
 
-impl MaterializedArchivePageV1 {
+impl MaterializedArchivePage {
     /// Borrow the stable page identity.
     #[must_use]
-    pub const fn page_ref(&self) -> &ArchivePageRefV1 {
+    pub const fn page_ref(&self) -> &ArchivePageRef {
         &self.page_ref
     }
 
     /// Borrow the rendered artifact.
     #[must_use]
-    pub const fn page(&self) -> &RenderedArchivePageV1 {
+    pub const fn page(&self) -> &RenderedArchivePage {
         &self.page
     }
 
@@ -800,28 +763,28 @@ impl MaterializedArchivePageV1 {
 
     /// Borrow the atom mint result for this page.
     #[must_use]
-    pub const fn atoms(&self) -> &ArchiveAtomMintV1 {
+    pub const fn atoms(&self) -> &ArchiveAtomMint {
         &self.atoms
     }
 }
 
 /// Receipt-level worker report.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct ArchiveMaterializeReportV1 {
-    pub(crate) disposition: ArchiveMaterializeDispositionV1,
-    pub(crate) pages: Vec<MaterializedArchivePageV1>,
+pub struct ArchiveMaterializeReport {
+    pub(crate) disposition: ArchiveMaterializeDisposition,
+    pub(crate) pages: Vec<MaterializedArchivePage>,
 }
 
-impl ArchiveMaterializeReportV1 {
+impl ArchiveMaterializeReport {
     /// Return whether this invocation applied or observed an exact retry.
     #[must_use]
-    pub const fn disposition(&self) -> ArchiveMaterializeDispositionV1 {
+    pub const fn disposition(&self) -> ArchiveMaterializeDisposition {
         self.disposition
     }
 
     /// Borrow rendered page results in caller-supplied order.
     #[must_use]
-    pub fn pages(&self) -> &[MaterializedArchivePageV1] {
+    pub fn pages(&self) -> &[MaterializedArchivePage] {
         &self.pages
     }
 }
@@ -829,7 +792,7 @@ impl ArchiveMaterializeReportV1 {
 /// Governed evidence classification carried by every semantic atom
 /// (constitutional compact: Observed, Derived, Calibrated, Designed).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
-pub enum ArchiveEvidenceClassV1 {
+pub enum ArchiveEvidenceClass {
     /// A fact read from a pinned source.
     Observed,
     /// A deterministic measure produced from pinned facts.
@@ -840,7 +803,7 @@ pub enum ArchiveEvidenceClassV1 {
     Designed,
 }
 
-impl ArchiveEvidenceClassV1 {
+impl ArchiveEvidenceClass {
     /// Stable storage spelling.
     #[must_use]
     pub const fn as_str(self) -> &'static str {
@@ -863,9 +826,9 @@ impl ArchiveEvidenceClassV1 {
 }
 
 /// Closed atom subject kinds (ADR249 R1/R12): the page kinds plus glossary
-/// concepts. Unlike [`ArchiveSubjectKindV1`] this domain is not a page kind.
+/// concepts. Unlike [`ArchiveSubjectKind`] this domain is not a page kind.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
-pub enum ArchiveAtomSubjectKindV1 {
+pub enum ArchiveAtomSubjectKind {
     /// United States county identified by five-digit Census FIPS.
     County,
     /// Census-designated place identified by seven-digit place GEOID.
@@ -874,7 +837,7 @@ pub enum ArchiveAtomSubjectKindV1 {
     Concept,
 }
 
-impl ArchiveAtomSubjectKindV1 {
+impl ArchiveAtomSubjectKind {
     /// Stable storage spelling.
     #[must_use]
     pub const fn as_str(self) -> &'static str {
@@ -896,29 +859,26 @@ impl ArchiveAtomSubjectKindV1 {
 
 /// One exact atom subject identity with its per-kind id discipline.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
-pub struct ArchiveAtomSubjectV1 {
-    kind: ArchiveAtomSubjectKindV1,
+pub struct ArchiveAtomSubject {
+    kind: ArchiveAtomSubjectKind,
     id: String,
 }
 
-impl ArchiveAtomSubjectV1 {
+impl ArchiveAtomSubject {
     /// Construct one bounded atom subject identity.
     ///
     /// # Errors
     /// Refuses a malformed per-kind id: five-digit county, seven-digit place,
     /// or a concept key matching ``^[a-z0-9][a-z0-9-]{0,127}$`` exactly.
-    pub fn try_new(
-        kind: ArchiveAtomSubjectKindV1,
-        id: String,
-    ) -> Result<Self, SemanticArchiveErrorV1> {
+    pub fn try_new(kind: ArchiveAtomSubjectKind, id: String) -> Result<Self, SemanticArchiveError> {
         let exact = match kind {
-            ArchiveAtomSubjectKindV1::County => {
+            ArchiveAtomSubjectKind::County => {
                 id.len() == 5 && id.bytes().all(|byte| byte.is_ascii_digit())
             }
-            ArchiveAtomSubjectKindV1::Place => {
+            ArchiveAtomSubjectKind::Place => {
                 id.len() == 7 && id.bytes().all(|byte| byte.is_ascii_digit())
             }
-            ArchiveAtomSubjectKindV1::Concept => {
+            ArchiveAtomSubjectKind::Concept => {
                 let mut bytes = id.bytes();
                 matches!(bytes.next(), Some(first) if first.is_ascii_lowercase() || first.is_ascii_digit())
                     && bytes.all(|byte| {
@@ -927,7 +887,7 @@ impl ArchiveAtomSubjectV1 {
             }
         };
         if !exact || id.len() > MAX_ID_BYTES || id.is_empty() {
-            return Err(SemanticArchiveErrorV1::InvalidIdentity);
+            return Err(SemanticArchiveError::InvalidIdentity);
         }
         Ok(Self { kind, id })
     }
@@ -936,18 +896,18 @@ impl ArchiveAtomSubjectV1 {
     ///
     /// # Errors
     /// Refuses a malformed identity; page references are prevalidated, so this
-    /// cannot fail for refs produced by [`ArchivePageRefV1::try_new`].
-    pub fn from_page_ref(page_ref: &ArchivePageRefV1) -> Result<Self, SemanticArchiveErrorV1> {
+    /// cannot fail for refs produced by [`ArchivePageRef::try_new`].
+    pub fn from_page_ref(page_ref: &ArchivePageRef) -> Result<Self, SemanticArchiveError> {
         let kind = match page_ref.kind() {
-            ArchiveSubjectKindV1::County => ArchiveAtomSubjectKindV1::County,
-            ArchiveSubjectKindV1::Place => ArchiveAtomSubjectKindV1::Place,
+            ArchiveSubjectKind::County => ArchiveAtomSubjectKind::County,
+            ArchiveSubjectKind::Place => ArchiveAtomSubjectKind::Place,
         };
         Self::try_new(kind, page_ref.id().to_owned())
     }
 
     /// Return the closed atom subject kind.
     #[must_use]
-    pub const fn kind(&self) -> ArchiveAtomSubjectKindV1 {
+    pub const fn kind(&self) -> ArchiveAtomSubjectKind {
         self.kind
     }
 
@@ -960,7 +920,7 @@ impl ArchiveAtomSubjectV1 {
 
 /// One typed, canonical atom value (ADR249 R1).
 #[derive(Clone, Debug, PartialEq)]
-pub enum ArchiveAtomValueV1 {
+pub enum ArchiveAtomValue {
     /// Bounded UTF-8 text.
     Text(String),
     /// Canonical finite binary64; `-0.0` normalizes to `+0.0`.
@@ -971,7 +931,7 @@ pub enum ArchiveAtomValueV1 {
     Bool(bool),
 }
 
-impl ArchiveAtomValueV1 {
+impl ArchiveAtomValue {
     const fn tag(&self) -> u8 {
         match self {
             Self::Text(_) => 1,
@@ -996,60 +956,60 @@ impl ArchiveAtomValueV1 {
 /// identical bytes re-mint to the identical id, so writer retries are
 /// idempotent and atoms never mutate.
 #[derive(Clone, Debug, PartialEq)]
-pub struct ArchiveAtomV1 {
+pub struct ArchiveAtom {
     campaign_id: CampaignId,
-    subject: ArchiveAtomSubjectV1,
+    subject: ArchiveAtomSubject,
     signal_key: String,
     grant_key: String,
-    evidence_class: ArchiveEvidenceClassV1,
-    value: ArchiveAtomValueV1,
-    citation: ArchiveCitationV1,
+    evidence_class: ArchiveEvidenceClass,
+    value: ArchiveAtomValue,
+    citation: ArchiveCitation,
     valid_tick: u64,
     atom_id: [u8; 32],
 }
 
-impl ArchiveAtomV1 {
+impl ArchiveAtom {
     /// Validate and mint one canonical atom.
     ///
     /// # Errors
     /// Refuses a malformed subject, key, citation, or tick; refuses a
-    /// non-finite `f64` value with [`SemanticArchiveErrorV1::NonFiniteValue`]
+    /// non-finite `f64` value with [`SemanticArchiveError::NonFiniteValue`]
     /// so refusal vectors can name it (R1).
     #[allow(clippy::too_many_arguments)]
     pub fn try_new(
         campaign_id: CampaignId,
-        subject: ArchiveAtomSubjectV1,
+        subject: ArchiveAtomSubject,
         signal_key: String,
         grant_key: String,
-        evidence_class: ArchiveEvidenceClassV1,
-        value: &ArchiveAtomValueV1,
-        citation: ArchiveCitationV1,
+        evidence_class: ArchiveEvidenceClass,
+        value: &ArchiveAtomValue,
+        citation: ArchiveCitation,
         valid_tick: u64,
-    ) -> Result<Self, SemanticArchiveErrorV1> {
+    ) -> Result<Self, SemanticArchiveError> {
         validate_key(&signal_key)?;
         validate_key(&grant_key)?;
         validate_text(citation.source_id())?;
         validate_text(citation.locator())?;
         if valid_tick > i64::MAX as u64 {
-            return Err(SemanticArchiveErrorV1::InvalidVerifiedTick);
+            return Err(SemanticArchiveError::InvalidVerifiedTick);
         }
         let canonical = match value {
-            ArchiveAtomValueV1::Text(text) => {
+            ArchiveAtomValue::Text(text) => {
                 if text.is_empty() || text.len() > MAX_TEXT_BYTES || text.as_bytes().contains(&0) {
-                    return Err(SemanticArchiveErrorV1::InvalidText);
+                    return Err(SemanticArchiveError::InvalidText);
                 }
-                ArchiveAtomValueV1::Text(text.clone())
+                ArchiveAtomValue::Text(text.clone())
             }
-            ArchiveAtomValueV1::F64(number) => {
+            ArchiveAtomValue::F64(number) => {
                 if !number.is_finite() {
-                    return Err(SemanticArchiveErrorV1::NonFiniteValue);
+                    return Err(SemanticArchiveError::NonFiniteValue);
                 }
                 // Parity doctrine: -0.0 canonicalizes to +0.0 so a sign-only
                 // bit difference never mints a second identity.
-                ArchiveAtomValueV1::F64(if *number == 0.0 { 0.0 } else { *number })
+                ArchiveAtomValue::F64(if *number == 0.0 { 0.0 } else { *number })
             }
-            ArchiveAtomValueV1::U64(number) => ArchiveAtomValueV1::U64(*number),
-            ArchiveAtomValueV1::Bool(flag) => ArchiveAtomValueV1::Bool(*flag),
+            ArchiveAtomValue::U64(number) => ArchiveAtomValue::U64(*number),
+            ArchiveAtomValue::Bool(flag) => ArchiveAtomValue::Bool(*flag),
         };
         let atom_id = canonical_atom_id(
             campaign_id.as_uuid(),
@@ -1082,7 +1042,7 @@ impl ArchiveAtomV1 {
 
     /// Borrow the exact atom subject.
     #[must_use]
-    pub const fn subject(&self) -> &ArchiveAtomSubjectV1 {
+    pub const fn subject(&self) -> &ArchiveAtomSubject {
         &self.subject
     }
 
@@ -1100,19 +1060,19 @@ impl ArchiveAtomV1 {
 
     /// Return the governed evidence class.
     #[must_use]
-    pub const fn evidence_class(&self) -> ArchiveEvidenceClassV1 {
+    pub const fn evidence_class(&self) -> ArchiveEvidenceClass {
         self.evidence_class
     }
 
     /// Borrow the typed canonical value.
     #[must_use]
-    pub const fn value(&self) -> &ArchiveAtomValueV1 {
+    pub const fn value(&self) -> &ArchiveAtomValue {
         &self.value
     }
 
     /// Borrow the pinned provenance citation.
     #[must_use]
-    pub const fn citation(&self) -> &ArchiveCitationV1 {
+    pub const fn citation(&self) -> &ArchiveCitation {
         &self.citation
     }
 
@@ -1136,8 +1096,8 @@ impl ArchiveAtomV1 {
 /// the exact grant row exists and `None` when it does not; the horizon is
 /// marker-backed by the caller (never `MAX(tick)`).
 #[must_use]
-pub const fn archive_atom_visible_v1(
-    atom: &ArchiveAtomV1,
+pub const fn archive_atom_visible(
+    atom: &ArchiveAtom,
     granted_tick: Option<u64>,
     acknowledged_horizon_tick: u64,
 ) -> bool {
@@ -1149,12 +1109,12 @@ pub const fn archive_atom_visible_v1(
 
 /// Per-page atom mint result inside one materialized receipt.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct ArchiveAtomMintV1 {
+pub struct ArchiveAtomMint {
     minted: usize,
     joined: usize,
 }
 
-impl ArchiveAtomMintV1 {
+impl ArchiveAtomMint {
     /// Construct one exact mint report row.
     #[must_use]
     pub const fn new(minted: usize, joined: usize) -> Self {
@@ -1177,16 +1137,16 @@ impl ArchiveAtomMintV1 {
 #[allow(clippy::too_many_arguments)]
 fn canonical_atom_id(
     campaign_id: &uuid::Uuid,
-    subject: &ArchiveAtomSubjectV1,
+    subject: &ArchiveAtomSubject,
     signal_key: &str,
     grant_key: &str,
-    evidence_class: ArchiveEvidenceClassV1,
-    value: &ArchiveAtomValueV1,
-    citation: &ArchiveCitationV1,
+    evidence_class: ArchiveEvidenceClass,
+    value: &ArchiveAtomValue,
+    citation: &ArchiveCitation,
     valid_tick: u64,
 ) -> [u8; 32] {
     let mut hasher = Sha256::new();
-    hasher.update(ARCHIVE_ATOM_DOMAIN_V1);
+    hasher.update(ARCHIVE_ATOM_DOMAIN);
     hasher.update(campaign_id.as_bytes());
     hasher.update([subject.kind.tag()]);
     hash_bytes(&mut hasher, subject.id.as_bytes());
@@ -1195,13 +1155,13 @@ fn canonical_atom_id(
     hasher.update([evidence_class.tag()]);
     hasher.update([value.tag()]);
     match value {
-        ArchiveAtomValueV1::Text(text) => hash_bytes(&mut hasher, text.as_bytes()),
-        ArchiveAtomValueV1::F64(number) => {
+        ArchiveAtomValue::Text(text) => hash_bytes(&mut hasher, text.as_bytes()),
+        ArchiveAtomValue::F64(number) => {
             let canonical = if *number == 0.0 { 0.0 } else { *number };
             hasher.update(canonical.to_bits().to_be_bytes());
         }
-        ArchiveAtomValueV1::U64(number) => hasher.update(number.to_be_bytes()),
-        ArchiveAtomValueV1::Bool(flag) => hasher.update([u8::from(*flag)]),
+        ArchiveAtomValue::U64(number) => hasher.update(number.to_be_bytes()),
+        ArchiveAtomValue::Bool(flag) => hasher.update([u8::from(*flag)]),
     }
     hash_citation(&mut hasher, citation);
     hasher.update(valid_tick.to_be_bytes());
@@ -1210,253 +1170,36 @@ fn canonical_atom_id(
 
 /// `PostgreSQL` adapter for the client-owned epistemic Archive tier.
 #[derive(Clone)]
-pub struct SemanticArchiveStoreV1 {
+pub struct SemanticArchiveStore {
     config: Config,
 }
 
-impl SemanticArchiveStoreV1 {
+impl SemanticArchiveStore {
     /// Bind the worker to one Rust-authoritative `PostgreSQL` target.
     #[must_use]
     pub fn new(config: &Config) -> Self {
         Self {
-            config: config.clone(),
+            config: crate::current_schema::bounded_config(config),
         }
     }
 
-    /// Install the additive Archive schemas under the shared schema lock.
-    ///
-    /// The base semantic Archive schema and the additive atom schema each
-    /// install idempotently with their own marker census; either one missing
-    /// installs, and the disposition reports `Installed` unless both were
-    /// already byte-current.
+    /// Verify the current runtime schema and its Archive wake hints.
     ///
     /// # Errors
-    /// Refuses partial markers, a wrong contract row, or database failure.
-    pub fn install_schema(&self) -> Result<ArchiveSchemaDispositionV1, SemanticArchiveErrorV1> {
-        let mut client = self.connect("connect Archive revision installer")?;
-        if crate::archive_revision::schema::installed(&mut client)? {
-            let revisions = crate::archive_revision::schema::install(&mut client)?;
-            let wakeup = crate::archive_wakeup::install(&mut client)?;
-            return Ok(
-                if revisions == ArchiveSchemaDispositionV1::Installed
-                    || wakeup == ArchiveSchemaDispositionV1::Installed
-                {
-                    ArchiveSchemaDispositionV1::Installed
-                } else {
-                    ArchiveSchemaDispositionV1::AlreadyCurrent
-                },
-            );
-        }
-        crate::archive_revision::schema::require_empty_campaigns(&mut client)?;
-        let mut disposition = self.install_base_schema()?;
-        if self.install_atom_schema()? == ArchiveSchemaDispositionV1::Installed {
-            disposition = ArchiveSchemaDispositionV1::Installed;
-        }
-        if self.install_verification_view()? == ArchiveSchemaDispositionV1::Installed {
-            disposition = ArchiveSchemaDispositionV1::Installed;
-        }
-        if crate::archive_revision::schema::install(&mut client)?
-            == ArchiveSchemaDispositionV1::Installed
-        {
-            disposition = ArchiveSchemaDispositionV1::Installed;
-        }
-        if crate::archive_wakeup::install(&mut client)? == ArchiveSchemaDispositionV1::Installed {
-            disposition = ArchiveSchemaDispositionV1::Installed;
-        }
-        Ok(disposition)
-    }
-
-    fn install_verification_view(
-        &self,
-    ) -> Result<ArchiveSchemaDispositionV1, SemanticArchiveErrorV1> {
-        let mut client = self.connect("connect Archive verification installer")?;
-        let mut transaction = client
-            .transaction()
-            .map_err(|error| database("begin Archive verification install", &error))?;
-        transaction
-            .query_one(
-                "SELECT pg_catalog.pg_advisory_xact_lock($1)",
-                &[&SCHEMA_ADVISORY_LOCK_KEY],
-            )
-            .map_err(|error| database("lock Archive verification install", &error))?;
-        let row = transaction
-            .query_one(
-                "SELECT pg_catalog.to_regclass('public.v_archive_verification_v1') IS NOT NULL",
-                &[],
-            )
-            .map_err(|error| database("inspect Archive verification view", &error))?;
-        let installed = decode::<bool>(&row, 0)?;
-        if !installed {
-            transaction
-                .batch_execute(ARCHIVE_VERIFICATION_SCHEMA_V1_SQL)
-                .map_err(|error| database("install Archive verification view", &error))?;
-        }
-        transaction
-            .commit()
-            .map_err(|error| database("commit Archive verification install", &error))?;
-        Ok(if installed {
-            ArchiveSchemaDispositionV1::AlreadyCurrent
-        } else {
-            ArchiveSchemaDispositionV1::Installed
-        })
-    }
-
-    /// Install the additive base semantic Archive schema under the shared
-    /// schema lock.
-    ///
-    /// # Errors
-    /// Refuses partial markers, a wrong contract row, or database failure.
-    pub fn install_base_schema(
-        &self,
-    ) -> Result<ArchiveSchemaDispositionV1, SemanticArchiveErrorV1> {
-        let mut client = self.connect("connect Archive schema installer")?;
-        client
-            .query_one(
-                "SELECT pg_catalog.pg_advisory_lock($1)",
-                &[&SCHEMA_ADVISORY_LOCK_KEY],
-            )
-            .map_err(|error| database("lock Archive schema installer", &error))?;
-        let result = (|| {
-            let row = client
-                .query_one(ARCHIVE_SCHEMA_MARKERS_SQL_V1, &[])
-                .map_err(|error| database("inspect Archive schema markers", &error))?;
-            let markers = [
-                decode::<bool>(&row, 0)?,
-                decode::<bool>(&row, 1)?,
-                decode::<bool>(&row, 2)?,
-                decode::<bool>(&row, 3)?,
-            ];
-            let page_fk_current = decode::<bool>(&row, 4)?;
-            if markers == [false; 4] && !page_fk_current {
-                let mut transaction = client
-                    .build_transaction()
-                    .isolation_level(IsolationLevel::Serializable)
-                    .start()
-                    .map_err(|error| database("begin Archive schema install", &error))?;
-                transaction
-                    .batch_execute(
-                        "SET LOCAL search_path TO pg_catalog; SET LOCAL synchronous_commit TO on",
-                    )
-                    .map_err(|error| database("set Archive schema install settings", &error))?;
-                transaction
-                    .batch_execute(SEMANTIC_ARCHIVE_SCHEMA_V1_SQL)
-                    .map_err(|error| database("install Archive schema", &error))?;
-                transaction
-                    .commit()
-                    .map_err(|error| database("commit Archive schema", &error))?;
-                Ok(ArchiveSchemaDispositionV1::Installed)
-            } else if markers == [true; 4] {
-                let row = client
-                    .query_one(
-                        "SELECT contract_id FROM babylon_meta.semantic_archive_schema_v1",
-                        &[],
-                    )
-                    .map_err(|error| database("read Archive schema contract", &error))?;
-                let contract_id: String = decode(&row, 0)?;
-                if contract_id != ARCHIVE_SCHEMA_CONTRACT_ID {
-                    return Err(SemanticArchiveErrorV1::SchemaMismatch);
-                }
-                if !page_fk_current {
-                    return Err(SemanticArchiveErrorV1::SchemaMismatch);
-                }
-                Ok(ArchiveSchemaDispositionV1::AlreadyCurrent)
-            } else {
-                Err(SemanticArchiveErrorV1::PartialSchema)
-            }
-        })();
-        let unlock = client
-            .query_one(
-                "SELECT pg_catalog.pg_advisory_unlock($1)",
-                &[&SCHEMA_ADVISORY_LOCK_KEY],
-            )
-            .and_then(|row| row.try_get::<_, bool>(0))
-            .map_err(|error| database("unlock Archive schema installer", &error));
-        match (result, unlock) {
-            (Err(error), _) | (Ok(_), Err(error)) => Err(error),
-            (Ok(disposition), Ok(true)) => Ok(disposition),
-            (Ok(_), Ok(false)) => Err(SemanticArchiveErrorV1::SchemaMismatch),
-        }
-    }
-
-    /// Install the additive Archive atom schema under the shared schema lock.
-    ///
-    /// The atom schema widens the knowledge-grant subject domain to concepts,
-    /// so the base semantic Archive schema must already be installed. The
-    /// fog-safe views land in the `public` schema (never `babylon_meta`) with
-    /// guarded reader grants.
-    ///
-    /// # Errors
-    /// Refuses partial markers, a wrong contract row, or database failure.
-    pub fn install_atom_schema(
-        &self,
-    ) -> Result<ArchiveSchemaDispositionV1, SemanticArchiveErrorV1> {
-        let mut client = self.connect("connect Archive atom schema installer")?;
-        client
-            .query_one(
-                "SELECT pg_catalog.pg_advisory_lock($1)",
-                &[&SCHEMA_ADVISORY_LOCK_KEY],
-            )
-            .map_err(|error| database("lock Archive atom schema installer", &error))?;
-        let result = (|| {
-            let row = client
-                .query_one(ARCHIVE_ATOM_SCHEMA_MARKERS_SQL_V1, &[])
-                .map_err(|error| database("inspect Archive atom schema markers", &error))?;
-            let markers = [
-                decode::<bool>(&row, 0)?,
-                decode::<bool>(&row, 1)?,
-                decode::<bool>(&row, 2)?,
-                decode::<bool>(&row, 3)?,
-                decode::<bool>(&row, 4)?,
-                decode::<bool>(&row, 5)?,
-            ];
-            if markers == [false; 6] {
-                let mut transaction = client
-                    .build_transaction()
-                    .isolation_level(IsolationLevel::Serializable)
-                    .start()
-                    .map_err(|error| database("begin Archive atom schema install", &error))?;
-                transaction
-                    .batch_execute(
-                        "SET LOCAL search_path TO pg_catalog; SET LOCAL synchronous_commit TO on",
-                    )
-                    .map_err(|error| {
-                        database("set Archive atom schema install settings", &error)
-                    })?;
-                transaction
-                    .batch_execute(ARCHIVE_ATOM_SCHEMA_V1_SQL)
-                    .map_err(|error| database("install Archive atom schema", &error))?;
-                transaction
-                    .commit()
-                    .map_err(|error| database("commit Archive atom schema install", &error))?;
-                Ok(ArchiveSchemaDispositionV1::Installed)
-            } else if markers == [true; 6] {
-                let row = client
-                    .query_one(
-                        "SELECT contract_id FROM babylon_meta.archive_atom_schema_v1",
-                        &[],
-                    )
-                    .map_err(|error| database("read Archive atom schema contract", &error))?;
-                let contract_id: String = decode(&row, 0)?;
-                if contract_id != ARCHIVE_ATOM_SCHEMA_CONTRACT_ID {
-                    return Err(SemanticArchiveErrorV1::SchemaMismatch);
-                }
-                Ok(ArchiveSchemaDispositionV1::AlreadyCurrent)
-            } else {
-                Err(SemanticArchiveErrorV1::PartialSchema)
-            }
-        })();
-        let unlock = client
-            .query_one(
-                "SELECT pg_catalog.pg_advisory_unlock($1)",
-                &[&SCHEMA_ADVISORY_LOCK_KEY],
-            )
-            .and_then(|row| row.try_get::<_, bool>(0))
-            .map_err(|error| database("unlock Archive atom schema installer", &error));
-        match (result, unlock) {
-            (Err(error), _) | (Ok(_), Err(error)) => Err(error),
-            (Ok(disposition), Ok(true)) => Ok(disposition),
-            (Ok(_), Ok(false)) => Err(SemanticArchiveErrorV1::SchemaMismatch),
-        }
+    /// Refuses unsupported schema identity, altered wake hints,
+    /// or database failure. Schema creation belongs to the atomic runtime bootstrap.
+    pub fn verify_schema(&self) -> Result<(), SemanticArchiveError> {
+        let mut client = self.connect("connect Archive schema verifier")?;
+        let mut tx = client
+            .build_transaction()
+            .isolation_level(IsolationLevel::RepeatableRead)
+            .start()
+            .map_err(|error| database("begin Archive schema verification", &error))?;
+        crate::current_schema::require_current_schema(&mut tx)
+            .map_err(SemanticArchiveError::CurrentSchema)?;
+        crate::archive_wakeup::validate(&mut tx)?;
+        tx.commit()
+            .map_err(|error| database("commit Archive schema verification", &error))
     }
 
     /// Insert one immutable subject or field knowledge grant.
@@ -1466,25 +1209,35 @@ impl SemanticArchiveStoreV1 {
     pub fn grant_knowledge(
         &self,
         campaign_id: CampaignId,
-        grant: &ArchiveKnowledgeGrantV1,
-    ) -> Result<(), SemanticArchiveErrorV1> {
+        grant: &ArchiveKnowledgeGrant,
+    ) -> Result<(), SemanticArchiveError> {
         let mut client = self.connect("connect Archive knowledge writer")?;
-        insert_grant_row_v1(
-            &mut client,
+        let mut transaction = client
+            .build_transaction()
+            .read_only(false)
+            .start()
+            .map_err(|error| database("begin Archive knowledge grant", &error))?;
+        crate::current_schema::require_current_schema(&mut transaction)
+            .map_err(SemanticArchiveError::CurrentSchema)?;
+        insert_grant_row(
+            &mut transaction,
             campaign_id,
             grant.page_ref.kind.as_str(),
             &grant.page_ref.id,
             &grant.grant_key,
             grant.granted_tick,
             &grant.citation,
-        )
+        )?;
+        transaction
+            .commit()
+            .map_err(|error| database("commit Archive knowledge grant", &error))
     }
 
     /// Materialize one committed receipt's bounded dirty page batch atomically.
     ///
-    /// In [`ArchiveMaterializeModeV1::Consume`] mode the receipt's full dirty
+    /// In [`ArchiveMaterializeMode::Consume`] mode the receipt's full dirty
     /// set drained: the pages write and the consumption row claims the receipt
-    /// inside one serializable transaction. In [`ArchiveMaterializeModeV1::Stage`]
+    /// inside one serializable transaction. In [`ArchiveMaterializeMode::Stage`]
     /// mode dirty pages remain (the PER-318 paged drain): the same atomic
     /// transaction writes this bounded batch without claiming, so the receipt
     /// stays pending, `verified_tick` honestly stalls behind it, and nothing
@@ -1499,16 +1252,16 @@ impl SemanticArchiveStoreV1 {
     pub fn materialize_receipt(
         &self,
         campaign_id: CampaignId,
-        batch: &ArchiveDirtyBatchV1,
-        mode: ArchiveMaterializeModeV1,
-    ) -> Result<ArchiveMaterializeReportV1, SemanticArchiveErrorV1> {
+        batch: &ArchiveDirtyBatch,
+        mode: ArchiveMaterializeMode,
+    ) -> Result<ArchiveMaterializeReport, SemanticArchiveError> {
         crate::archive_revision::publication::materialize(self, campaign_id, batch, mode)
     }
 
     pub(crate) fn connect(
         &self,
         operation: &'static str,
-    ) -> Result<postgres::Client, SemanticArchiveErrorV1> {
+    ) -> Result<postgres::Client, SemanticArchiveError> {
         self.config
             .connect(NoTls)
             .map_err(|error| database(operation, &error))
@@ -1517,55 +1270,46 @@ impl SemanticArchiveStoreV1 {
 
 /// Hash the exact schema and template inputs used by the idempotent worker.
 #[must_use]
-pub fn archive_worker_contract_sha256_v1() -> [u8; 32] {
-    let mut bytes = Vec::with_capacity(
-        ARCHIVE_WORKER_DOMAIN_V1.len()
-            + SEMANTIC_ARCHIVE_SCHEMA_V1_SQL.len()
-            + ARCHIVE_ATOM_SCHEMA_V1_SQL.len()
-            + ARCHIVE_PAGE_TEMPLATE_SHA256_V1.len(),
-    );
-    bytes.extend_from_slice(ARCHIVE_WORKER_DOMAIN_V1);
-    bytes.extend_from_slice(SEMANTIC_ARCHIVE_SCHEMA_V1_SQL.as_bytes());
-    bytes.extend_from_slice(ARCHIVE_ATOM_SCHEMA_V1_SQL.as_bytes());
-    bytes.extend_from_slice(&ARCHIVE_PAGE_TEMPLATE_SHA256_V1);
-    sha256_of(&bytes)
+pub fn archive_worker_contract_sha256() -> [u8; 32] {
+    let mut hash = Sha256::new();
+    hash.update(ARCHIVE_WORKER_DOMAIN);
+    hash.update(CURRENT_ARCHIVE_SCHEMA_SQL.as_bytes());
+    hash.update(ARCHIVE_PAGE_TEMPLATE_SHA256);
+    hash.finalize().into()
 }
 
 /// Insert one immutable knowledge-grant row by exact subject kind and id.
 ///
-/// Page subjects validate through [`ArchivePageRefV1`]; concept subjects
-/// validate through [`ArchiveAtomSubjectV1`] (ADR249 R12) because concepts
+/// Page subjects validate through [`ArchivePageRef`]; concept subjects
+/// validate through [`ArchiveAtomSubject`] (ADR249 R12) because concepts
 /// are grant subjects without being page kinds. The insert is idempotent:
 /// an exact retry succeeds and any drifted row refuses `GrantConflict`.
-pub(crate) fn insert_grant_row_v1(
+pub(crate) fn insert_grant_row(
     client: &mut impl GenericClient,
     campaign_id: CampaignId,
     subject_kind: &str,
     subject_id: &str,
     grant_key: &str,
     granted_tick: u64,
-    citation: &ArchiveCitationV1,
-) -> Result<(), SemanticArchiveErrorV1> {
+    citation: &ArchiveCitation,
+) -> Result<(), SemanticArchiveError> {
     validate_key(grant_key)?;
     validate_text(citation.source_id())?;
     validate_text(citation.locator())?;
     match subject_kind {
         "county" => {
-            ArchivePageRefV1::try_new(ArchiveSubjectKindV1::County, subject_id.to_owned())?;
+            ArchivePageRef::try_new(ArchiveSubjectKind::County, subject_id.to_owned())?;
         }
         "place" => {
-            ArchivePageRefV1::try_new(ArchiveSubjectKindV1::Place, subject_id.to_owned())?;
+            ArchivePageRef::try_new(ArchiveSubjectKind::Place, subject_id.to_owned())?;
         }
         "concept" => {
-            ArchiveAtomSubjectV1::try_new(
-                ArchiveAtomSubjectKindV1::Concept,
-                subject_id.to_owned(),
-            )?;
+            ArchiveAtomSubject::try_new(ArchiveAtomSubjectKind::Concept, subject_id.to_owned())?;
         }
-        _ => return Err(SemanticArchiveErrorV1::InvalidIdentity),
+        _ => return Err(SemanticArchiveError::InvalidIdentity),
     }
     let granted_tick =
-        i64::try_from(granted_tick).map_err(|_| SemanticArchiveErrorV1::InvalidVerifiedTick)?;
+        i64::try_from(granted_tick).map_err(|_| SemanticArchiveError::InvalidVerifiedTick)?;
     let affected = client
         .execute(
             "INSERT INTO babylon_meta.archive_knowledge_grant_v1 \
@@ -1607,7 +1351,7 @@ pub(crate) fn insert_grant_row_v1(
     if exact {
         Ok(())
     } else {
-        Err(SemanticArchiveErrorV1::GrantConflict)
+        Err(SemanticArchiveError::GrantConflict)
     }
 }
 
@@ -1626,37 +1370,37 @@ pub(crate) fn read_knowledge(
     client: &mut impl GenericClient,
     campaign_id: CampaignId,
     resolve_tick: i64,
-) -> Result<ArchiveKnowledgeV1, SemanticArchiveErrorV1> {
+) -> Result<ArchiveKnowledge, SemanticArchiveError> {
     let rows = client
         .query(
-            ARCHIVE_KNOWLEDGE_SQL_V1,
+            ARCHIVE_KNOWLEDGE_SQL,
             &[
                 campaign_id.as_uuid(),
                 &resolve_tick,
                 &i64::try_from(MAX_KNOWLEDGE_GRANTS + 1)
-                    .map_err(|_| SemanticArchiveErrorV1::CollectionBound)?,
+                    .map_err(|_| SemanticArchiveError::CollectionBound)?,
             ],
         )
         .map_err(|error| database("read Archive knowledge grants", &error))?;
     if rows.len() > MAX_KNOWLEDGE_GRANTS {
-        return Err(SemanticArchiveErrorV1::CollectionBound);
+        return Err(SemanticArchiveError::CollectionBound);
     }
     let mut grants = Vec::with_capacity(rows.len());
     for row in rows {
         let kind = decode_subject_kind(&decode::<String>(&row, 0)?)?;
-        let page_ref = ArchivePageRefV1::try_new(kind, decode(&row, 1)?)?;
+        let page_ref = ArchivePageRef::try_new(kind, decode(&row, 1)?)?;
         let grant_key: String = decode(&row, 2)?;
         let granted_tick = u64::try_from(decode::<i64>(&row, 3)?)
-            .map_err(|_| SemanticArchiveErrorV1::StoredPageMismatch)?;
-        let citation = ArchiveCitationV1::try_new(decode(&row, 4)?, decode(&row, 5)?)?;
-        grants.push(ArchiveKnowledgeGrantV1::try_new(
+            .map_err(|_| SemanticArchiveError::StoredPageMismatch)?;
+        let citation = ArchiveCitation::try_new(decode(&row, 4)?, decode(&row, 5)?)?;
+        grants.push(ArchiveKnowledgeGrant::try_new(
             page_ref,
             grant_key,
             granted_tick,
             citation,
         )?);
     }
-    ArchiveKnowledgeV1::try_new(grants)
+    ArchiveKnowledge::try_new(grants)
 }
 
 /// Mint the canonical atom set one known page asserts (ADR249 R1): the
@@ -1666,20 +1410,20 @@ pub(crate) fn read_knowledge(
 pub(crate) fn mint_page_atoms(
     campaign_id: CampaignId,
     resolve_tick: u64,
-    input: &ArchivePageInputV1,
-    knowledge: &ArchiveKnowledgeV1,
-) -> Result<Vec<ArchiveAtomV1>, SemanticArchiveErrorV1> {
+    input: &ArchivePageInput,
+    knowledge: &ArchiveKnowledge,
+) -> Result<Vec<ArchiveAtom>, SemanticArchiveError> {
     let page_ref = input.subject.page_ref();
-    let subject = ArchiveAtomSubjectV1::from_page_ref(page_ref)?;
+    let subject = ArchiveAtomSubject::from_page_ref(page_ref)?;
     let mut atoms = Vec::with_capacity(input.signals.len() + input.links.len() + 1);
     if let Some(grant) = knowledge.grant(page_ref, "subject") {
-        atoms.push(ArchiveAtomV1::try_new(
+        atoms.push(ArchiveAtom::try_new(
             campaign_id,
             subject.clone(),
             "subject".to_owned(),
             "subject".to_owned(),
-            ArchiveEvidenceClassV1::Observed,
-            &ArchiveAtomValueV1::Text(input.subject.title().to_owned()),
+            ArchiveEvidenceClass::Observed,
+            &ArchiveAtomValue::Text(input.subject.title().to_owned()),
             grant.citation.clone(),
             resolve_tick,
         )?);
@@ -1689,13 +1433,13 @@ pub(crate) fn mint_page_atoms(
             continue;
         }
         let evidence_class = signal_evidence_class(page_ref, signal, knowledge)?;
-        atoms.push(ArchiveAtomV1::try_new(
+        atoms.push(ArchiveAtom::try_new(
             campaign_id,
             subject.clone(),
             signal.grant_key().to_owned(),
             signal.grant_key().to_owned(),
             evidence_class,
-            &ArchiveAtomValueV1::Text(signal.value().to_owned()),
+            &ArchiveAtomValue::Text(signal.value().to_owned()),
             signal.citation().clone(),
             resolve_tick,
         )?);
@@ -1704,13 +1448,13 @@ pub(crate) fn mint_page_atoms(
         let Some(grant) = knowledge.grant(link.target(), "subject") else {
             continue;
         };
-        atoms.push(ArchiveAtomV1::try_new(
+        atoms.push(ArchiveAtom::try_new(
             campaign_id,
             subject.clone(),
             "link".to_owned(),
             "subject".to_owned(),
-            ArchiveEvidenceClassV1::Observed,
-            &ArchiveAtomValueV1::Text(link.target().page_key()),
+            ArchiveEvidenceClass::Observed,
+            &ArchiveAtomValue::Text(link.target().page_key()),
             grant.citation.clone(),
             resolve_tick,
         )?);
@@ -1719,22 +1463,22 @@ pub(crate) fn mint_page_atoms(
 }
 
 fn signal_evidence_class(
-    page_ref: &ArchivePageRefV1,
-    signal: &ArchiveSignalV1,
-    knowledge: &ArchiveKnowledgeV1,
-) -> Result<ArchiveEvidenceClassV1, SemanticArchiveErrorV1> {
+    page_ref: &ArchivePageRef,
+    signal: &ArchiveSignal,
+    knowledge: &ArchiveKnowledge,
+) -> Result<ArchiveEvidenceClass, SemanticArchiveError> {
     use crate::archive_foundation_grants::county_qcew_citation;
-    use crate::michigan_economy::{michigan_economy_v1, QCEW_ECONOMICS_FIELD_KEYS_V1};
+    use crate::michigan_economy::{michigan_economy, QCEW_ECONOMICS_FIELD_KEYS};
 
     if signal.grant_key() == "identity" {
-        return Ok(ArchiveEvidenceClassV1::Observed);
+        return Ok(ArchiveEvidenceClass::Observed);
     }
-    let Some(index) = QCEW_ECONOMICS_FIELD_KEYS_V1
+    let Some(index) = QCEW_ECONOMICS_FIELD_KEYS
         .iter()
         .position(|key| *key == signal.grant_key())
-        .filter(|_| page_ref.kind() == ArchiveSubjectKindV1::County)
+        .filter(|_| page_ref.kind() == ArchiveSubjectKind::County)
     else {
-        return Ok(ArchiveEvidenceClassV1::Derived);
+        return Ok(ArchiveEvidenceClass::Derived);
     };
     let citation = county_qcew_citation(page_ref.id());
     if signal.citation() != &citation
@@ -1742,15 +1486,15 @@ fn signal_evidence_class(
             .grant(page_ref, signal.grant_key())
             .is_none_or(|grant| grant.citation != citation)
     {
-        return Ok(ArchiveEvidenceClassV1::Derived);
+        return Ok(ArchiveEvidenceClass::Derived);
     }
-    let economy = michigan_economy_v1().map_err(|_| SemanticArchiveErrorV1::ArtifactDigest)?;
+    let economy = michigan_economy().map_err(|_| SemanticArchiveError::ArtifactDigest)?;
     let Some(county) = economy
         .counties()
         .iter()
         .find(|county| county.county_geoid == page_ref.id())
     else {
-        return Ok(ArchiveEvidenceClassV1::Derived);
+        return Ok(ArchiveEvidenceClass::Derived);
     };
     let observed = [
         county.annual_avg_estabs_count,
@@ -1759,9 +1503,9 @@ fn signal_evidence_class(
         county.annual_avg_wkly_wage,
     ][index];
     Ok(if signal.value() == observed.to_string() {
-        ArchiveEvidenceClassV1::Observed
+        ArchiveEvidenceClass::Observed
     } else {
-        ArchiveEvidenceClassV1::Derived
+        ArchiveEvidenceClass::Derived
     })
 }
 
@@ -1773,8 +1517,8 @@ fn signal_evidence_class(
 pub(crate) fn persist_atom_rows(
     client: &mut impl GenericClient,
     campaign_id: CampaignId,
-    atoms: &[ArchiveAtomV1],
-) -> Result<ArchiveAtomMintV1, SemanticArchiveErrorV1> {
+    atoms: &[ArchiveAtom],
+) -> Result<ArchiveAtomMint, SemanticArchiveError> {
     let mut minted = 0usize;
     for atom in atoms {
         let (text_col, f64_col, u64_col, bool_col): (
@@ -1783,14 +1527,14 @@ pub(crate) fn persist_atom_rows(
             Option<i64>,
             Option<bool>,
         ) = match atom.value() {
-            ArchiveAtomValueV1::Text(text) => (Some(text), None, None, None),
-            ArchiveAtomValueV1::F64(number) => (None, Some(*number), None, None),
-            ArchiveAtomValueV1::U64(number) => {
+            ArchiveAtomValue::Text(text) => (Some(text), None, None, None),
+            ArchiveAtomValue::F64(number) => (None, Some(*number), None, None),
+            ArchiveAtomValue::U64(number) => {
                 let exact =
-                    i64::try_from(*number).map_err(|_| SemanticArchiveErrorV1::CollectionBound)?;
+                    i64::try_from(*number).map_err(|_| SemanticArchiveError::CollectionBound)?;
                 (None, None, Some(exact), None)
             }
-            ArchiveAtomValueV1::Bool(flag) => (None, None, None, Some(*flag)),
+            ArchiveAtomValue::Bool(flag) => (None, None, None, Some(*flag)),
         };
         let affected = client
             .execute(
@@ -1817,7 +1561,7 @@ pub(crate) fn persist_atom_rows(
                     &atom.citation().source_id(),
                     &atom.citation().locator(),
                     &i64::try_from(atom.valid_tick())
-                        .map_err(|_| SemanticArchiveErrorV1::InvalidVerifiedTick)?,
+                        .map_err(|_| SemanticArchiveError::InvalidVerifiedTick)?,
                 ],
             )
             .map_err(|error| database("insert semantic Archive atom", &error))?;
@@ -1825,73 +1569,69 @@ pub(crate) fn persist_atom_rows(
             minted += 1;
         }
     }
-    Ok(ArchiveAtomMintV1::new(minted, atoms.len()))
+    Ok(ArchiveAtomMint::new(minted, atoms.len()))
 }
 
-pub(crate) fn decode_subject_kind(
-    value: &str,
-) -> Result<ArchiveSubjectKindV1, SemanticArchiveErrorV1> {
+pub(crate) fn decode_subject_kind(value: &str) -> Result<ArchiveSubjectKind, SemanticArchiveError> {
     match value {
-        "county" => Ok(ArchiveSubjectKindV1::County),
-        "place" => Ok(ArchiveSubjectKindV1::Place),
-        _ => Err(SemanticArchiveErrorV1::StoredPageMismatch),
+        "county" => Ok(ArchiveSubjectKind::County),
+        "place" => Ok(ArchiveSubjectKind::Place),
+        _ => Err(SemanticArchiveError::StoredPageMismatch),
     }
 }
 
-fn decode_atom_subject_kind(
-    value: &str,
-) -> Result<ArchiveAtomSubjectKindV1, SemanticArchiveErrorV1> {
+fn decode_atom_subject_kind(value: &str) -> Result<ArchiveAtomSubjectKind, SemanticArchiveError> {
     match value {
-        "county" => Ok(ArchiveAtomSubjectKindV1::County),
-        "place" => Ok(ArchiveAtomSubjectKindV1::Place),
-        "concept" => Ok(ArchiveAtomSubjectKindV1::Concept),
-        _ => Err(SemanticArchiveErrorV1::StoredPageMismatch),
+        "county" => Ok(ArchiveAtomSubjectKind::County),
+        "place" => Ok(ArchiveAtomSubjectKind::Place),
+        "concept" => Ok(ArchiveAtomSubjectKind::Concept),
+        _ => Err(SemanticArchiveError::StoredPageMismatch),
     }
 }
 
-fn decode_evidence_class(value: &str) -> Result<ArchiveEvidenceClassV1, SemanticArchiveErrorV1> {
+fn decode_evidence_class(value: &str) -> Result<ArchiveEvidenceClass, SemanticArchiveError> {
     match value {
-        "Observed" => Ok(ArchiveEvidenceClassV1::Observed),
-        "Derived" => Ok(ArchiveEvidenceClassV1::Derived),
-        "Calibrated" => Ok(ArchiveEvidenceClassV1::Calibrated),
-        "Designed" => Ok(ArchiveEvidenceClassV1::Designed),
-        _ => Err(SemanticArchiveErrorV1::StoredPageMismatch),
+        "Observed" => Ok(ArchiveEvidenceClass::Observed),
+        "Derived" => Ok(ArchiveEvidenceClass::Derived),
+        "Calibrated" => Ok(ArchiveEvidenceClass::Calibrated),
+        "Designed" => Ok(ArchiveEvidenceClass::Designed),
+        _ => Err(SemanticArchiveError::StoredPageMismatch),
     }
 }
 
 /// Decode one stored atom row with read-time revalidation: every field is
 /// revalidated and the canonical identity is recomputed against the stored
 /// `atom_id`, so any stored drift refuses with `StoredPageMismatch`.
-pub(crate) fn decode_stored_atom(row: &Row) -> Result<ArchiveAtomV1, SemanticArchiveErrorV1> {
+pub(crate) fn decode_stored_atom(row: &Row) -> Result<ArchiveAtom, SemanticArchiveError> {
     let campaign_id = CampaignId::from_uuid(decode(row, 0)?);
     let kind = decode_atom_subject_kind(&decode::<String>(row, 1)?)?;
-    let subject = ArchiveAtomSubjectV1::try_new(kind, decode(row, 2)?)?;
+    let subject = ArchiveAtomSubject::try_new(kind, decode(row, 2)?)?;
     let signal_key: String = decode(row, 3)?;
     let grant_key: String = decode(row, 4)?;
     let evidence_class = decode_evidence_class(&decode::<String>(row, 5)?)?;
     let value_kind: String = decode(row, 6)?;
     let value = match value_kind.as_str() {
-        "text" => ArchiveAtomValueV1::Text(decode(row, 7)?),
+        "text" => ArchiveAtomValue::Text(decode(row, 7)?),
         "f64" => {
             let number: f64 = decode(row, 8)?;
             if !number.is_finite() {
-                return Err(SemanticArchiveErrorV1::StoredPageMismatch);
+                return Err(SemanticArchiveError::StoredPageMismatch);
             }
-            ArchiveAtomValueV1::F64(if number == 0.0 { 0.0 } else { number })
+            ArchiveAtomValue::F64(if number == 0.0 { 0.0 } else { number })
         }
         "u64" => {
             let number = u64::try_from(decode::<i64>(row, 9)?)
-                .map_err(|_| SemanticArchiveErrorV1::StoredPageMismatch)?;
-            ArchiveAtomValueV1::U64(number)
+                .map_err(|_| SemanticArchiveError::StoredPageMismatch)?;
+            ArchiveAtomValue::U64(number)
         }
-        "bool" => ArchiveAtomValueV1::Bool(decode(row, 10)?),
-        _ => return Err(SemanticArchiveErrorV1::StoredPageMismatch),
+        "bool" => ArchiveAtomValue::Bool(decode(row, 10)?),
+        _ => return Err(SemanticArchiveError::StoredPageMismatch),
     };
-    let citation = ArchiveCitationV1::try_new(decode(row, 11)?, decode(row, 12)?)?;
+    let citation = ArchiveCitation::try_new(decode(row, 11)?, decode(row, 12)?)?;
     let valid_tick = u64::try_from(decode::<i64>(row, 13)?)
-        .map_err(|_| SemanticArchiveErrorV1::StoredPageMismatch)?;
+        .map_err(|_| SemanticArchiveError::StoredPageMismatch)?;
     let stored_atom_id = decode_digest(row, 14)?;
-    let atom = ArchiveAtomV1::try_new(
+    let atom = ArchiveAtom::try_new(
         campaign_id,
         subject,
         signal_key,
@@ -1902,42 +1642,39 @@ pub(crate) fn decode_stored_atom(row: &Row) -> Result<ArchiveAtomV1, SemanticArc
         valid_tick,
     )?;
     if atom.atom_id() != stored_atom_id {
-        return Err(SemanticArchiveErrorV1::StoredPageMismatch);
+        return Err(SemanticArchiveError::StoredPageMismatch);
     }
     Ok(atom)
 }
 
-pub(crate) fn decode<T: FromSqlOwned>(
-    row: &Row,
-    index: usize,
-) -> Result<T, SemanticArchiveErrorV1> {
+pub(crate) fn decode<T: FromSqlOwned>(row: &Row, index: usize) -> Result<T, SemanticArchiveError> {
     row.try_get(index)
         .map_err(|error| database("decode semantic Archive row", &error))
 }
 
-pub(crate) fn decode_digest(row: &Row, index: usize) -> Result<[u8; 32], SemanticArchiveErrorV1> {
+pub(crate) fn decode_digest(row: &Row, index: usize) -> Result<[u8; 32], SemanticArchiveError> {
     let bytes: Vec<u8> = decode(row, index)?;
     bytes
         .try_into()
-        .map_err(|_| SemanticArchiveErrorV1::StoredPageMismatch)
+        .map_err(|_| SemanticArchiveError::StoredPageMismatch)
 }
 
-pub(crate) fn database(operation: &'static str, error: &postgres::Error) -> SemanticArchiveErrorV1 {
-    SemanticArchiveErrorV1::Database {
+pub(crate) fn database(operation: &'static str, error: &postgres::Error) -> SemanticArchiveError {
+    SemanticArchiveError::Database {
         operation,
-        diagnostic: PostgresDiagnosticV1::capture(error),
+        diagnostic: PostgresDiagnostic::capture(error),
     }
 }
 
 #[derive(Serialize)]
-struct TemplateSignalV1<'a> {
+struct TemplateSignal<'a> {
     label: &'a str,
     value: &'a str,
-    citation: &'a ArchiveCitationV1,
+    citation: &'a ArchiveCitation,
 }
 
-impl<'a> From<&'a ArchiveSignalV1> for TemplateSignalV1<'a> {
-    fn from(signal: &'a ArchiveSignalV1) -> Self {
+impl<'a> From<&'a ArchiveSignal> for TemplateSignal<'a> {
+    fn from(signal: &'a ArchiveSignal) -> Self {
         Self {
             label: &signal.label,
             value: &signal.value,
@@ -1947,14 +1684,14 @@ impl<'a> From<&'a ArchiveSignalV1> for TemplateSignalV1<'a> {
 }
 
 #[derive(Serialize)]
-struct TemplateLinkV1<'a> {
+struct TemplateLink<'a> {
     page_key: String,
     known_label: Option<&'a str>,
 }
 
 /// Stable closed refusal taxonomy for semantic Archive inputs and rendering.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum SemanticArchiveErrorV1 {
+pub enum SemanticArchiveError {
     /// County or place identity was malformed.
     InvalidIdentity,
     /// Human-readable or grant-key text was unsafe or unbounded.
@@ -1979,16 +1716,12 @@ pub enum SemanticArchiveErrorV1 {
     GrantConflict,
     /// A history cursor belongs to another scope or unfinished composition.
     ArchiveCursorMismatch,
-    /// A worker attempted to pass an earlier pending receipt or unsealed cutover.
+    /// A worker attempted to pass an earlier pending receipt.
     ArchiveOrderViolation,
-    /// A producer cannot prove the complete cutover subject domain.
-    ArchiveCoverageUnavailable,
-    /// Only part of the additive Archive schema exists.
-    PartialSchema,
-    /// The Archive schema marker or unlock result was not exact.
+    /// The Archive wakeup shape or advisory unlock result was not exact.
     SchemaMismatch,
-    /// Existing campaigns lack the current revision schema and cannot be adopted.
-    RevisionSchemaAbsentForExistingCampaigns,
+    /// The runtime schema is absent, unsupported, or altered.
+    CurrentSchema(crate::CurrentSchemaError),
     /// A stored page, digest, kind, tick, or provenance row was malformed.
     StoredPageMismatch,
     /// A pinned reference-artifact digest diverged from its contract-pinned value.
@@ -2029,40 +1762,40 @@ pub enum SemanticArchiveErrorV1 {
         /// Stable operation identity.
         operation: &'static str,
         /// Secret-safe `PostgreSQL` classification, SQLSTATE, and message.
-        diagnostic: PostgresDiagnosticV1,
+        diagnostic: PostgresDiagnostic,
     },
 }
 
-impl std::fmt::Display for SemanticArchiveErrorV1 {
+impl std::fmt::Display for SemanticArchiveError {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(formatter, "semantic Archive refusal: {self:?}")
     }
 }
 
-impl std::error::Error for SemanticArchiveErrorV1 {}
+impl std::error::Error for SemanticArchiveError {}
 
-pub(crate) fn validate_text(value: &str) -> Result<(), SemanticArchiveErrorV1> {
+pub(crate) fn validate_text(value: &str) -> Result<(), SemanticArchiveError> {
     if value.is_empty() || value.len() > MAX_TEXT_BYTES || value.as_bytes().contains(&0) {
-        return Err(SemanticArchiveErrorV1::InvalidText);
+        return Err(SemanticArchiveError::InvalidText);
     }
     Ok(())
 }
 
-pub(crate) fn validate_key(value: &str) -> Result<(), SemanticArchiveErrorV1> {
+pub(crate) fn validate_key(value: &str) -> Result<(), SemanticArchiveError> {
     let mut bytes = value.bytes();
     let Some(first) = bytes.next() else {
-        return Err(SemanticArchiveErrorV1::InvalidText);
+        return Err(SemanticArchiveError::InvalidText);
     };
     if value.len() > MAX_ID_BYTES
         || !(first.is_ascii_lowercase() || first.is_ascii_digit())
         || !bytes.all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-')
     {
-        return Err(SemanticArchiveErrorV1::InvalidText);
+        return Err(SemanticArchiveError::InvalidText);
     }
     Ok(())
 }
 
-fn hash_page_input(hasher: &mut Sha256, input: &ArchivePageInputV1) {
+fn hash_page_input(hasher: &mut Sha256, input: &ArchivePageInput) {
     hash_page_ref(hasher, input.subject.page_ref());
     hash_bytes(hasher, input.subject.title.as_bytes());
     hasher.update(input.verified_tick.to_be_bytes());
@@ -2082,15 +1815,15 @@ fn hash_page_input(hasher: &mut Sha256, input: &ArchivePageInputV1) {
     }
 }
 
-fn hash_page_ref(hasher: &mut Sha256, page_ref: &ArchivePageRefV1) {
+fn hash_page_ref(hasher: &mut Sha256, page_ref: &ArchivePageRef) {
     hasher.update([match page_ref.kind {
-        ArchiveSubjectKindV1::County => 1,
-        ArchiveSubjectKindV1::Place => 2,
+        ArchiveSubjectKind::County => 1,
+        ArchiveSubjectKind::Place => 2,
     }]);
     hash_bytes(hasher, page_ref.id.as_bytes());
 }
 
-fn hash_citation(hasher: &mut Sha256, citation: &ArchiveCitationV1) {
+fn hash_citation(hasher: &mut Sha256, citation: &ArchiveCitation) {
     hash_bytes(hasher, citation.source_id.as_bytes());
     hash_bytes(hasher, citation.locator.as_bytes());
 }
@@ -2117,39 +1850,39 @@ pub(crate) fn hex_digest(digest: &[u8; 32]) -> String {
 mod tests {
     use super::*;
 
-    fn public_qcew_page() -> (CampaignId, ArchivePageInputV1, ArchiveKnowledgeV1) {
+    fn public_qcew_page() -> (CampaignId, ArchivePageInput, ArchiveKnowledge) {
         let campaign = CampaignId::from_uuid(uuid::Uuid::from_u128(319));
-        let county = crate::michigan_economy::michigan_economy_v1()
+        let county = crate::michigan_economy::michigan_economy()
             .unwrap()
             .counties()
             .iter()
             .find(|county| county.county_geoid == "26163")
             .unwrap();
-        let fields = crate::CommittedTerritoryFieldsV1::try_from_qcew([
+        let fields = crate::CommittedTerritoryFields::try_from_qcew([
             Some(i64::try_from(county.annual_avg_estabs_count).unwrap()),
             Some(i64::try_from(county.annual_avg_emplvl).unwrap()),
             Some(i64::try_from(county.total_annual_wages).unwrap()),
             Some(i64::try_from(county.annual_avg_wkly_wage).unwrap()),
         ])
         .unwrap();
-        let plan = crate::CountyPagePlanV1::try_new(
+        let plan = crate::CountyPagePlan::try_new(
             county.county_geoid.clone(),
             "county-26163".to_owned(),
             "Wayne County".to_owned(),
-            crate::county_committed_signals_v1(&fields).unwrap(),
+            crate::county_committed_signals(&fields).unwrap(),
             Vec::new(),
         )
         .unwrap();
-        let page = crate::county_page_input_v1(&plan, 1, [1; 32]).unwrap();
-        let grants = crate::foundation_grant_rows_v1()
+        let page = crate::county_page_input(&plan, 1, [1; 32]).unwrap();
+        let grants = crate::foundation_grant_rows()
             .unwrap()
             .into_iter()
             .filter(|row| {
-                row.subject().kind() == ArchiveAtomSubjectKindV1::County
+                row.subject().kind() == ArchiveAtomSubjectKind::County
                     && row.subject().id() == county.county_geoid
             })
             .map(|row| {
-                ArchiveKnowledgeGrantV1::try_new(
+                ArchiveKnowledgeGrant::try_new(
                     page.subject().page_ref().clone(),
                     row.grant_key().to_owned(),
                     0,
@@ -2158,7 +1891,7 @@ mod tests {
                 .unwrap()
             })
             .collect();
-        (campaign, page, ArchiveKnowledgeV1::try_new(grants).unwrap())
+        (campaign, page, ArchiveKnowledge::try_new(grants).unwrap())
     }
 
     #[test]
@@ -2171,7 +1904,7 @@ mod tests {
             .collect();
         assert_eq!(qcew.len(), 4);
         for atom in qcew {
-            assert_eq!(atom.evidence_class(), ArchiveEvidenceClassV1::Observed);
+            assert_eq!(atom.evidence_class(), ArchiveEvidenceClass::Observed);
         }
     }
 
@@ -2207,7 +1940,7 @@ mod tests {
             let atom = atoms.iter().find(|atom| atom.signal_key() == key).unwrap();
             assert_eq!(
                 atom.evidence_class(),
-                ArchiveEvidenceClassV1::Derived,
+                ArchiveEvidenceClass::Derived,
                 "{field}"
             );
         }

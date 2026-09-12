@@ -7,28 +7,29 @@ use babylon_bsl::metrics::MetricRegistry;
 use babylon_bsl::probability::{
     allocate_tickets, analyze_content_set,
     compile_rule_probability as compile_rule_probability_with_types, forecast_event_likelihoods,
-    validate_probability_content_set, BranchProjectionV1, FiniteKernelV1, FiniteProjectionV1, Mass,
+    validate_probability_content_set, BranchProjection, FiniteKernel, FiniteProjection, Mass,
     ProbabilityError, FINITE_KERNEL_DRAW_BASE, TICKET_DENOMINATOR,
 };
 use babylon_bsl::reader::{read, read_all_spanned, Atom, SExpr};
 use babylon_bsl::scenario::{
-    load_scenario, load_scenario_with_named_preludes, NamedDeclarationPreludeV1,
+    load_scenario, load_scenario_with_named_preludes, NamedDeclarationPrelude,
 };
 use babylon_bsl::structural_verbs::CollectingSink;
 use babylon_bsl::tick::{
-    forecast_event_likelihoods as forecast_detached, run_tick_observed, ForecastContextV1,
+    forecast_event_likelihoods as forecast_detached, run_tick_observed, ForecastContext,
 };
 use babylon_bsl::types::{BslType, FieldDecl, FieldKind};
 use babylon_bsl::write_log::CollectingWriteLog;
 use babylon_bsl::{
-    check_rule_with_kernel, expr_cost, load_rule, load_rule_form, split_content, BindSource,
-    BindingDecl, BindingVocabulary, CardinalityCeilings, EnumRegistry, LoadContext, LoadError,
-    TypeEnv,
+    bindings::BindSource, bindings::BindingDecl, bindings::BindingVocabulary,
+    bound_checker::check_rule_with_kernel, bound_checker::expr_cost, fuel::CardinalityCeilings,
+    rule_pipeline::load_rule, rule_pipeline::load_rule_form, rule_pipeline::split_content,
+    rule_pipeline::LoadContext, rule_pipeline::LoadError, typecheck::TypeEnv, types::EnumRegistry,
 };
 use babylon_graph::memory::MemoryGraph;
-use babylon_graph::stable_element::StableElementResolverV1;
+use babylon_graph::stable_element::StableElementResolver;
 use babylon_graph::substrate::GraphSubstrate;
-use babylon_kernel::replay::{ReplaySeed, ReplaySessionIdV1, RngSeedContext};
+use babylon_kernel::replay::{ReplaySeed, ReplaySessionId, RngSeedContext};
 use std::collections::{HashMap, HashSet};
 
 #[test]
@@ -171,7 +172,7 @@ fn compile_rule_probability(
     enums: &EnumRegistry,
     bindings: &[BindingDecl],
     consts: &HashMap<String, Value>,
-) -> Result<(Option<FiniteKernelV1>, Option<FiniteProjectionV1>), ProbabilityError> {
+) -> Result<(Option<FiniteKernel>, Option<FiniteProjection>), ProbabilityError> {
     let types = TypeEnv {
         fields: HashMap::new(),
         exemptions: &[],
@@ -946,9 +947,9 @@ fn assert_carrier_locality_refusal(error: ProbabilityError, source: &str) {
 }
 
 fn assert_compiled_locality_survives_raw_rule_mutation(
-    mut cross_carrier_kernel: babylon_bsl::LoadedRule,
+    mut cross_carrier_kernel: babylon_bsl::rule_pipeline::LoadedRule,
     replacement_rule: SExpr,
-    matching_projection: babylon_bsl::LoadedRule,
+    matching_projection: babylon_bsl::rule_pipeline::LoadedRule,
     cross_carrier_source: &str,
 ) {
     cross_carrier_kernel.rule = replacement_rule;
@@ -1155,7 +1156,7 @@ fn a_finite_projection_refuses_graph_global_metric_bindings_at_load() {
     );
 }
 
-fn load_mass_probe(source: &str) -> Result<babylon_bsl::LoadedRule, LoadError> {
+fn load_mass_probe(source: &str) -> Result<babylon_bsl::rule_pipeline::LoadedRule, LoadError> {
     let fields = HashMap::from([(
         "social-class/value".to_owned(),
         FieldDecl {
@@ -1226,7 +1227,7 @@ fn loader_analysis_retains_mass_literals_in_bindings_scenarios_and_named_prelude
     let loaded = load_scenario_with_named_preludes(
         "content/scenario.bscn",
         scenario_source,
-        &[NamedDeclarationPreludeV1 {
+        &[NamedDeclarationPrelude {
             source_id: "content/prelude.bsl",
             source: prelude_source,
         }],
@@ -1470,11 +1471,11 @@ fn exact_pushforward_retains_zero_one_and_multiple_favorable_preimages() {
         &projection,
         &[Mass::from_nanounits(1), Mass::from_nanounits(3)],
         &[
-            BranchProjectionV1 {
+            BranchProjection {
                 outcome: "EXCESSIVE_FORCE".to_owned(),
                 event_types: vec!["ONE".to_owned(), "MULTIPLE".to_owned()],
             },
-            BranchProjectionV1 {
+            BranchProjection {
                 outcome: "NO_INCIDENT".to_owned(),
                 event_types: vec!["MULTIPLE".to_owned()],
             },
@@ -1570,14 +1571,13 @@ fn detached_forecast_applies_each_real_branch_and_runs_the_adjacent_recognizer()
         0,
         &graph,
         subject,
-        &ForecastContextV1 {
+        &ForecastContext {
             types: &types,
             enums: &scenario.enums,
             host: &EmptyIntrinsicHost,
             costs: &costs,
             defines: &scenario.consts,
             tick: 1,
-            vocabulary: None,
         },
     )
     .unwrap();
@@ -1640,14 +1640,14 @@ fn runtime_never_evaluates_an_unselected_branch_body() {
         },
     )
     .unwrap();
-    let resolver = StableElementResolverV1::seal(
+    let resolver = StableElementResolver::seal(
         &graph,
         "demo/lazy",
         &scenario.node_content_ids,
         &scenario.hyperedge_content_ids,
     )
     .unwrap();
-    let session = ReplaySessionIdV1::try_from("demo/lazy-runtime").unwrap();
+    let session = ReplaySessionId::try_from("demo/lazy-runtime").unwrap();
     let mut sink = CollectingSink::default();
     let mut writes = CollectingWriteLog::new();
     let outcome = run_tick_observed(
@@ -1660,12 +1660,11 @@ fn runtime_never_evaluates_an_unselected_branch_body() {
         &costs,
         &scenario.consts,
         1,
-        Some(&scenario.node_content_ids),
-        RngSeedContext::V2 {
+        RngSeedContext {
             session: &session,
             seed: ReplaySeed::new(313),
         },
-        Some(&resolver),
+        &resolver,
         None,
         &mut writes,
     )

@@ -4,31 +4,31 @@ use std::fmt::Write as _;
 use std::io::Read as _;
 use std::sync::OnceLock;
 
-use babylon_bsl::{rule_pipeline::split_content, rules_hash_of};
+use babylon_bsl::{canonical_ast::rules_hash_of, rule_pipeline::split_content};
 use babylon_graph::hypergraph_store::HypergraphStore;
 use babylon_kernel::{
     clock::DAYS_PER_TICK,
-    replay::{ReplaySeed, ReplaySessionIdV1},
-    sha256_of,
-    tick_content_hash::RefDigestV1,
-    ContentDigest,
+    content_digest::sha256_of,
+    content_digest::ContentDigest,
+    replay::{ReplaySeed, ReplaySessionId},
+    tick_content_hash::RefDigest,
 };
-use babylon_tick::{material_state::MaterialStateV1, replay_session::ReplayTickSession};
+use babylon_tick::{material_state::MaterialState, replay_session::ReplayTickSession};
 use serde::{Deserialize, Serialize};
 
-use crate::{michigan_dynamic_hex_foundation_v1, FoundationContentBundleV1};
+use crate::{michigan_dynamic_hex_foundation, FoundationContentBundle};
 
 /// Immutable scenario identity shared by the runtime and window.
-pub const MICHIGAN_OBSERVER_SCENARIO_V1: &str = "production/michigan-observer-v1";
+pub const MICHIGAN_OBSERVER_SCENARIO: &str = "production/michigan-observer-v1";
 /// Exact public-record source vintage; these values are not simulated flows.
-pub const QCEW_ECONOMICS_VINTAGE_V1: u16 = 2024;
+pub const QCEW_ECONOMICS_VINTAGE: u16 = 2024;
 /// Source identifier shared by baseline and Archive citations.
-pub const QCEW_ECONOMICS_SOURCE_ID_V1: &str = "qcew-county-economics-v1";
+pub const QCEW_ECONOMICS_SOURCE_ID: &str = "qcew-county-economics-v1";
 /// Exact artifact identity from `QcewCountyEconomicsV1`.
-pub const QCEW_ECONOMICS_ARTIFACT_SHA256_V1: &str =
+pub const QCEW_ECONOMICS_ARTIFACT_SHA256: &str =
     "116affb2998c6c0259d5bf14840f99f835d7e0733aa0b4f4c60a257b2723cd16";
 /// Exact observed field keys. Wages are USD whole units, not engine money.
-pub const QCEW_ECONOMICS_FIELD_KEYS_V1: [&str; 4] = [
+pub const QCEW_ECONOMICS_FIELD_KEYS: [&str; 4] = [
     "qcew-establishments",
     "qcew-employment",
     "qcew-total-annual-wages",
@@ -43,7 +43,7 @@ const REFERENCE_DOMAIN: &[u8] = b"babylon.h3.reference-bundle-composite.v1\0";
 
 /// One unrounded, unsuppressed, exact row from the pinned public artifact.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct MichiganCountyEconomyV1 {
+pub struct MichiganCountyEconomy {
     pub county_geoid: String,
     pub annual_avg_estabs_count: u64,
     pub annual_avg_emplvl: u64,
@@ -53,13 +53,13 @@ pub struct MichiganCountyEconomyV1 {
 
 /// Checked immutable source and deterministic scenario text.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct MichiganEconomyV1 {
-    counties: Vec<MichiganCountyEconomyV1>,
+pub struct MichiganEconomy {
+    counties: Vec<MichiganCountyEconomy>,
     scenario_source: String,
 }
-impl MichiganEconomyV1 {
+impl MichiganEconomy {
     #[must_use]
-    pub fn counties(&self) -> &[MichiganCountyEconomyV1] {
+    pub fn counties(&self) -> &[MichiganCountyEconomy] {
         &self.counties
     }
     #[must_use]
@@ -70,7 +70,7 @@ impl MichiganEconomyV1 {
 
 /// Closed construction failures, without input or credential disclosure.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum MichiganEconomyErrorV1 {
+pub enum MichiganEconomyError {
     ArtifactDigest,
     ArtifactDecode,
     ArtifactShape,
@@ -79,12 +79,12 @@ pub enum MichiganEconomyErrorV1 {
     Foundation,
     Reference,
 }
-impl std::fmt::Display for MichiganEconomyErrorV1 {
+impl std::fmt::Display for MichiganEconomyError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "Michigan economics refused: {self:?}")
     }
 }
-impl std::error::Error for MichiganEconomyErrorV1 {}
+impl std::error::Error for MichiganEconomyError {}
 
 pub(crate) fn digest_hex(bytes: &[u8]) -> String {
     let mut output = String::with_capacity(bytes.len() * 2);
@@ -94,19 +94,19 @@ pub(crate) fn digest_hex(bytes: &[u8]) -> String {
     output
 }
 
-fn parse_csv(source: &str) -> Result<MichiganEconomyV1, MichiganEconomyErrorV1> {
+fn parse_csv(source: &str) -> Result<MichiganEconomy, MichiganEconomyError> {
     let mut lines = source.lines();
     if lines.next() != Some(HEADER) || !source.ends_with('\n') {
-        return Err(MichiganEconomyErrorV1::ArtifactShape);
+        return Err(MichiganEconomyError::ArtifactShape);
     }
     let mut counties = Vec::with_capacity(83);
     for (position, line) in lines.enumerate() {
         if position >= 83 {
-            return Err(MichiganEconomyErrorV1::ArtifactShape);
+            return Err(MichiganEconomyError::ArtifactShape);
         }
         let columns: Vec<&str> = line.split(',').collect();
         if columns.len() != 5 || columns[0] != format!("{}", 26_001 + position * 2) {
-            return Err(MichiganEconomyErrorV1::ArtifactShape);
+            return Err(MichiganEconomyError::ArtifactShape);
         }
         let mut values = [0_u64; 4];
         for (index, text) in columns[1..].iter().enumerate() {
@@ -114,19 +114,19 @@ fn parse_csv(source: &str) -> Result<MichiganEconomyV1, MichiganEconomyErrorV1> 
                 || !text.bytes().all(|byte| byte.is_ascii_digit())
                 || (text.len() > 1 && text.starts_with('0'))
             {
-                return Err(MichiganEconomyErrorV1::ArtifactValue);
+                return Err(MichiganEconomyError::ArtifactValue);
             }
             let value = text
                 .parse::<u64>()
-                .map_err(|_| MichiganEconomyErrorV1::ArtifactValue)?;
+                .map_err(|_| MichiganEconomyError::ArtifactValue)?;
             // BSL's int principal is signed 64-bit; refuse any lossy bridge.
-            i64::try_from(value).map_err(|_| MichiganEconomyErrorV1::ArtifactValue)?;
+            i64::try_from(value).map_err(|_| MichiganEconomyError::ArtifactValue)?;
             if value > 9_007_199_254_740_992 {
-                return Err(MichiganEconomyErrorV1::ArtifactValue);
+                return Err(MichiganEconomyError::ArtifactValue);
             }
             values[index] = value;
         }
-        counties.push(MichiganCountyEconomyV1 {
+        counties.push(MichiganCountyEconomy {
             county_geoid: columns[0].to_owned(),
             annual_avg_estabs_count: values[0],
             annual_avg_emplvl: values[1],
@@ -135,12 +135,12 @@ fn parse_csv(source: &str) -> Result<MichiganEconomyV1, MichiganEconomyErrorV1> 
         });
     }
     if counties.len() != 83 {
-        return Err(MichiganEconomyErrorV1::ArtifactShape);
+        return Err(MichiganEconomyError::ArtifactShape);
     }
-    let mut scenario_source = format!("(scenario {MICHIGAN_OBSERVER_SCENARIO_V1}\n  (defvocabulary NodeType (TERRITORY))\n  (deffield territory/county-fips int extensive)\n");
+    let mut scenario_source = format!("(scenario {MICHIGAN_OBSERVER_SCENARIO}\n  (defvocabulary NodeType (TERRITORY))\n  (deffield territory/county-fips int extensive)\n");
     append_county_observations(&mut scenario_source, &counties);
     scenario_source.push_str(")\n");
-    Ok(MichiganEconomyV1 {
+    Ok(MichiganEconomy {
         counties,
         scenario_source,
     })
@@ -149,9 +149,9 @@ fn parse_csv(source: &str) -> Result<MichiganEconomyV1, MichiganEconomyErrorV1> 
 /// Append the same observed county declarations and rows to a versioned scenario.
 pub(crate) fn append_county_observations(
     scenario_source: &mut String,
-    counties: &[MichiganCountyEconomyV1],
+    counties: &[MichiganCountyEconomy],
 ) {
-    for (index, key) in QCEW_ECONOMICS_FIELD_KEYS_V1.iter().enumerate() {
+    for (index, key) in QCEW_ECONOMICS_FIELD_KEYS.iter().enumerate() {
         writeln!(
             scenario_source,
             "  (deffield territory/{key} int {})",
@@ -172,7 +172,7 @@ pub(crate) fn append_county_observations(
             county.total_annual_wages,
             county.annual_avg_wkly_wage,
         ];
-        for (key, value) in QCEW_ECONOMICS_FIELD_KEYS_V1.iter().zip(values) {
+        for (key, value) in QCEW_ECONOMICS_FIELD_KEYS.iter().zip(values) {
             writeln!(scenario_source, "    (territory/{key} {value})").expect("String write");
         }
         scenario_source.push_str("  )\n");
@@ -182,22 +182,22 @@ pub(crate) fn append_county_observations(
 /// Decode the bounded artifact once and verify its exact governed digest.
 /// # Errors
 /// Refuses altered gzip bytes, excess expansion, malformed CSV or invalid values.
-pub fn michigan_economy_v1() -> Result<&'static MichiganEconomyV1, MichiganEconomyErrorV1> {
-    static ECONOMY: OnceLock<Result<MichiganEconomyV1, MichiganEconomyErrorV1>> = OnceLock::new();
+pub fn michigan_economy() -> Result<&'static MichiganEconomy, MichiganEconomyError> {
+    static ECONOMY: OnceLock<Result<MichiganEconomy, MichiganEconomyError>> = OnceLock::new();
     ECONOMY
         .get_or_init(|| {
-            if digest_hex(&sha256_of(ARTIFACT)) != QCEW_ECONOMICS_ARTIFACT_SHA256_V1 {
-                return Err(MichiganEconomyErrorV1::ArtifactDigest);
+            if digest_hex(&sha256_of(ARTIFACT)) != QCEW_ECONOMICS_ARTIFACT_SHA256 {
+                return Err(MichiganEconomyError::ArtifactDigest);
             }
             let mut decoded = String::new();
             flate2::read::GzDecoder::new(ARTIFACT)
                 .take(MAX_DECODED_BYTES + 1)
                 .read_to_string(&mut decoded)
-                .map_err(|_| MichiganEconomyErrorV1::ArtifactDecode)?;
-            if u64::try_from(decoded.len()).map_err(|_| MichiganEconomyErrorV1::ArtifactDecode)?
+                .map_err(|_| MichiganEconomyError::ArtifactDecode)?;
+            if u64::try_from(decoded.len()).map_err(|_| MichiganEconomyError::ArtifactDecode)?
                 > MAX_DECODED_BYTES
             {
-                return Err(MichiganEconomyErrorV1::ArtifactDecode);
+                return Err(MichiganEconomyError::ArtifactDecode);
             }
             parse_csv(&decoded)
         })
@@ -208,35 +208,24 @@ pub fn michigan_economy_v1() -> Result<&'static MichiganEconomyV1, MichiganEcono
 /// Build the sole Michigan observer foundation. The baseline has no economy rules yet.
 /// # Errors
 /// Refuses invalid reference identity, content or tick-zero construction.
-pub fn michigan_observer_foundation_v1() -> Result<
-    (
-        ReplayTickSession<HypergraphStore>,
-        FoundationContentBundleV1,
-    ),
-    MichiganEconomyErrorV1,
-> {
-    build_observer_foundation(michigan_economy_v1()?)
+pub fn michigan_observer_foundation(
+) -> Result<(ReplayTickSession<HypergraphStore>, FoundationContentBundle), MichiganEconomyError> {
+    build_observer_foundation(michigan_economy()?)
 }
 
 // The public entry point admits only the digest-pinned artifact above. Keeping
 // preparation private lets tests qualify source changes without a runtime bypass.
 fn build_observer_foundation(
-    economy: &MichiganEconomyV1,
-) -> Result<
-    (
-        ReplayTickSession<HypergraphStore>,
-        FoundationContentBundleV1,
-    ),
-    MichiganEconomyErrorV1,
-> {
+    economy: &MichiganEconomy,
+) -> Result<(ReplayTickSession<HypergraphStore>, FoundationContentBundle), MichiganEconomyError> {
     let defines = format!(
-        "{{\"qcew_vintage\":{QCEW_ECONOMICS_VINTAGE_V1},\"tick_duration_days\":{DAYS_PER_TICK}}}"
+        "{{\"qcew_vintage\":{QCEW_ECONOMICS_VINTAGE},\"tick_duration_days\":{DAYS_PER_TICK}}}"
     );
     observer_foundation_from_source(
         economy.scenario_source(),
         "g4/michigan-observer-v1",
         defines.as_bytes(),
-        FoundationContentBundleV1::try_new,
+        FoundationContentBundle::try_new,
     )
 }
 
@@ -251,21 +240,21 @@ pub(crate) fn observer_foundation_from_source<B>(
         &str,
         &[u8],
         &[u8],
-    ) -> Result<B, crate::RustPersistenceRuntimeErrorV2>,
-) -> Result<(ReplayTickSession<HypergraphStore>, B), MichiganEconomyErrorV1> {
-    let (_, rules) = split_content("").map_err(|_| MichiganEconomyErrorV1::Scenario)?;
+    ) -> Result<B, crate::RustPersistenceRuntimeError>,
+) -> Result<(ReplayTickSession<HypergraphStore>, B), MichiganEconomyError> {
+    let (_, rules) = split_content("").map_err(|_| MichiganEconomyError::Scenario)?;
     let forms = rules.into_iter().map(|rule| rule.form).collect::<Vec<_>>();
     let content = ContentDigest {
         defines_hash: sha256_of(defines),
-        rules_hash: rules_hash_of(&forms).map_err(|_| MichiganEconomyErrorV1::Scenario)?,
+        rules_hash: rules_hash_of(&forms).map_err(|_| MichiganEconomyError::Scenario)?,
     };
     let foundation =
-        michigan_dynamic_hex_foundation_v1().map_err(|_| MichiganEconomyErrorV1::Reference)?;
+        michigan_dynamic_hex_foundation().map_err(|_| MichiganEconomyError::Reference)?;
     let mut manifest = REFERENCE_DOMAIN.to_vec();
     manifest.extend_from_slice(&foundation.base_reference_cohort_digest());
     manifest.extend_from_slice(&foundation.r8_section_digest());
     if sha256_of(&manifest) != foundation.reference_bundle_digest() {
-        return Err(MichiganEconomyErrorV1::Reference);
+        return Err(MichiganEconomyError::Reference);
     }
     // Scenario bytes carry every exact economics input, so the foundation digest
     // covers the QCEW rows while the existing H3 reference identity stays intact.
@@ -274,28 +263,27 @@ pub(crate) fn observer_foundation_from_source<B>(
         None,
         "",
         HypergraphStore::new(),
-        ReplaySessionIdV1::try_from(session_identity)
-            .map_err(|_| MichiganEconomyErrorV1::Scenario)?,
+        ReplaySessionId::try_from(session_identity).map_err(|_| MichiganEconomyError::Scenario)?,
         ReplaySeed::new(319),
         content,
-        RefDigestV1::from_bytes(foundation.reference_bundle_digest()),
-        MaterialStateV1::try_new(foundation).map_err(|_| MichiganEconomyErrorV1::Foundation)?,
+        RefDigest::from_bytes(foundation.reference_bundle_digest()),
+        MaterialState::try_new(foundation).map_err(|_| MichiganEconomyError::Foundation)?,
     )
-    .map_err(|_| MichiganEconomyErrorV1::Foundation)?;
+    .map_err(|_| MichiganEconomyError::Foundation)?;
     let bundle = encode_bundle(scenario_source, None, "", defines, &manifest)
-        .map_err(|_| MichiganEconomyErrorV1::Foundation)?;
+        .map_err(|_| MichiganEconomyError::Foundation)?;
     Ok((session, bundle))
 }
 
 /// Exact complete deterministic foundation identity shared by every observer session.
 /// # Errors
 /// Refuses any failed tick-zero construction or canonical foundation capture.
-pub fn michigan_observer_foundation_digest_v1() -> Result<[u8; 32], MichiganEconomyErrorV1> {
-    static DIGEST: OnceLock<Result<[u8; 32], MichiganEconomyErrorV1>> = OnceLock::new();
+pub fn michigan_observer_foundation_digest() -> Result<[u8; 32], MichiganEconomyError> {
+    static DIGEST: OnceLock<Result<[u8; 32], MichiganEconomyError>> = OnceLock::new();
     *DIGEST.get_or_init(|| {
-        let (session, bundle) = michigan_observer_foundation_v1()?;
-        let captured = crate::CampaignFoundationV1::capture(&session, bundle)
-            .map_err(|_| MichiganEconomyErrorV1::Foundation)?;
+        let (session, bundle) = michigan_observer_foundation()?;
+        let captured = crate::CampaignFoundation::capture(&session, bundle)
+            .map_err(|_| MichiganEconomyError::Foundation)?;
         Ok(sha256_of(captured.canonical_bytes()))
     })
 }
@@ -305,14 +293,13 @@ mod tests {
     use super::*;
     use std::collections::BTreeMap;
 
-    use babylon_bsl::{identity_codec::StableBslValueV1, structural_verbs::CollectingSink};
-    use babylon_graph::stable_element::StableElementKeyV1;
-    use babylon_practice_contract::ordered_action_v1::OrderedPracticeActionBatchV1;
-    use babylon_tick::replay_session::IdentifiedTickReportV2;
+    use babylon_bsl::{identity_codec::StableBslValue, structural_verbs::CollectingSink};
+    use babylon_graph::stable_element::StableElementKey;
+    use babylon_practice_contract::OrderedPracticeActionBatch;
+    use babylon_tick::replay_session::IdentifiedTickReport;
 
     use crate::{
-        county_committed_signals_v1, CampaignFoundationV1, CommittedTerritoryFieldsV1,
-        CountySignalV1,
+        county_committed_signals, CampaignFoundation, CommittedTerritoryFields, CountySignal,
     };
 
     // Synthetic test inputs, not new observations: the Python source-builder
@@ -324,15 +311,15 @@ mod tests {
 
     #[test]
     fn diagnostic_interval_changes_foundation_identity_without_rescaling_source_facts() {
-        let economy = michigan_economy_v1().unwrap();
+        let economy = michigan_economy().unwrap();
         let (session, bundle) = build_observer_foundation(economy).unwrap();
         let defines: serde_json::Value = serde_json::from_slice(bundle.defines_bytes()).unwrap();
         assert_eq!(defines["qcew_vintage"], 2024);
         assert_eq!(defines["tick_duration_days"], 28);
-        let current = CampaignFoundationV1::capture(&session, bundle).unwrap();
+        let current = CampaignFoundation::capture(&session, bundle).unwrap();
         assert_eq!(
             sha256_of(current.canonical_bytes()),
-            michigan_observer_foundation_digest_v1().unwrap()
+            michigan_observer_foundation_digest().unwrap()
         );
 
         for incompatible in [
@@ -344,10 +331,10 @@ mod tests {
                 economy.scenario_source(),
                 "g4/michigan-observer-v1",
                 incompatible,
-                FoundationContentBundleV1::try_new,
+                FoundationContentBundle::try_new,
             )
             .unwrap();
-            let old = CampaignFoundationV1::capture(&old_session, old_bundle).unwrap();
+            let old = CampaignFoundation::capture(&old_session, old_bundle).unwrap();
             assert_ne!(
                 sha256_of(old.canonical_bytes()),
                 sha256_of(current.canonical_bytes()),
@@ -363,10 +350,10 @@ mod tests {
 
     fn advance_observation(
         session: &mut ReplayTickSession<HypergraphStore>,
-    ) -> IdentifiedTickReportV2 {
+    ) -> IdentifiedTickReport {
         let tick = u64::try_from(session.completed_tick() + 1).unwrap();
         let actions =
-            OrderedPracticeActionBatchV1::empty(session.session_identity().clone(), tick).unwrap();
+            OrderedPracticeActionBatch::empty(session.session_identity().clone(), tick).unwrap();
         let mut sink = CollectingSink::default();
         let report = session.advance(&mut sink, &actions).unwrap();
         assert_eq!(report.report().considered, 0);
@@ -376,17 +363,17 @@ mod tests {
         report
     }
 
-    fn dossier_signals(report: &IdentifiedTickReportV2) -> BTreeMap<String, Vec<CountySignalV1>> {
+    fn dossier_signals(report: &IdentifiedTickReport) -> BTreeMap<String, Vec<CountySignal>> {
         let mut result = BTreeMap::new();
         for row in report.material_state_rows().territories().rows() {
-            let StableElementKeyV1::Node {
+            let StableElementKey::Node {
                 scenario,
                 local_name,
             } = row.territory_id()
             else {
                 panic!("a county must retain its stable node identity");
             };
-            assert_eq!(scenario, MICHIGAN_OBSERVER_SCENARIO_V1);
+            assert_eq!(scenario, MICHIGAN_OBSERVER_SCENARIO);
             assert_eq!(
                 row.ordered_fields().len(),
                 5,
@@ -397,14 +384,14 @@ mod tests {
                 .iter()
                 .map(|(key, value)| (key.as_str(), value))
                 .collect();
-            let values = QCEW_ECONOMICS_FIELD_KEYS_V1.map(|key| {
-                let StableBslValueV1::Int(value) = fields[key] else {
+            let values = QCEW_ECONOMICS_FIELD_KEYS.map(|key| {
+                let StableBslValue::Int(value) = fields[key] else {
                     panic!("QCEW {key} must survive the actual territory projector as an integer");
                 };
                 Some(*value)
             });
-            let input = CommittedTerritoryFieldsV1::try_from_qcew(values).unwrap();
-            let signals = county_committed_signals_v1(&input).unwrap();
+            let input = CommittedTerritoryFields::try_from_qcew(values).unwrap();
+            let signals = county_committed_signals(&input).unwrap();
             assert_eq!(signals.len(), 4);
             assert!(result.insert(local_name.clone(), signals).is_none());
         }
@@ -420,9 +407,8 @@ mod tests {
         let (mut revised, revised_bundle) = build_observer_foundation(&changed).unwrap();
         assert!(original_bundle.rule_source_bytes().is_empty());
         assert!(revised_bundle.rule_source_bytes().is_empty());
-        let original_foundation =
-            CampaignFoundationV1::capture(&original, original_bundle).unwrap();
-        let revised_foundation = CampaignFoundationV1::capture(&revised, revised_bundle).unwrap();
+        let original_foundation = CampaignFoundation::capture(&original, original_bundle).unwrap();
+        let revised_foundation = CampaignFoundation::capture(&revised, revised_bundle).unwrap();
         assert_ne!(
             original_foundation.canonical_bytes(),
             revised_foundation.canonical_bytes()
@@ -485,10 +471,10 @@ mod tests {
         let (mut continued, first_bundle) = build_observer_foundation(&economy).unwrap();
         let (mut reopened, second_bundle) = build_observer_foundation(&economy).unwrap();
         assert_eq!(
-            CampaignFoundationV1::capture(&continued, first_bundle)
+            CampaignFoundation::capture(&continued, first_bundle)
                 .unwrap()
                 .canonical_bytes(),
-            CampaignFoundationV1::capture(&reopened, second_bundle)
+            CampaignFoundation::capture(&reopened, second_bundle)
                 .unwrap()
                 .canonical_bytes()
         );
@@ -519,15 +505,15 @@ mod tests {
     fn malformed_county_rows_refuse_instead_of_becoming_zero() {
         assert_eq!(
             parse_csv(&format!("{HEADER}\n26001,1,NaN,3,4\n")),
-            Err(MichiganEconomyErrorV1::ArtifactValue)
+            Err(MichiganEconomyError::ArtifactValue)
         );
         assert_eq!(
             parse_csv(&format!("{HEADER}\n26003,1,2,3,4\n")),
-            Err(MichiganEconomyErrorV1::ArtifactShape)
+            Err(MichiganEconomyError::ArtifactShape)
         );
         assert_eq!(
             parse_csv(&format!("{HEADER}\n26001,1,2,9223372036854775808,4\n")),
-            Err(MichiganEconomyErrorV1::ArtifactValue)
+            Err(MichiganEconomyError::ArtifactValue)
         );
     }
 }

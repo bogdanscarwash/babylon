@@ -31,7 +31,9 @@
 
 use std::collections::HashSet;
 
-use babylon_bsl::{Atom, ErrorIdentity, SExpr, Span, SpanTable};
+use babylon_bsl::{
+    error_identity::ErrorIdentity, reader::Atom, reader::SExpr, reader::Span, reader::SpanTable,
+};
 
 /// What a locator strategy found (§6.2's three outcomes).
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -372,9 +374,14 @@ mod tests {
         by_atom, by_enum_ref, by_head_and_operand, by_keyword_operand, by_operand_index, by_qname,
         locate, LocateOutcome,
     };
-    use babylon_bsl::{read_all_spanned, ErrorIdentity};
+    use babylon_bsl::{error_identity::ErrorIdentity, reader::read_all_spanned};
 
-    fn parse(source: &str) -> (Vec<babylon_bsl::SExpr>, babylon_bsl::SpanTable) {
+    fn parse(
+        source: &str,
+    ) -> (
+        Vec<babylon_bsl::reader::SExpr>,
+        babylon_bsl::reader::SpanTable,
+    ) {
         read_all_spanned(source.as_bytes()).expect("fixture source must parse")
     }
 

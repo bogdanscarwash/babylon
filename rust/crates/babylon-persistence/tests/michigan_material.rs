@@ -1,29 +1,29 @@
 use babylon_bsl::structural_verbs::CollectingSink;
 use babylon_graph::hypergraph_store::HypergraphStore;
 use babylon_material_circuit::{
-    decode_material_circuit_state_v3, encode_material_circuit_state_v3, MaterialCircuitStateV3,
+    decode_material_circuit_state, encode_material_circuit_state, MaterialCircuitState,
 };
-use babylon_persistence::michigan_content::MichiganContentPresetV1;
-use babylon_persistence::michigan_material::{MichiganDeliveryPresetV1, MichiganMaterialSiteV1};
-use babylon_practice_contract::ordered_action_v1::OrderedPracticeActionBatchV1;
+use babylon_persistence::michigan_content::MichiganContentPreset;
+use babylon_persistence::michigan_material::{MichiganDeliveryPreset, MichiganMaterialSite};
+use babylon_practice_contract::OrderedPracticeActionBatch;
 use babylon_tick::{
-    material_replay::{MaterialReplaySessionV3, PreparedMaterialTickV3},
-    material_world::{decode_material_receipts_v4, MaterialTickReceiptsV4},
-    replay_session::ReplayCommitDispositionV1,
+    material_replay::{MaterialReplaySession, PreparedMaterialTick},
+    material_world::{decode_material_receipts, MaterialTickReceipts},
+    replay_session::ReplayCommitDisposition,
 };
 
-type Session = MaterialReplaySessionV3<HypergraphStore>;
+type Session = MaterialReplaySession<HypergraphStore>;
 
-fn session(preset: MichiganDeliveryPresetV1) -> Session {
-    MichiganContentPresetV1::new_campaign(preset)
+fn session(preset: MichiganDeliveryPreset) -> Session {
+    MichiganContentPreset::new_campaign(preset)
         .create_foundation(&crate::test_support::catalog())
         .unwrap()
         .into_session()
         .unwrap()
 }
 
-fn prepare(session: &Session) -> PreparedMaterialTickV3<HypergraphStore> {
-    let actions = OrderedPracticeActionBatchV1::empty(
+fn prepare(session: &Session) -> PreparedMaterialTick<HypergraphStore> {
+    let actions = OrderedPracticeActionBatch::empty(
         session.graph_session().session_identity().clone(),
         session.completed_tick() + 1,
     )
@@ -31,17 +31,17 @@ fn prepare(session: &Session) -> PreparedMaterialTickV3<HypergraphStore> {
     session.prepare_advance(&actions).unwrap()
 }
 
-fn commit(session: &mut Session, candidate: PreparedMaterialTickV3<HypergraphStore>) {
+fn commit(session: &mut Session, candidate: PreparedMaterialTick<HypergraphStore>) {
     session
         .commit_prepared_and_publish(&mut CollectingSink::default(), candidate, |_| {
-            Ok::<_, ()>(ReplayCommitDispositionV1::Committed)
+            Ok::<_, ()>(ReplayCommitDisposition::Committed)
         })
         .unwrap();
 }
 
-fn advance(session: &mut Session) -> MaterialTickReceiptsV4 {
+fn advance(session: &mut Session) -> MaterialTickReceipts {
     let candidate = prepare(session);
-    let receipts = decode_material_receipts_v4(candidate.material().receipt_bytes()).unwrap();
+    let receipts = decode_material_receipts(candidate.material().receipt_bytes()).unwrap();
     commit(session, candidate);
     receipts
 }
@@ -57,7 +57,7 @@ fn shared_freight_capacity_changes_two_chains_through_the_authoritative_session(
             12,
         ),
     ] {
-        let preset = MichiganContentPresetV1::from_id(name)
+        let preset = MichiganContentPreset::from_id(name)
             .expect("shared freight must be admitted campaign content");
         let mut session = preset
             .create_foundation(&crate::test_support::catalog())
@@ -119,15 +119,15 @@ fn shared_freight_capacity_changes_two_chains_through_the_authoritative_session(
 fn shared_freight_has_one_capacity_principal_and_competing_order_demand() {
     let catalog = crate::test_support::catalog();
     let opening = |preset| {
-        MichiganContentPresetV1::new_campaign(preset)
+        MichiganContentPreset::new_campaign(preset)
             .create_foundation(&catalog)
             .unwrap()
             .initial_register()
             .state()
             .clone()
     };
-    let ample = opening(MichiganDeliveryPresetV1::SharedFreightAmple);
-    let mut constrained = opening(MichiganDeliveryPresetV1::SharedFreightConstrained);
+    let ample = opening(MichiganDeliveryPreset::SharedFreightAmple);
+    let mut constrained = opening(MichiganDeliveryPreset::SharedFreightConstrained);
     assert_eq!(ample.corridor_capacities.len(), 2 * 16);
     let sheet = catalog
         .routes()
@@ -154,10 +154,10 @@ fn shared_freight_has_one_capacity_principal_and_competing_order_demand() {
     let text = include_str!("../../../../content/scenarios/michigan/defines.toml")
         .replace("ORDERED_UNITS = 200", "ORDERED_UNITS = 80");
     let changed =
-        babylon_persistence::michigan_material::MichiganMaterialCatalogV1::from_defines_toml(&text)
+        babylon_persistence::michigan_material::MichiganMaterialCatalog::from_defines_toml(&text)
             .unwrap();
     let mut session =
-        MichiganContentPresetV1::new_campaign(MichiganDeliveryPresetV1::SharedFreightConstrained)
+        MichiganContentPreset::new_campaign(MichiganDeliveryPreset::SharedFreightConstrained)
             .create_foundation(&changed)
             .unwrap()
             .into_session()
@@ -186,7 +186,7 @@ fn shared_freight_has_one_capacity_principal_and_competing_order_demand() {
     assert_material_conserved(session.material().state());
 }
 
-fn inventory(state: &MaterialCircuitStateV3, site: &str, good: &str) -> u64 {
+fn inventory(state: &MaterialCircuitState, site: &str, good: &str) -> u64 {
     let catalog = crate::test_support::catalog();
     let site_id = catalog.site(site).unwrap().id();
     let good_id = catalog.good(good).unwrap().id();
@@ -197,7 +197,7 @@ fn inventory(state: &MaterialCircuitStateV3, site: &str, good: &str) -> u64 {
         .map_or(0, |row| row.quantity)
 }
 
-fn assert_material_conserved(state: &MaterialCircuitStateV3) {
+fn assert_material_conserved(state: &MaterialCircuitState) {
     let catalog = crate::test_support::catalog();
     let mut metal = 0;
     let mut food = 0;
@@ -238,8 +238,8 @@ fn assert_material_conserved(state: &MaterialCircuitStateV3) {
 }
 
 fn assert_second_period_delivery_delay(
-    standard: &MaterialCircuitStateV3,
-    delayed: &MaterialCircuitStateV3,
+    standard: &MaterialCircuitState,
+    delayed: &MaterialCircuitState,
 ) {
     assert_eq!(inventory(standard, "macomb-fabricated-metal", "sheet"), 320);
     assert_eq!(inventory(delayed, "macomb-fabricated-metal", "sheet"), 0);
@@ -271,13 +271,13 @@ fn assert_second_period_delivery_delay(
 
 #[test]
 fn presets_share_exact_setup_except_the_single_declared_delay() {
-    let standard = MichiganContentPresetV1::new_campaign(MichiganDeliveryPresetV1::Standard)
+    let standard = MichiganContentPreset::new_campaign(MichiganDeliveryPreset::Standard)
         .create_foundation(&crate::test_support::catalog())
         .unwrap()
         .initial_register()
         .state()
         .clone();
-    let mut delayed = MichiganContentPresetV1::new_campaign(MichiganDeliveryPresetV1::Delayed)
+    let mut delayed = MichiganContentPreset::new_campaign(MichiganDeliveryPreset::Delayed)
         .create_foundation(&crate::test_support::catalog())
         .unwrap()
         .initial_register()
@@ -297,8 +297,8 @@ fn presets_share_exact_setup_except_the_single_declared_delay() {
     assert_eq!(changed.travel_periods, 3);
     changed.travel_periods = 1;
     assert_eq!(
-        encode_material_circuit_state_v3(&standard).unwrap(),
-        encode_material_circuit_state_v3(&delayed).unwrap()
+        encode_material_circuit_state(&standard).unwrap(),
+        encode_material_circuit_state(&delayed).unwrap()
     );
     assert_eq!(standard.period, 1);
     assert_eq!(standard.capacities.len(), 5 * 16);
@@ -344,17 +344,17 @@ fn presets_share_exact_setup_except_the_single_declared_delay() {
 }
 
 fn assert_food_disconnected(
-    standard: &MaterialCircuitStateV3,
-    a: &MaterialTickReceiptsV4,
-    delayed: &MaterialCircuitStateV3,
-    b: &MaterialTickReceiptsV4,
+    standard: &MaterialCircuitState,
+    a: &MaterialTickReceipts,
+    delayed: &MaterialCircuitState,
+    b: &MaterialTickReceipts,
 ) {
     let catalog = crate::test_support::catalog();
     let food_sites: Vec<_> = catalog
         .sites()
         .iter()
         .filter(|site| site.naics == "311")
-        .map(MichiganMaterialSiteV1::id)
+        .map(MichiganMaterialSite::id)
         .collect();
     let food_route = catalog
         .routes()
@@ -421,8 +421,8 @@ fn assert_food_disconnected(
 
 #[test]
 fn delivery_delay_changes_following_period_output_with_food_causally_disconnected() {
-    let mut standard = session(MichiganDeliveryPresetV1::Standard);
-    let mut delayed = session(MichiganDeliveryPresetV1::Delayed);
+    let mut standard = session(MichiganDeliveryPreset::Standard);
+    let mut delayed = session(MichiganDeliveryPreset::Delayed);
     let mut first_standard_output = None;
     let mut first_delayed_output = None;
     for period in 1..=crate::test_support::catalog().horizon_ticks() {
@@ -462,10 +462,10 @@ fn delivery_delay_changes_following_period_output_with_food_causally_disconnecte
 #[test]
 fn every_dispatch_transit_arrival_restart_reproduces_exact_continuation() {
     for preset in [
-        MichiganDeliveryPresetV1::Standard,
-        MichiganDeliveryPresetV1::Delayed,
-        MichiganDeliveryPresetV1::SharedFreightAmple,
-        MichiganDeliveryPresetV1::SharedFreightConstrained,
+        MichiganDeliveryPreset::Standard,
+        MichiganDeliveryPreset::Delayed,
+        MichiganDeliveryPreset::SharedFreightAmple,
+        MichiganDeliveryPreset::SharedFreightConstrained,
     ] {
         let mut uninterrupted = session(preset);
         let mut next = Some(prepare(&uninterrupted));
@@ -489,9 +489,9 @@ fn every_dispatch_transit_arrival_restart_reproduces_exact_continuation() {
                 )
                 .unwrap();
             let encoded =
-                encode_material_circuit_state_v3(candidate.material().register().state()).unwrap();
+                encode_material_circuit_state(candidate.material().register().state()).unwrap();
             assert_eq!(
-                decode_material_circuit_state_v3(&encoded).unwrap(),
+                decode_material_circuit_state(&encoded).unwrap(),
                 *restored.material().state()
             );
             commit(&mut uninterrupted, candidate);

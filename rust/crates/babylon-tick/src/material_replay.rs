@@ -5,45 +5,36 @@
 
 use crate::{
     material_staffing::{
-        apply_material_staffing_v1, MaterialStaffingErrorV2, StaffingCompositionV1,
-        StaffingEffectContextV1, StaffingEffectsV1,
+        apply_material_staffing, MaterialStaffingError, StaffingComposition, StaffingEffectContext,
+        StaffingEffects,
     },
-    material_state::MaterialStateRowsV1,
+    material_state::MaterialStateRows,
     material_world::{
-        nominal_material_world_hash_v3, MaterialWorldErrorV3, MaterialWorldRegisterV3,
-        PreparedMaterialWorldV4,
+        nominal_material_world_hash, MaterialWorldError, MaterialWorldRegister,
+        PreparedMaterialWorld,
     },
     replay_session::{
-        IdentifiedTickReportV2, PreparedReplayCommitErrorV1, PreparedReplayTickV1,
-        ReplayCommitDispositionV1, ReplayTickError, ReplayTickSession,
+        IdentifiedTickReport, PreparedReplayCommitError, PreparedReplayTick,
+        ReplayCommitDisposition, ReplayTickError, ReplayTickSession,
     },
 };
 use babylon_bsl::structural_verbs::CollectingSink;
 use babylon_graph::{
-    allocator_state::AllocatorState, stable_state::StableGraphStateV1, state_hash::CanonicalState,
+    allocator_state::AllocatorState, stable_state::StableGraphState, state_hash::CanonicalState,
     substrate::GraphSubstrate, working_copy::DetachedCopy,
 };
-use babylon_kernel::{sha256_of, tick_content_hash::TickContentHashV1};
-use babylon_material_circuit::{close_material_period_v3, MaterialCircuitErrorV3};
-use babylon_practice_contract::ordered_action_v1::OrderedPracticeActionBatchV1;
+use babylon_kernel::{content_digest::sha256_of, tick_content_hash::TickContentHash};
+use babylon_material_circuit::{close_material_period, MaterialCircuitError};
+use babylon_practice_contract::OrderedPracticeActionBatch;
 
 const TICK_DOMAIN: &[u8] = b"babylon.material-tick-content.v3\0";
-const TICK_IDENTITY_BYTES_V3: usize = TICK_DOMAIN.len() + 12 + 7 * 32;
-
-/// Explicit labor authority selected by the pinned foundation content.
-#[derive(Debug, Clone)]
-pub enum MaterialLaborV1 {
-    /// The physical register owns the authored labor schedule.
-    Scheduled,
-    /// Graph-owned workforce accounts derive every next-opening labor row.
-    Staffed(StaffingCompositionV1),
-}
+const TICK_IDENTITY_BYTES: usize = TICK_DOMAIN.len() + 12 + 7 * 32;
 
 /// Typed refusal inside the detached material-base composition.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum MaterialBaseErrorV1 {
-    World(MaterialWorldErrorV3),
-    Staffing(MaterialStaffingErrorV2),
+pub enum MaterialBaseError {
+    World(MaterialWorldError),
+    Staffing(MaterialStaffingError),
     /// A BSL rule could overwrite a graph field owned by native staffing.
     StaffingFieldOwner {
         rule_id: String,
@@ -58,108 +49,106 @@ pub enum MaterialBaseErrorV1 {
     MissingCandidate,
     MissingResolver,
 }
-impl std::fmt::Display for MaterialBaseErrorV1 {
+impl std::fmt::Display for MaterialBaseError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "material-base composition refused: {self:?}")
     }
 }
-impl std::error::Error for MaterialBaseErrorV1 {}
-impl From<MaterialWorldErrorV3> for MaterialBaseErrorV1 {
-    fn from(error: MaterialWorldErrorV3) -> Self {
+impl std::error::Error for MaterialBaseError {}
+impl From<MaterialWorldError> for MaterialBaseError {
+    fn from(error: MaterialWorldError) -> Self {
         Self::World(error)
     }
 }
-impl From<MaterialCircuitErrorV3> for MaterialBaseErrorV1 {
-    fn from(error: MaterialCircuitErrorV3) -> Self {
+impl From<MaterialCircuitError> for MaterialBaseError {
+    fn from(error: MaterialCircuitError) -> Self {
         Self::World(error.into())
     }
 }
-impl From<MaterialStaffingErrorV2> for MaterialBaseErrorV1 {
-    fn from(error: MaterialStaffingErrorV2) -> Self {
+impl From<MaterialStaffingError> for MaterialBaseError {
+    fn from(error: MaterialStaffingError) -> Self {
         Self::Staffing(error)
     }
 }
 
 pub(crate) struct MaterialBaseInputs<'a> {
-    pub(crate) opening: &'a MaterialWorldRegisterV3,
-    pub(crate) labor: &'a MaterialLaborV1,
+    pub(crate) opening: &'a MaterialWorldRegister,
+    pub(crate) labor: &'a StaffingComposition,
 }
 impl MaterialBaseInputs<'_> {
     pub(crate) fn prepare(
         self,
         graph: &mut impl GraphSubstrate,
-        context: StaffingEffectContextV1<'_>,
+        context: StaffingEffectContext<'_>,
         tick: i64,
-    ) -> Result<(PreparedMaterialWorldV4, Option<StaffingEffectsV1>), MaterialBaseErrorV1> {
+    ) -> Result<(PreparedMaterialWorld, Option<StaffingEffects>), MaterialBaseError> {
         if u64::try_from(tick).ok() != self.opening.completed_tick().checked_add(1) {
-            return Err(MaterialBaseErrorV1::Period);
+            return Err(MaterialBaseError::Period);
         }
-        match self.labor {
-            MaterialLaborV1::Scheduled => Ok((self.opening.prepare_next()?, None)),
-            MaterialLaborV1::Staffed(composition) => {
-                let closed = close_material_period_v3(self.opening.state())?;
-                let bindings = composition
-                    .bindings()
-                    .iter()
-                    .map(|row| row.pool().clone())
-                    .collect::<Vec<_>>();
-                let requests = closed.staffing_requests(&bindings)?;
-                let effects = apply_material_staffing_v1(
-                    graph,
-                    context,
-                    composition,
-                    closed.closing_period(),
-                    &requests,
-                )?;
-                let transition = closed.finish_with_labor(effects.next_labor().to_vec())?;
-                Ok((self.opening.prepare_transition(transition)?, Some(effects)))
-            }
+        let composition = self.labor;
+        {
+            let closed = close_material_period(self.opening.state())?;
+            let bindings = composition
+                .bindings()
+                .iter()
+                .map(|row| row.pool().clone())
+                .collect::<Vec<_>>();
+            let requests = closed.staffing_requests(&bindings)?;
+            let effects = apply_material_staffing(
+                graph,
+                context,
+                composition,
+                closed.closing_period(),
+                &requests,
+            )?;
+            let transition = closed.finish_with_labor(effects.next_labor().to_vec())?;
+            Ok((self.opening.prepare_transition(transition)?, Some(effects)))
         }
     }
 }
 
 /// Closed errors at the material session boundary.
 #[derive(Debug)]
-pub enum MaterialReplayErrorV3 {
+pub enum MaterialReplayError {
     Graph(ReplayTickError),
-    Material(MaterialWorldErrorV3),
+    Material(MaterialWorldError),
     FoundationTick,
     Horizon,
     StaleCandidate,
     Identity,
 }
-impl std::fmt::Display for MaterialReplayErrorV3 {
+impl std::fmt::Display for MaterialReplayError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "material replay refused: {self:?}")
     }
 }
-impl std::error::Error for MaterialReplayErrorV3 {}
-impl From<ReplayTickError> for MaterialReplayErrorV3 {
+impl std::error::Error for MaterialReplayError {}
+impl From<ReplayTickError> for MaterialReplayError {
     fn from(value: ReplayTickError) -> Self {
         Self::Graph(value)
     }
 }
-impl From<MaterialWorldErrorV3> for MaterialReplayErrorV3 {
-    fn from(value: MaterialWorldErrorV3) -> Self {
+impl From<MaterialWorldError> for MaterialReplayError {
+    fn from(value: MaterialWorldError) -> Self {
         Self::Material(value)
     }
 }
 
 /// Identity emitted only by successful detached adjudication of both components.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct IdentifiedMaterialTickV3 {
+pub struct IdentifiedMaterialTick {
     resolve_tick: u64,
     foundation_digest: [u8; 32],
-    graph_tick_content_hash: TickContentHashV1,
+    graph_tick_content_hash: TickContentHash,
     graph_world_before: [u8; 32],
     graph_world_after: [u8; 32],
     prior_world_hash: [u8; 32],
     result_world_hash: [u8; 32],
     receipt_digest: [u8; 32],
-    canonical_bytes: [u8; TICK_IDENTITY_BYTES_V3],
-    tick_content_hash: TickContentHashV1,
+    canonical_bytes: [u8; TICK_IDENTITY_BYTES],
+    tick_content_hash: TickContentHash,
 }
-impl IdentifiedMaterialTickV3 {
+impl IdentifiedMaterialTick {
     #[must_use]
     pub const fn resolve_tick(&self) -> u64 {
         self.resolve_tick
@@ -169,7 +158,7 @@ impl IdentifiedMaterialTickV3 {
         self.foundation_digest
     }
     #[must_use]
-    pub const fn graph_tick_content_hash(&self) -> TickContentHashV1 {
+    pub const fn graph_tick_content_hash(&self) -> TickContentHash {
         self.graph_tick_content_hash
     }
     #[must_use]
@@ -197,27 +186,27 @@ impl IdentifiedMaterialTickV3 {
         &self.canonical_bytes
     }
     #[must_use]
-    pub const fn tick_content_hash(&self) -> TickContentHashV1 {
+    pub const fn tick_content_hash(&self) -> TickContentHash {
         self.tick_content_hash
     }
     /// Decode the closed fixed-width V3 tick identity.
     /// # Errors
     /// Refuses wrong domain/version/length, zero tick or trailing bytes.
-    pub fn decode(bytes: &[u8]) -> Result<Self, MaterialReplayErrorV3> {
+    pub fn decode(bytes: &[u8]) -> Result<Self, MaterialReplayError> {
         let head = TICK_DOMAIN.len();
         if bytes.len() != head + 12 + 7 * 32
             || !bytes.starts_with(TICK_DOMAIN)
             || bytes[head..head + 4] != 3_u32.to_be_bytes()
         {
-            return Err(MaterialReplayErrorV3::Identity);
+            return Err(MaterialReplayError::Identity);
         }
         let resolve_tick = u64::from_be_bytes(
             bytes[head + 4..head + 12]
                 .try_into()
-                .map_err(|_| MaterialReplayErrorV3::Identity)?,
+                .map_err(|_| MaterialReplayError::Identity)?,
         );
         if resolve_tick == 0 {
-            return Err(MaterialReplayErrorV3::Identity);
+            return Err(MaterialReplayError::Identity);
         }
         let mut digests = [[0_u8; 32]; 7];
         for (index, digest) in digests.iter_mut().enumerate() {
@@ -226,7 +215,7 @@ impl IdentifiedMaterialTickV3 {
         Ok(Self {
             resolve_tick,
             foundation_digest: digests[0],
-            graph_tick_content_hash: TickContentHashV1::from_bytes(digests[1]),
+            graph_tick_content_hash: TickContentHash::from_bytes(digests[1]),
             graph_world_before: digests[2],
             graph_world_after: digests[3],
             prior_world_hash: digests[4],
@@ -234,25 +223,25 @@ impl IdentifiedMaterialTickV3 {
             receipt_digest: digests[6],
             canonical_bytes: bytes
                 .try_into()
-                .map_err(|_| MaterialReplayErrorV3::Identity)?,
-            tick_content_hash: TickContentHashV1::from_bytes(sha256_of(bytes)),
+                .map_err(|_| MaterialReplayError::Identity)?,
+            tick_content_hash: TickContentHash::from_bytes(sha256_of(bytes)),
         })
     }
     fn compose(
         foundation: [u8; 32],
-        graph: &IdentifiedTickReportV2,
-        prior: &MaterialWorldRegisterV3,
-        material: &PreparedMaterialWorldV4,
-    ) -> Result<Self, MaterialReplayErrorV3> {
+        graph: &IdentifiedTickReport,
+        prior: &MaterialWorldRegister,
+        material: &PreparedMaterialWorld,
+    ) -> Result<Self, MaterialReplayError> {
         let resolve_tick = material.register().completed_tick();
         if u64::try_from(graph.result_registers().completed_tick()).ok() != Some(resolve_tick) {
-            return Err(MaterialReplayErrorV3::Identity);
+            return Err(MaterialReplayError::Identity);
         }
-        let prior_world_hash = nominal_material_world_hash_v3(graph.report().world_before, prior);
+        let prior_world_hash = nominal_material_world_hash(graph.report().world_before, prior);
         let result_world_hash =
-            nominal_material_world_hash_v3(graph.report().world_after, material.register());
+            nominal_material_world_hash(graph.report().world_after, material.register());
         let receipt_digest = sha256_of(material.receipt_bytes());
-        let mut canonical_bytes = [0_u8; TICK_IDENTITY_BYTES_V3];
+        let mut canonical_bytes = [0_u8; TICK_IDENTITY_BYTES];
         let head = TICK_DOMAIN.len();
         canonical_bytes[..head].copy_from_slice(TICK_DOMAIN);
         canonical_bytes[head..head + 4].copy_from_slice(&3_u32.to_be_bytes());
@@ -268,7 +257,7 @@ impl IdentifiedMaterialTickV3 {
         ]) {
             slot.copy_from_slice(&digest);
         }
-        let tick_content_hash = TickContentHashV1::from_bytes(sha256_of(&canonical_bytes));
+        let tick_content_hash = TickContentHash::from_bytes(sha256_of(&canonical_bytes));
         Ok(Self {
             resolve_tick,
             foundation_digest: foundation,
@@ -285,63 +274,59 @@ impl IdentifiedMaterialTickV3 {
 }
 
 /// Sole active owner; no mutable access to either graph or circuit component.
-pub struct MaterialReplaySessionV3<G> {
+pub struct MaterialReplaySession<G> {
     graph: ReplayTickSession<G>,
-    material: MaterialWorldRegisterV3,
+    material: MaterialWorldRegister,
     foundation_digest: [u8; 32],
     horizon: u64,
-    labor: MaterialLaborV1,
+    labor: StaffingComposition,
 }
 /// Fully prepared candidate; dropping it publishes nothing.
-pub struct PreparedMaterialTickV3<G> {
-    graph: PreparedReplayTickV1<G>,
-    material: PreparedMaterialWorldV4,
-    identity: IdentifiedMaterialTickV3,
+pub struct PreparedMaterialTick<G> {
+    graph: PreparedReplayTick<G>,
+    material: PreparedMaterialWorld,
+    identity: IdentifiedMaterialTick,
 }
-impl<G> PreparedMaterialTickV3<G> {
+impl<G> PreparedMaterialTick<G> {
     #[must_use]
-    pub const fn graph_report(&self) -> &IdentifiedTickReportV2 {
+    pub const fn graph_report(&self) -> &IdentifiedTickReport {
         self.graph.report()
     }
     #[must_use]
-    pub const fn material(&self) -> &PreparedMaterialWorldV4 {
+    pub const fn material(&self) -> &PreparedMaterialWorld {
         &self.material
     }
     #[must_use]
-    pub const fn identity(&self) -> &IdentifiedMaterialTickV3 {
+    pub const fn identity(&self) -> &IdentifiedMaterialTick {
         &self.identity
     }
 }
 /// Fallible preflight or durable operation; neither publishes any candidate state.
 #[derive(Debug)]
-pub enum MaterialCommitErrorV3<E> {
-    Preflight(MaterialReplayErrorV3),
+pub enum MaterialCommitError<E> {
+    Preflight(MaterialReplayError),
     Commit(E),
 }
 
-impl<G: GraphSubstrate + CanonicalState + AllocatorState + DetachedCopy>
-    MaterialReplaySessionV3<G>
-{
+impl<G: GraphSubstrate + CanonicalState + AllocatorState + DetachedCopy> MaterialReplaySession<G> {
     /// Bind a new foundation at tick zero. Existing graph sessions cannot acquire mechanics.
     /// # Errors
     /// Refuses nonzero component clocks, an empty horizon, invalid state, or
     /// BSL writes to staffing-owned fields when staffed labor is selected.
     pub fn new(
         graph: ReplayTickSession<G>,
-        material: MaterialWorldRegisterV3,
+        material: MaterialWorldRegister,
         foundation_digest: [u8; 32],
         horizon: u64,
-        labor: MaterialLaborV1,
-    ) -> Result<Self, MaterialReplayErrorV3> {
+        labor: StaffingComposition,
+    ) -> Result<Self, MaterialReplayError> {
         if graph.completed_tick() != 0 || material.completed_tick() != 0 {
-            return Err(MaterialReplayErrorV3::FoundationTick);
+            return Err(MaterialReplayError::FoundationTick);
         }
         if horizon == 0 || horizon > i64::MAX as u64 {
-            return Err(MaterialReplayErrorV3::Horizon);
+            return Err(MaterialReplayError::Horizon);
         }
-        if matches!(labor, MaterialLaborV1::Staffed(_)) {
-            graph.validate_staffing_ownership()?;
-        }
+        graph.validate_staffing_ownership()?;
         Ok(Self {
             graph,
             material,
@@ -355,7 +340,7 @@ impl<G: GraphSubstrate + CanonicalState + AllocatorState + DetachedCopy>
         &self.graph
     }
     #[must_use]
-    pub const fn material(&self) -> &MaterialWorldRegisterV3 {
+    pub const fn material(&self) -> &MaterialWorldRegister {
         &self.material
     }
     #[must_use]
@@ -374,29 +359,29 @@ impl<G: GraphSubstrate + CanonicalState + AllocatorState + DetachedCopy>
     /// Hash the currently held graph and material world under the successor domain.
     /// # Errors
     /// Refuses invalid graph values or nominal component encoding.
-    pub fn current_world_hash(&self) -> Result<[u8; 32], MaterialReplayErrorV3> {
+    pub fn current_world_hash(&self) -> Result<[u8; 32], MaterialReplayError> {
         let graph = self.graph.graph();
         let hash = graph
             .state_hash()
-            .map_err(|_| MaterialReplayErrorV3::Identity)?;
+            .map_err(|_| MaterialReplayError::Identity)?;
         let nominal = crate::world_hash::nominal_world_hash(
             hash,
             self.graph.completed_tick(),
             graph.allocator_cursors(),
-            crate::phase_order::schedule_digest().map_err(|_| MaterialReplayErrorV3::Identity)?,
+            crate::phase_order::schedule_digest().map_err(|_| MaterialReplayError::Identity)?,
         )
-        .map_err(|_| MaterialReplayErrorV3::Identity)?;
-        Ok(nominal_material_world_hash_v3(nominal, &self.material))
+        .map_err(|_| MaterialReplayError::Identity)?;
+        Ok(nominal_material_world_hash(nominal, &self.material))
     }
     /// Prepare one exact interval, with prior commitments and routed freight governed by V2.
     /// # Errors
     /// Either component failure leaves both live owners and all sinks unchanged.
     pub fn prepare_advance(
         &self,
-        actions: &OrderedPracticeActionBatchV1,
-    ) -> Result<PreparedMaterialTickV3<G>, MaterialReplayErrorV3> {
+        actions: &OrderedPracticeActionBatch,
+    ) -> Result<PreparedMaterialTick<G>, MaterialReplayError> {
         if self.completed_tick() >= self.horizon {
-            return Err(MaterialReplayErrorV3::Horizon);
+            return Err(MaterialReplayError::Horizon);
         }
         let (graph, material) = self.graph.prepare_material_advance(
             actions,
@@ -405,13 +390,13 @@ impl<G: GraphSubstrate + CanonicalState + AllocatorState + DetachedCopy>
                 labor: &self.labor,
             },
         )?;
-        let identity = IdentifiedMaterialTickV3::compose(
+        let identity = IdentifiedMaterialTick::compose(
             self.foundation_digest,
             graph.report(),
             &self.material,
             &material,
         )?;
-        Ok(PreparedMaterialTickV3 {
+        Ok(PreparedMaterialTick {
             graph,
             material,
             identity,
@@ -423,51 +408,51 @@ impl<G: GraphSubstrate + CanonicalState + AllocatorState + DetachedCopy>
     pub fn commit_prepared_and_publish<E, F>(
         &mut self,
         sink: &mut CollectingSink,
-        prepared: PreparedMaterialTickV3<G>,
+        prepared: PreparedMaterialTick<G>,
         commit: F,
-    ) -> Result<(IdentifiedMaterialTickV3, ReplayCommitDispositionV1), MaterialCommitErrorV3<E>>
+    ) -> Result<(IdentifiedMaterialTick, ReplayCommitDisposition), MaterialCommitError<E>>
     where
-        F: FnOnce(&IdentifiedMaterialTickV3) -> Result<ReplayCommitDispositionV1, E>,
+        F: FnOnce(&IdentifiedMaterialTick) -> Result<ReplayCommitDisposition, E>,
     {
         if prepared.material.prior_digest() != self.material.digest()
             || prepared.identity.foundation_digest != self.foundation_digest
             || prepared.identity.resolve_tick != self.completed_tick().saturating_add(1)
         {
-            return Err(MaterialCommitErrorV3::Preflight(
-                MaterialReplayErrorV3::StaleCandidate,
+            return Err(MaterialCommitError::Preflight(
+                MaterialReplayError::StaleCandidate,
             ));
         }
         let (_, disposition) = self
             .graph
             .commit_prepared_and_publish(sink, prepared.graph, |_| commit(&prepared.identity))
             .map_err(|error| match error {
-                PreparedReplayCommitErrorV1::Preflight(error) => {
-                    MaterialCommitErrorV3::Preflight(MaterialReplayErrorV3::Graph(error))
+                PreparedReplayCommitError::Preflight(error) => {
+                    MaterialCommitError::Preflight(MaterialReplayError::Graph(error))
                 }
-                PreparedReplayCommitErrorV1::Commit(error) => MaterialCommitErrorV3::Commit(error),
+                PreparedReplayCommitError::Commit(error) => MaterialCommitError::Commit(error),
             })?;
         self.material = prepared.material.into_register();
         Ok((prepared.identity, disposition))
     }
 }
 
-impl MaterialReplaySessionV3<babylon_graph::hypergraph_store::HypergraphStore> {
+impl MaterialReplaySession<babylon_graph::hypergraph_store::HypergraphStore> {
     /// Restore checked component checkpoint sections under the exact pinned foundation.
     /// # Errors
     /// Every decode, tick or graph restore refusal leaves both live owners unchanged.
     pub fn restore_full_checkpoint(
         &mut self,
-        graph_state: &StableGraphStateV1,
-        graph_material: &MaterialStateRowsV1,
+        graph_state: &StableGraphState,
+        graph_material: &MaterialStateRows,
         graph_registers: &[u8],
         material_bytes: &[u8],
-    ) -> Result<(), MaterialReplayErrorV3> {
-        let material = MaterialWorldRegisterV3::decode(material_bytes)?;
+    ) -> Result<(), MaterialReplayError> {
+        let material = MaterialWorldRegister::decode(material_bytes)?;
         let tick = material.completed_tick();
         if tick == 0 || tick > self.horizon {
-            return Err(MaterialReplayErrorV3::Horizon);
+            return Err(MaterialReplayError::Horizon);
         }
-        let tick = i64::try_from(tick).map_err(|_| MaterialReplayErrorV3::Identity)?;
+        let tick = i64::try_from(tick).map_err(|_| MaterialReplayError::Identity)?;
         self.graph
             .restore_full_checkpoint(tick, graph_state, graph_material, graph_registers)?;
         self.material = material;

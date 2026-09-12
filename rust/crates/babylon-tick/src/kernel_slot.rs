@@ -6,12 +6,12 @@
 
 use std::collections::BTreeMap;
 
-use babylon_bsl::probability::FiniteKernelV1;
-use babylon_bsl::{read, Atom, SExpr};
+use babylon_bsl::probability::FiniteKernel;
+use babylon_bsl::{reader::read, reader::Atom, reader::SExpr};
 
 /// One borrowed permanent kernel-slot reservation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct KernelSlotReservationV1<'a> {
+pub struct KernelSlotReservationRef<'a> {
     /// Continuous global append-only position.
     pub ordinal: u32,
     /// Governed mechanic rule `QName`.
@@ -25,8 +25,8 @@ pub struct KernelSlotReservationV1<'a> {
 /// The built-in ledger compiled into the canonical runtime preparation path.
 /// Rows are never removed or reordered; genuinely new kernels append here and
 /// in `content/content-sets.toml` together.
-pub const BUNDLED_KERNEL_SLOT_RESERVATIONS_V1: &[KernelSlotReservationV1<'static>] =
-    &[KernelSlotReservationV1 {
+pub const BUNDLED_KERNEL_SLOT_RESERVATIONS: &[KernelSlotReservationRef<'static>] =
+    &[KernelSlotReservationRef {
         ordinal: 0,
         rule: "struggle/spark-mechanic",
         sample: "struggle/spark",
@@ -35,7 +35,7 @@ pub const BUNDLED_KERNEL_SLOT_RESERVATIONS_V1: &[KernelSlotReservationV1<'static
 
 /// Structural or live-kernel refusal from the permanent ledger.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum KernelSlotLedgerErrorV1 {
+pub enum KernelSlotLedgerError {
     /// A document position could not be represented by the governed ordinal.
     OrdinalCapacity { position: usize },
     /// A row ordinal did not equal its zero-based document position.
@@ -117,7 +117,7 @@ pub enum KernelSlotLedgerErrorV1 {
     },
 }
 
-impl std::fmt::Display for KernelSlotLedgerErrorV1 {
+impl std::fmt::Display for KernelSlotLedgerError {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::OrdinalCapacity { position } => write!(
@@ -221,36 +221,36 @@ impl std::fmt::Display for KernelSlotLedgerErrorV1 {
     }
 }
 
-impl std::error::Error for KernelSlotLedgerErrorV1 {}
+impl std::error::Error for KernelSlotLedgerError {}
 
 /// Exact relationship between one live kernel and a validated ledger.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum KernelSlotReservationMatchV1<'a> {
+pub enum KernelSlotReservationMatch<'a> {
     Exact,
     Missing,
     SampleMismatch {
-        reservation: KernelSlotReservationV1<'a>,
+        reservation: KernelSlotReservationRef<'a>,
     },
     SlotMismatch {
-        reservation: KernelSlotReservationV1<'a>,
+        reservation: KernelSlotReservationRef<'a>,
     },
     SampleMoved {
-        reservation: KernelSlotReservationV1<'a>,
+        reservation: KernelSlotReservationRef<'a>,
     },
 }
 
 /// Validate one complete append-only reservation ledger.
-pub fn validate_kernel_slot_ledger_v1(
-    reservations: &[KernelSlotReservationV1<'_>],
-) -> Result<(), KernelSlotLedgerErrorV1> {
+pub fn validate_kernel_slot_ledger(
+    reservations: &[KernelSlotReservationRef<'_>],
+) -> Result<(), KernelSlotLedgerError> {
     let mut bindings: BTreeMap<(String, u32), (String, u32)> = BTreeMap::new();
     let mut samples: BTreeMap<String, (String, u32, u32)> = BTreeMap::new();
     let mut next_slot_by_rule: BTreeMap<String, u64> = BTreeMap::new();
     for (position, reservation) in reservations.iter().enumerate() {
         let expected = u32::try_from(position)
-            .map_err(|_| KernelSlotLedgerErrorV1::OrdinalCapacity { position })?;
+            .map_err(|_| KernelSlotLedgerError::OrdinalCapacity { position })?;
         if reservation.ordinal != expected {
-            return Err(KernelSlotLedgerErrorV1::Ordinal {
+            return Err(KernelSlotLedgerError::Ordinal {
                 position,
                 expected,
                 actual: reservation.ordinal,
@@ -258,7 +258,7 @@ pub fn validate_kernel_slot_ledger_v1(
         }
         for (field, value) in [("rule", reservation.rule), ("sample", reservation.sample)] {
             if !is_canonical_qname(value) {
-                return Err(KernelSlotLedgerErrorV1::InvalidQName {
+                return Err(KernelSlotLedgerError::InvalidQName {
                     ordinal: reservation.ordinal,
                     field,
                     value: value.to_owned(),
@@ -268,7 +268,7 @@ pub fn validate_kernel_slot_ledger_v1(
         let key = (reservation.rule.to_owned(), reservation.slot);
         if let Some((existing_sample, first_ordinal)) = bindings.get(&key) {
             if existing_sample == reservation.sample {
-                return Err(KernelSlotLedgerErrorV1::Collision {
+                return Err(KernelSlotLedgerError::Collision {
                     rule: reservation.rule.to_owned(),
                     slot: reservation.slot,
                     sample: reservation.sample.to_owned(),
@@ -276,7 +276,7 @@ pub fn validate_kernel_slot_ledger_v1(
                     duplicate_ordinal: reservation.ordinal,
                 });
             }
-            return Err(KernelSlotLedgerErrorV1::Rebind {
+            return Err(KernelSlotLedgerError::Rebind {
                 rule: reservation.rule.to_owned(),
                 slot: reservation.slot,
                 existing_sample: existing_sample.clone(),
@@ -287,7 +287,7 @@ pub fn validate_kernel_slot_ledger_v1(
         }
         if let Some((existing_rule, existing_slot, first_ordinal)) = samples.get(reservation.sample)
         {
-            return Err(KernelSlotLedgerErrorV1::SampleCollision {
+            return Err(KernelSlotLedgerError::SampleCollision {
                 sample: reservation.sample.to_owned(),
                 existing_rule: existing_rule.clone(),
                 existing_slot: *existing_slot,
@@ -302,7 +302,7 @@ pub fn validate_kernel_slot_ledger_v1(
             .copied()
             .unwrap_or(0);
         if u64::from(reservation.slot) != expected_slot {
-            return Err(KernelSlotLedgerErrorV1::RuleSlotSequence {
+            return Err(KernelSlotLedgerError::RuleSlotSequence {
                 rule: reservation.rule.to_owned(),
                 expected: expected_slot,
                 actual: reservation.slot,
@@ -325,20 +325,20 @@ pub fn validate_kernel_slot_ledger_v1(
 
 /// Match one typed kernel against a structurally validated ledger.
 #[must_use]
-pub fn match_kernel_slot_reservation_v1<'a>(
-    reservations: &[KernelSlotReservationV1<'a>],
+pub fn match_kernel_slot_reservation<'a>(
+    reservations: &[KernelSlotReservationRef<'a>],
     rule: &str,
     sample: &str,
     slot: u32,
-) -> KernelSlotReservationMatchV1<'a> {
+) -> KernelSlotReservationMatch<'a> {
     if let Some(reservation) = reservations
         .iter()
         .find(|reservation| reservation.rule == rule && reservation.slot == slot)
     {
         return if reservation.sample == sample {
-            KernelSlotReservationMatchV1::Exact
+            KernelSlotReservationMatch::Exact
         } else {
-            KernelSlotReservationMatchV1::SampleMismatch {
+            KernelSlotReservationMatch::SampleMismatch {
                 reservation: *reservation,
             }
         };
@@ -347,15 +347,15 @@ pub fn match_kernel_slot_reservation_v1<'a>(
         .iter()
         .find(|reservation| reservation.rule == rule && reservation.sample == sample)
     {
-        return KernelSlotReservationMatchV1::SlotMismatch {
+        return KernelSlotReservationMatch::SlotMismatch {
             reservation: *reservation,
         };
     }
     reservations
         .iter()
         .find(|reservation| reservation.sample == sample)
-        .map_or(KernelSlotReservationMatchV1::Missing, |reservation| {
-            KernelSlotReservationMatchV1::SampleMoved {
+        .map_or(KernelSlotReservationMatch::Missing, |reservation| {
+            KernelSlotReservationMatch::SampleMoved {
                 reservation: *reservation,
             }
         })
@@ -363,23 +363,23 @@ pub fn match_kernel_slot_reservation_v1<'a>(
 
 /// Validate every live typed kernel against the permanent ledger. Historical
 /// reservations without a live kernel remain legal tombstones.
-pub fn validate_live_kernel_slots_v1(
-    reservations: &[KernelSlotReservationV1<'_>],
-    kernels: &[(&str, &FiniteKernelV1)],
-) -> Result<(), KernelSlotLedgerErrorV1> {
-    validate_kernel_slot_ledger_v1(reservations)?;
+pub fn validate_live_kernel_slots(
+    reservations: &[KernelSlotReservationRef<'_>],
+    kernels: &[(&str, &FiniteKernel)],
+) -> Result<(), KernelSlotLedgerError> {
+    validate_kernel_slot_ledger(reservations)?;
     for (rule, kernel) in kernels {
-        match match_kernel_slot_reservation_v1(reservations, rule, &kernel.sample, kernel.slot) {
-            KernelSlotReservationMatchV1::Exact => {}
-            KernelSlotReservationMatchV1::Missing => {
-                return Err(KernelSlotLedgerErrorV1::MissingLiveReservation {
+        match match_kernel_slot_reservation(reservations, rule, &kernel.sample, kernel.slot) {
+            KernelSlotReservationMatch::Exact => {}
+            KernelSlotReservationMatch::Missing => {
+                return Err(KernelSlotLedgerError::MissingLiveReservation {
                     rule: (*rule).to_owned(),
                     sample: kernel.sample.clone(),
                     slot: kernel.slot,
                 });
             }
-            KernelSlotReservationMatchV1::SampleMismatch { reservation } => {
-                return Err(KernelSlotLedgerErrorV1::LiveSampleMismatch {
+            KernelSlotReservationMatch::SampleMismatch { reservation } => {
+                return Err(KernelSlotLedgerError::LiveSampleMismatch {
                     rule: (*rule).to_owned(),
                     slot: kernel.slot,
                     expected_sample: reservation.sample.to_owned(),
@@ -387,8 +387,8 @@ pub fn validate_live_kernel_slots_v1(
                     ordinal: reservation.ordinal,
                 });
             }
-            KernelSlotReservationMatchV1::SlotMismatch { reservation } => {
-                return Err(KernelSlotLedgerErrorV1::LiveSlotMismatch {
+            KernelSlotReservationMatch::SlotMismatch { reservation } => {
+                return Err(KernelSlotLedgerError::LiveSlotMismatch {
                     rule: (*rule).to_owned(),
                     sample: kernel.sample.clone(),
                     expected_slot: reservation.slot,
@@ -396,8 +396,8 @@ pub fn validate_live_kernel_slots_v1(
                     ordinal: reservation.ordinal,
                 });
             }
-            KernelSlotReservationMatchV1::SampleMoved { reservation } => {
-                return Err(KernelSlotLedgerErrorV1::LiveSampleMoved {
+            KernelSlotReservationMatch::SampleMoved { reservation } => {
+                return Err(KernelSlotLedgerError::LiveSampleMoved {
                     sample: kernel.sample.clone(),
                     expected_rule: reservation.rule.to_owned(),
                     expected_slot: reservation.slot,
@@ -422,11 +422,11 @@ fn is_canonical_qname(value: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::{
-        match_kernel_slot_reservation_v1, validate_kernel_slot_ledger_v1, KernelSlotLedgerErrorV1,
-        KernelSlotReservationMatchV1, KernelSlotReservationV1,
+        match_kernel_slot_reservation, validate_kernel_slot_ledger, KernelSlotLedgerError,
+        KernelSlotReservationMatch, KernelSlotReservationRef,
     };
 
-    const FIRST: KernelSlotReservationV1<'static> = KernelSlotReservationV1 {
+    const FIRST: KernelSlotReservationRef<'static> = KernelSlotReservationRef {
         ordinal: 0,
         rule: "struggle/spark-mechanic",
         sample: "struggle/spark",
@@ -436,46 +436,46 @@ mod tests {
     #[test]
     fn retained_historical_rows_and_exact_live_matches_are_legal() {
         let rows = [FIRST];
-        validate_kernel_slot_ledger_v1(&rows).unwrap();
+        validate_kernel_slot_ledger(&rows).unwrap();
         assert_eq!(
-            match_kernel_slot_reservation_v1(&rows, "struggle/spark-mechanic", "struggle/spark", 0),
-            KernelSlotReservationMatchV1::Exact
+            match_kernel_slot_reservation(&rows, "struggle/spark-mechanic", "struggle/spark", 0),
+            KernelSlotReservationMatch::Exact
         );
     }
 
     #[test]
     fn deletion_reorder_gap_rebind_and_sample_move_are_typed() {
-        let ordinal_gap = [KernelSlotReservationV1 {
+        let ordinal_gap = [KernelSlotReservationRef {
             ordinal: 1,
             ..FIRST
         }];
         assert!(matches!(
-            validate_kernel_slot_ledger_v1(&ordinal_gap),
-            Err(KernelSlotLedgerErrorV1::Ordinal { .. })
+            validate_kernel_slot_ledger(&ordinal_gap),
+            Err(KernelSlotLedgerError::Ordinal { .. })
         ));
 
-        let slot_gap = [KernelSlotReservationV1 { slot: 1, ..FIRST }];
+        let slot_gap = [KernelSlotReservationRef { slot: 1, ..FIRST }];
         assert!(matches!(
-            validate_kernel_slot_ledger_v1(&slot_gap),
-            Err(KernelSlotLedgerErrorV1::RuleSlotSequence { .. })
+            validate_kernel_slot_ledger(&slot_gap),
+            Err(KernelSlotLedgerError::RuleSlotSequence { .. })
         ));
 
         let rebind = [
             FIRST,
-            KernelSlotReservationV1 {
+            KernelSlotReservationRef {
                 ordinal: 1,
                 sample: "struggle/rebound",
                 ..FIRST
             },
         ];
         assert!(matches!(
-            validate_kernel_slot_ledger_v1(&rebind),
-            Err(KernelSlotLedgerErrorV1::Rebind { .. })
+            validate_kernel_slot_ledger(&rebind),
+            Err(KernelSlotLedgerError::Rebind { .. })
         ));
 
         let moved = [
             FIRST,
-            KernelSlotReservationV1 {
+            KernelSlotReservationRef {
                 ordinal: 1,
                 rule: "struggle/other",
                 sample: FIRST.sample,
@@ -483,8 +483,8 @@ mod tests {
             },
         ];
         assert!(matches!(
-            validate_kernel_slot_ledger_v1(&moved),
-            Err(KernelSlotLedgerErrorV1::SampleCollision { .. })
+            validate_kernel_slot_ledger(&moved),
+            Err(KernelSlotLedgerError::SampleCollision { .. })
         ));
     }
 }

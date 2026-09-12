@@ -129,17 +129,6 @@ layouts:
     length: replay_session_bytes
   replay_seed:
     fields: [signed_i64]
-  rng_v1:
-    byte_order: little-endian
-    key_preimage:
-      - session_bytes
-      - tick_u64
-      - salt_u64
-      - domain_length_u64
-      - domain_bytes
-      - carrier_length_u64
-      - carrier_bytes
-    salt_u64: 195144730
   rng_v2:
     domain_hex: 626162796c6f6e2e726e672d73747265616d00
     layout_u32: 2
@@ -152,7 +141,6 @@ layouts:
       - {tag: 5, value: stable_carrier_key_v2_bytes32}
     stream: ChaCha8 with a 64-bit block counter and zero stream id
     next_u64: two consecutive little-endian u32 output words
-    next_f64: top 53 bits of next_u64 multiplied by 2^-53
   stable_element_v1:
     domain_ascii_nul: babylon.stable-element
     layout_u32: 1
@@ -287,7 +275,7 @@ layouts:
         body: event_count_u32 then event_name_str32, payload_count_u32, label_str32, ValueV1 rows
         order: executable_arrival_and_source_pair_order
       - tag: 3
-        body: receipt_count_u32 then rule_qname_str32, RuleRoleV1, EvidenceClassV1, ordinal_u32, EffectSignatureV1 rows
+        body: receipt_count_u32 then rule_qname_str32, RuleRole, EvidenceClass, ordinal_u32, EffectSignature rows
         order: published_receipt_order
       - {tag: 4, body: accepted_action_outcome_count_u16, exact_value: 0}
   tick_content_hash_v1:
@@ -369,7 +357,6 @@ vector_families:
   required:
     - replay_session
     - replay_seed
-    - rng_v1
     - rng_v2
     - stable_element
     - carrier_segment
@@ -389,7 +376,6 @@ vector_families:
     - refusal
 
 preserved_contracts:
-  - RNG V1 byte derivation and stream vectors
   - Practice V2 contract vector corpora
   - P27 frozen Python bytes and behavior
 

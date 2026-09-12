@@ -4,8 +4,10 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write as _;
 
 use babylon_persistence::{
-    ProductionFreightCapacityAccountV2, ProductionFreightCapacityOrderV2,
-    ProductionFreightReservationV2, ProductionRouteV2, ProductionSiteV2, ProductionSnapshotV2,
+    production_observation::ProductionFreightCapacityAccount,
+    production_observation::ProductionFreightCapacityOrder,
+    production_observation::ProductionFreightReservation, production_observation::ProductionRoute,
+    production_observation::ProductionSite, production_observation::ProductionSnapshot,
 };
 
 /// Capacity mass is displayed in kilograms without rounding away gram residuals.
@@ -21,9 +23,9 @@ pub(crate) fn format_freight_mass(grams: u64) -> String {
 }
 
 fn participating_routes<'a>(
-    account: &ProductionFreightCapacityAccountV2,
-    snapshot: &'a ProductionSnapshotV2,
-) -> Vec<&'a ProductionRouteV2> {
+    account: &ProductionFreightCapacityAccount,
+    snapshot: &'a ProductionSnapshot,
+) -> Vec<&'a ProductionRoute> {
     let mut routes: Vec<_> = snapshot
         .routes
         .iter()
@@ -50,9 +52,9 @@ fn participating_routes<'a>(
 /// A shared principal is shown once, independent of how many routes use it.
 /// Both endpoints must belong to this observation before a route is named.
 pub(crate) fn shared_accounts<'a>(
-    snapshot: &'a ProductionSnapshotV2,
+    snapshot: &'a ProductionSnapshot,
     selected_site: Option<&str>,
-) -> Vec<&'a ProductionFreightCapacityAccountV2> {
+) -> Vec<&'a ProductionFreightCapacityAccount> {
     let disclosed: BTreeSet<_> = snapshot.sites.iter().map(|site| site.id.as_str()).collect();
     let routes: BTreeMap<_, _> = snapshot
         .routes
@@ -67,7 +69,9 @@ pub(crate) fn shared_accounts<'a>(
         .freight_capacity_accounts
         .iter()
         .filter(|account| {
-            if account.kind != babylon_persistence::ProductionCapacityKindV2::Transport {
+            if account.kind
+                != babylon_persistence::production_observation::ProductionCapacityKind::Transport
+            {
                 return false;
             }
             let participants: Vec<_> = account
@@ -96,7 +100,7 @@ pub(crate) fn shared_accounts<'a>(
     accounts
 }
 
-fn route_label(route: &ProductionRouteV2, snapshot: &ProductionSnapshotV2) -> String {
+fn route_label(route: &ProductionRoute, snapshot: &ProductionSnapshot) -> String {
     let name = |id: &str| {
         snapshot
             .sites
@@ -117,7 +121,7 @@ fn route_label(route: &ProductionRouteV2, snapshot: &ProductionSnapshotV2) -> St
 
 /// The relationship rail keeps the capacity principal visible; full route
 /// accounts live in the Freight reading.
-pub(crate) fn account_brief(account: &ProductionFreightCapacityAccountV2) -> String {
+pub(crate) fn account_brief(account: &ProductionFreightCapacityAccount) -> String {
     let mut output = format!("{}\n", account.corridor_label);
     if let Some(completed) = &account.completed {
         for reservation in &completed.reservations {
@@ -148,8 +152,8 @@ pub(crate) fn account_brief(account: &ProductionFreightCapacityAccountV2) -> Str
 }
 
 pub(crate) fn account_reading(
-    account: &ProductionFreightCapacityAccountV2,
-    snapshot: &ProductionSnapshotV2,
+    account: &ProductionFreightCapacityAccount,
+    snapshot: &ProductionSnapshot,
 ) -> String {
     let mut output = format!("{}\n", account.corridor_label);
     let routes = participating_routes(account, snapshot);
@@ -221,8 +225,8 @@ pub(crate) fn account_reading(
 /// Competition links are separate from the supplier/buyer relation graph.
 pub(crate) fn competitor_sites<'a>(
     site_id: &str,
-    snapshot: &'a ProductionSnapshotV2,
-) -> Vec<&'a ProductionSiteV2> {
+    snapshot: &'a ProductionSnapshot,
+) -> Vec<&'a ProductionSite> {
     let route_ids: BTreeSet<_> = shared_accounts(snapshot, Some(site_id))
         .into_iter()
         .flat_map(|account| &account.route_ids)
@@ -244,7 +248,7 @@ pub(crate) fn competitor_sites<'a>(
         .collect()
 }
 
-fn order_key(order: &ProductionFreightCapacityOrderV2) -> (&str, Option<&str>, &str, &str) {
+fn order_key(order: &ProductionFreightCapacityOrder) -> (&str, Option<&str>, &str, &str) {
     (
         &order.order_id,
         order.route_id.as_deref(),
@@ -269,12 +273,12 @@ fn capacity_pair(output: &mut String, label: &str, current: u64, compared: u64) 
 
 fn compare_orders(
     output: &mut String,
-    r_a: &ProductionFreightReservationV2,
-    r_b: &ProductionFreightReservationV2,
-    current: &ProductionSnapshotV2,
-    compared: &ProductionSnapshotV2,
-    a: &ProductionFreightCapacityAccountV2,
-    b: &ProductionFreightCapacityAccountV2,
+    r_a: &ProductionFreightReservation,
+    r_b: &ProductionFreightReservation,
+    current: &ProductionSnapshot,
+    compared: &ProductionSnapshot,
+    a: &ProductionFreightCapacityAccount,
+    b: &ProductionFreightCapacityAccount,
 ) {
     let orders: BTreeSet<_> = r_a
         .orders
@@ -340,8 +344,8 @@ fn compare_orders(
 
 fn compare_reservation_capacity(
     output: &mut String,
-    r_a: &ProductionFreightReservationV2,
-    r_b: &ProductionFreightReservationV2,
+    r_a: &ProductionFreightReservation,
+    r_b: &ProductionFreightReservation,
 ) {
     for (label, current_value, compared_value) in [
         (
@@ -366,8 +370,8 @@ fn compare_reservation_capacity(
 
 fn capacity_changed(
     period: u64,
-    current: &ProductionFreightCapacityAccountV2,
-    compared: &ProductionFreightCapacityAccountV2,
+    current: &ProductionFreightCapacityAccount,
+    compared: &ProductionFreightCapacityAccount,
 ) -> bool {
     if current.next_opening_period == compared.next_opening_period
         && current.next_opening_available_grams != compared.next_opening_available_grams
@@ -390,8 +394,8 @@ fn capacity_changed(
 
 fn comparison_keys<'a>(
     period: u64,
-    left: &[&'a ProductionFreightCapacityAccountV2],
-    right: &[&'a ProductionFreightCapacityAccountV2],
+    left: &[&'a ProductionFreightCapacityAccount],
+    right: &[&'a ProductionFreightCapacityAccount],
 ) -> Vec<&'a str> {
     let left: BTreeMap<_, _> = left.iter().map(|a| (a.corridor_id.as_str(), *a)).collect();
     let right: BTreeMap<_, _> = right.iter().map(|a| (a.corridor_id.as_str(), *a)).collect();
@@ -414,8 +418,8 @@ fn comparison_keys<'a>(
 
 pub(crate) fn comparison_reading(
     period: u64,
-    current: &ProductionSnapshotV2,
-    compared: &ProductionSnapshotV2,
+    current: &ProductionSnapshot,
+    compared: &ProductionSnapshot,
     selected_site: Option<&str>,
 ) -> String {
     let left = shared_accounts(current, selected_site);
@@ -426,7 +430,7 @@ pub(crate) fn comparison_reading(
         output.push_str("Six shared capacity pools shown, with capacity changes first.\n");
     }
     for corridor_id in keys.into_iter().take(6) {
-        let find = |accounts: &[&ProductionFreightCapacityAccountV2]| {
+        let find = |accounts: &[&ProductionFreightCapacityAccount]| {
             accounts
                 .iter()
                 .position(|account| account.corridor_id == corridor_id)
@@ -501,37 +505,42 @@ pub(crate) fn comparison_reading(
 pub(crate) mod tests {
     use super::*;
     use babylon_persistence::{
-        CompletedProductionFreightCapacityV2, ProductionFreightCapacityAccountV2,
-        ProductionFreightCapacityOrderV2, ProductionFreightReservationV2, ProductionRouteStageV2,
-        ProductionRouteV2, ProductionSiteV2, ProductionSnapshotV2,
+        production_observation::CompletedProductionFreightCapacity,
+        production_observation::ProductionFreightCapacityAccount,
+        production_observation::ProductionFreightCapacityOrder,
+        production_observation::ProductionFreightReservation,
+        production_observation::ProductionRoute, production_observation::ProductionRouteStage,
+        production_observation::ProductionSite, production_observation::ProductionSnapshot,
     };
 
-    pub(crate) fn fixture() -> ProductionSnapshotV2 {
+    pub(crate) fn fixture() -> ProductionSnapshot {
         let sites = ["steel", "panels", "mill", "meals"]
             .into_iter()
-            .map(|id| ProductionSiteV2 {
+            .map(|id| ProductionSite {
                 id: id.into(),
                 county_geoid: "26163".into(),
                 name: id.into(),
                 industry_code: "331".into(),
                 observed_employment: None,
                 inventory: Vec::new(),
-                role: babylon_persistence::ProductionSiteRoleV2::Production,
+                role: babylon_persistence::production_observation::ProductionSiteRole::Production,
                 sector_code: "31-33".into(),
-                processes: vec![babylon_persistence::ProductionProcessV2 {
-                    id: "fixture-process".into(),
-                    name: "Fixture process".into(),
-                    output_good_id: id.into(),
-                    output_unit_id: "kg".into(),
-                    output_good: id.into(),
-                    output_unit: "kg".into(),
-                    output_per_batch: 1,
-                    available_batches: 1,
-                    planned_batches: Some(1),
-                    produced_batches: Some(1),
-                    inputs: Vec::new(),
-                    labor: Vec::new(),
-                }],
+                processes: vec![
+                    babylon_persistence::production_observation::ProductionProcess {
+                        id: "fixture-process".into(),
+                        name: "Fixture process".into(),
+                        output_good_id: id.into(),
+                        output_unit_id: "kg".into(),
+                        output_good: id.into(),
+                        output_unit: "kg".into(),
+                        output_per_batch: 1,
+                        available_batches: 1,
+                        planned_batches: Some(1),
+                        produced_batches: Some(1),
+                        inputs: Vec::new(),
+                        labor: Vec::new(),
+                    },
+                ],
             })
             .collect();
         let routes = [
@@ -539,35 +548,34 @@ pub(crate) mod tests {
             ("meal", "mill", "meals", 200, 40),
         ]
         .into_iter()
-        .map(
-            |(id, supplier, buyer, ordered, shipped)| ProductionRouteV2 {
-                physical_edge_ids: Vec::new(),
-                distance_mm: None,
-                transport_kind: babylon_persistence::ProductionRouteTransportV2::Staged,
-                grams_per_unit: 1000,
-                id: id.into(),
-                supplier_site_id: supplier.into(),
-                buyer_site_id: buyer.into(),
-                good_id: id.into(),
-                unit_id: "kg".into(),
-                good: id.into(),
-                unit: "kg".into(),
+        .map(|(id, supplier, buyer, ordered, shipped)| ProductionRoute {
+            physical_edge_ids: Vec::new(),
+            distance_mm: None,
+            transport_kind:
+                babylon_persistence::production_observation::ProductionRouteTransport::Staged,
+            grams_per_unit: 1000,
+            id: id.into(),
+            supplier_site_id: supplier.into(),
+            buyer_site_id: buyer.into(),
+            good_id: id.into(),
+            unit_id: "kg".into(),
+            good: id.into(),
+            unit: "kg".into(),
+            travel_periods: 1,
+            ordered,
+            shipped,
+            delivered: 0,
+            lost: 0,
+            realized: 0,
+            backlog: ordered - shipped,
+            stages: vec![ProductionRouteStage {
+                stage_index: 0,
+                capacity_ids: vec!["pool".into()],
                 travel_periods: 1,
-                ordered,
-                shipped,
-                delivered: 0,
-                lost: 0,
-                realized: 0,
-                backlog: ordered - shipped,
-                stages: vec![ProductionRouteStageV2 {
-                    stage_index: 0,
-                    capacity_ids: vec!["pool".into()],
-                    travel_periods: 1,
-                }],
-            },
-        )
+            }],
+        })
         .collect();
-        ProductionSnapshotV2 {
+        ProductionSnapshot {
             content_authority_sha256: "a".repeat(64),
             road_source: None,
             physical_edges: Vec::new(),
@@ -589,18 +597,18 @@ pub(crate) mod tests {
         }
     }
 
-    fn capacity_fixture() -> ProductionFreightCapacityAccountV2 {
-        ProductionFreightCapacityAccountV2 {
+    fn capacity_fixture() -> ProductionFreightCapacityAccount {
+        ProductionFreightCapacityAccount {
             corridor_id: "pool".into(),
             corridor_label: "Designed regional freight pool".into(),
-            kind: babylon_persistence::ProductionCapacityKindV2::Transport,
+            kind: babylon_persistence::production_observation::ProductionCapacityKind::Transport,
             merchant_site_ids: Vec::new(),
             route_ids: vec!["sheets".into(), "meal".into()],
             next_opening_period: 2,
             next_opening_available_grams: 160_000,
-            completed: Some(CompletedProductionFreightCapacityV2 {
+            completed: Some(CompletedProductionFreightCapacity {
                 period: 1,
-                reservations: vec![ProductionFreightReservationV2 {
+                reservations: vec![ProductionFreightReservation {
                     reservation_period: 1,
                     opening_available_grams: 160_000,
                     newly_reserved_grams: 160_000,
@@ -608,10 +616,10 @@ pub(crate) mod tests {
                     orders: [("sheets", 600, 120), ("meal", 200, 40)]
                         .into_iter()
                         .map(
-                            |(id, requested, dispatched)| ProductionFreightCapacityOrderV2 {
+                            |(id, requested, dispatched)| ProductionFreightCapacityOrder {
                                 order_id: format!("order-{id}"),
                                 route_id: Some(id.into()),
-                                kind: babylon_persistence::ProductionOutboundKindV2::Delivery,
+                                kind: babylon_persistence::production_observation::ProductionOutboundKind::Delivery,
                                 supplier_site_id: if id == "sheets" {
                                     "steel".into()
                                 } else {

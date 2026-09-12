@@ -233,13 +233,13 @@ use babylon_bsl::scenario::load_scenario;
 use babylon_bsl::structural_verbs::CollectingSink;
 use babylon_graph::hypergraph_store::HypergraphStore;
 use babylon_graph::substrate::{GraphSubstrate, NodeId};
-use babylon_kernel::SessionId;
-use babylon_tick::{run_once_into, TickSession};
+use babylon_kernel::replay::ReplaySessionId;
+use babylon_tick::{diagnostic::RuleDiagnosticSession, run_once_into};
 
 /// Fixed deterministic V1 namespace for this file's non-kernel
-/// `TickSession` fixtures.
-fn test_session() -> SessionId {
-    SessionId::new("decomposition-conformance-test").expect("literal is non-empty")
+/// `RuleDiagnosticSession` fixtures.
+fn test_session() -> ReplaySessionId {
+    ReplaySessionId::try_from("decomposition-conformance-test").expect("literal is non-empty")
 }
 
 const SCENARIO: &str = include_str!("../content/scenarios/decomposition-conformance.bscn");
@@ -592,7 +592,7 @@ fn p03_computes_the_frozen_splits() {
 /// census fold) — a second tick over a world with no tick-2 input change
 /// must NOT move `decomposition-fire-tick` off tick 1, mirroring the frozen
 /// `if persistent.get("_decomposition_complete"): return` early exit
-/// (`decomposition.py:129-130`). `TickSession::advance` idiom,
+/// (`decomposition.py:129-130`). `RuleDiagnosticSession::advance` idiom,
 /// `production_conformance.rs::p0_reset_keeps_extraction_intensity_stable_
 /// across_two_ticks`'s own precedent. THIS test, not a dedicated mutation,
 /// is what proves the `decomposition-complete == 0` conjunct is
@@ -601,8 +601,15 @@ fn p03_computes_the_frozen_splits() {
 /// assertion catches.
 #[test]
 fn p03_is_idempotent_across_two_ticks() {
-    let mut session = TickSession::new(SCENARIO, RULE, HypergraphStore::new(), test_session())
-        .expect("the pack must load into a session");
+    let mut session = RuleDiagnosticSession::new(
+        SCENARIO,
+        None,
+        RULE,
+        HypergraphStore::new(),
+        test_session(),
+        babylon_kernel::replay::ReplaySeed::new(0),
+    )
+    .expect("the pack must load into a session");
     let mut sink = CollectingSink::default();
     session.advance(&mut sink).expect("tick 1");
     let fire_tick_after_1 = attribute(
@@ -799,9 +806,15 @@ fn the_bourgeois_class_is_untouched_by_the_whole_pack() {
 /// here since this world's OWN trigger tick is 53, not 1.
 #[test]
 fn the_delay_path_emits_the_warning_at_tick_1_and_decomposes_at_tick_53() {
-    let mut session =
-        TickSession::new(DELAY_SCENARIO, RULE, HypergraphStore::new(), test_session())
-            .expect("the delay scenario must load into a session");
+    let mut session = RuleDiagnosticSession::new(
+        DELAY_SCENARIO,
+        None,
+        RULE,
+        HypergraphStore::new(),
+        test_session(),
+        babylon_kernel::replay::ReplaySeed::new(0),
+    )
+    .expect("the delay scenario must load into a session");
 
     let mut sink1 = CollectingSink::default();
     session.advance(&mut sink1).expect("tick 1");
@@ -884,9 +897,15 @@ fn the_delay_path_emits_the_warning_at_tick_1_and_decomposes_at_tick_53() {
 /// catches it where the lifecycle test's tick-53 check alone would not).
 #[test]
 fn the_delay_path_does_not_decompose_at_tick_52() {
-    let mut session =
-        TickSession::new(DELAY_SCENARIO, RULE, HypergraphStore::new(), test_session())
-            .expect("the delay scenario must load into a session");
+    let mut session = RuleDiagnosticSession::new(
+        DELAY_SCENARIO,
+        None,
+        RULE,
+        HypergraphStore::new(),
+        test_session(),
+        babylon_kernel::replay::ReplaySeed::new(0),
+    )
+    .expect("the delay scenario must load into a session");
     let mut sink = CollectingSink::default();
     for _ in 1..=52 {
         session.advance(&mut sink).expect("tick");
@@ -930,9 +949,15 @@ fn the_delay_path_does_not_decompose_at_tick_52() {
 /// precedent, applied to the census pack.
 #[test]
 fn p01_la_inactive_contributes_nothing_to_the_census() {
-    let mut session =
-        TickSession::new(DELAY_SCENARIO, RULE, HypergraphStore::new(), test_session())
-            .expect("the delay scenario must load into a session");
+    let mut session = RuleDiagnosticSession::new(
+        DELAY_SCENARIO,
+        None,
+        RULE,
+        HypergraphStore::new(),
+        test_session(),
+        babylon_kernel::replay::ReplaySeed::new(0),
+    )
+    .expect("the delay scenario must load into a session");
     let mut sink = CollectingSink::default();
     session.advance(&mut sink).expect("tick 1");
     for field in [

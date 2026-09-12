@@ -4,7 +4,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use babylon_persistence::ProductionSnapshotV2;
+use babylon_persistence::production_observation::ProductionSnapshot;
 use bevy::prelude::{Rect, Vec2, Vec3};
 
 use crate::production_brief::{dependency_sites, DependencyDirection};
@@ -19,7 +19,7 @@ pub(crate) struct ProductionLayout {
 
 impl ProductionLayout {
     pub(crate) fn focused(
-        snapshot: &ProductionSnapshotV2,
+        snapshot: &ProductionSnapshot,
         selected: Option<&str>,
         page: usize,
     ) -> Self {

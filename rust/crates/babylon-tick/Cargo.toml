@@ -11,9 +11,8 @@ publish = false
 babylon-bsl = { path = "../babylon-bsl" }
 babylon-graph = { path = "../babylon-graph" }
 babylon-material-circuit = { path = "../babylon-material-circuit" }
-# TickSession's deterministic V1 execution namespace and ReplayTickSession's
-# governed V2 replay identity are direct production dependencies. Finite
-# choices are legal only through the latter; BSL has no author-visible draw.
+# Diagnostics and committed replay use the same explicit seeded RNG identity.
+# BSL has no author-visible draw.
 babylon-kernel = { path = "../babylon-kernel" }
 babylon-practice-contract = { path = "../babylon-practice-contract" }
 

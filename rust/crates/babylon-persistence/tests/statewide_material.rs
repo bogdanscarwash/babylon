@@ -3,37 +3,36 @@
 
 use babylon_bsl::structural_verbs::CollectingSink;
 use babylon_graph::hypergraph_store::HypergraphStore;
-use babylon_kernel::sha256_of;
+use babylon_kernel::content_digest::sha256_of;
 use babylon_material_circuit::{
-    GoodIdV1, MaterialCircuitStateV3, MerchantRoleV3, OrderIdV1, SiteIdV1, UnitIdV1,
-    MAX_MATERIAL_CIRCUIT_ROWS_V1,
+    GoodId, MaterialCircuitState, MerchantRole, OrderId, SiteId, UnitId, MAX_MATERIAL_CIRCUIT_ROWS,
 };
 use babylon_persistence::{
-    michigan_content::{admit_michigan_content_v1, MichiganContentPresetV1},
+    michigan_content::{admit_michigan_content, MichiganContentPreset},
     michigan_material::{
-        MichiganDeliveryPresetV1, MichiganMaterialCatalogV1, MAX_MICHIGAN_CAPTURED_CONTENT_BYTES_V2,
+        MichiganDeliveryPreset, MichiganMaterialCatalog, MAX_MICHIGAN_CAPTURED_CONTENT_BYTES,
     },
 };
-use babylon_practice_contract::ordered_action_v1::OrderedPracticeActionBatchV1;
+use babylon_practice_contract::OrderedPracticeActionBatch;
 use babylon_tick::{
-    material_replay::{MaterialReplayErrorV3, MaterialReplaySessionV3, PreparedMaterialTickV3},
+    material_replay::{MaterialReplayError, MaterialReplaySession, PreparedMaterialTick},
     material_world::{
-        decode_material_receipts_v4, MaterialTickReceiptsV4, MaterialWorldRegisterV3,
-        MAX_MATERIAL_WORLD_REGISTER_BYTES_V3,
+        decode_material_receipts, MaterialTickReceipts, MaterialWorldRegister,
+        MAX_MATERIAL_WORLD_REGISTER_BYTES,
     },
-    replay_session::ReplayCommitDispositionV1,
+    replay_session::ReplayCommitDisposition,
 };
 use std::{collections::BTreeMap, time::Instant};
 
-type Session = MaterialReplaySessionV3<HypergraphStore>;
-type Goods = BTreeMap<(GoodIdV1, UnitIdV1), u128>;
+type Session = MaterialReplaySession<HypergraphStore>;
+type Goods = BTreeMap<(GoodId, UnitId), u128>;
 
 #[path = "fixtures/statewide_synthetic.rs"]
 mod synthetic;
 
 #[test]
 fn physical_paths_require_all_overlapping_capacity_memberships_and_preserve_identity() {
-    use babylon_persistence::michigan_material::MichiganMaterialPathV2;
+    use babylon_persistence::michigan_material::MichiganMaterialPath;
     let fixture = synthetic::load();
     let qualification = serde_json::to_vec(&fixture.qualification).unwrap();
     let mut physical = fixture.physical;
@@ -42,7 +41,7 @@ fn physical_paths_require_all_overlapping_capacity_memberships_and_preserve_iden
     overlap.label = "Second Designed road service".to_owned();
     physical.capacity_groups.push(overlap);
     let compile = |network| {
-        MichiganMaterialCatalogV1::from_statewide_qualification(
+        MichiganMaterialCatalog::from_statewide_qualification(
             include_str!("../../../../content/scenarios/michigan/defines.toml"),
             &qualification,
             network,
@@ -52,7 +51,7 @@ fn physical_paths_require_all_overlapping_capacity_memberships_and_preserve_iden
     let catalog = compile(physical.clone()).unwrap();
     let mut routed = 0;
     for route in catalog.routes() {
-        if let MichiganMaterialPathV2::Routed { capacity_keys, .. } = &route.path {
+        if let MichiganMaterialPath::Routed { capacity_keys, .. } = &route.path {
             assert_eq!(
                 capacity_keys,
                 &["second-shared-road-service", "synthetic-shared-road"]
@@ -77,8 +76,8 @@ fn physical_paths_require_all_overlapping_capacity_memberships_and_preserve_iden
     );
 }
 
-fn prepare(session: &Session) -> PreparedMaterialTickV3<HypergraphStore> {
-    let actions = OrderedPracticeActionBatchV1::empty(
+fn prepare(session: &Session) -> PreparedMaterialTick<HypergraphStore> {
+    let actions = OrderedPracticeActionBatch::empty(
         session.graph_session().session_identity().clone(),
         session.completed_tick() + 1,
     )
@@ -86,7 +85,7 @@ fn prepare(session: &Session) -> PreparedMaterialTickV3<HypergraphStore> {
     session.prepare_advance(&actions).unwrap()
 }
 
-fn stock_and_transit(state: &MaterialCircuitStateV3) -> Goods {
+fn stock_and_transit(state: &MaterialCircuitState) -> Goods {
     let mut totals = Goods::new();
     for row in &state.inventory {
         *totals.entry((row.good_id, row.unit_id)).or_default() += u128::from(row.quantity);
@@ -98,9 +97,9 @@ fn stock_and_transit(state: &MaterialCircuitStateV3) -> Goods {
 }
 
 fn assert_goods_conserved(
-    opening: &MaterialCircuitStateV3,
-    closing: &MaterialCircuitStateV3,
-    receipts: &MaterialTickReceiptsV4,
+    opening: &MaterialCircuitState,
+    closing: &MaterialCircuitState,
+    receipts: &MaterialTickReceipts,
 ) {
     let mut available = stock_and_transit(opening);
     let mut accounted = stock_and_transit(closing);
@@ -148,10 +147,10 @@ fn assert_goods_conserved(
 }
 
 fn assert_order_accounts(
-    opening: &MaterialCircuitStateV3,
-    state: &MaterialCircuitStateV3,
-    receipts: &MaterialTickReceiptsV4,
-    fulfilled: &mut BTreeMap<OrderIdV1, u128>,
+    opening: &MaterialCircuitState,
+    state: &MaterialCircuitState,
+    receipts: &MaterialTickReceipts,
+    fulfilled: &mut BTreeMap<OrderId, u128>,
 ) {
     for receipt in &receipts.local_fulfillments {
         let order = state
@@ -201,11 +200,8 @@ fn assert_order_accounts(
     }
 }
 
-fn assert_opening_labor_limits(
-    opening: &MaterialCircuitStateV3,
-    receipts: &MaterialTickReceiptsV4,
-) {
-    let mut used: BTreeMap<(SiteIdV1, UnitIdV1), u128> = BTreeMap::new();
+fn assert_opening_labor_limits(opening: &MaterialCircuitState, receipts: &MaterialTickReceipts) {
+    let mut used: BTreeMap<(SiteId, UnitId), u128> = BTreeMap::new();
     for receipt in &receipts.production {
         let coefficient = opening
             .labor_coefficients
@@ -240,7 +236,7 @@ fn assert_opening_labor_limits(
     }
 }
 
-fn maximum_row_count(state: &MaterialCircuitStateV3) -> usize {
+fn maximum_row_count(state: &MaterialCircuitState) -> usize {
     [
         state.site_logistics_nodes.len(),
         state.process_outputs.len(),
@@ -279,7 +275,7 @@ fn synthetic_statewide_roster_completes_sixteen_authenticated_periods_with_nativ
     assert_eq!(catalog.final_demands().len(), 233);
     assert_eq!(catalog.staffing().pools.len(), 397);
     assert!(catalog.routes().len() > 500);
-    assert!(catalog.defines_bytes().len() < MAX_MICHIGAN_CAPTURED_CONTENT_BYTES_V2);
+    assert!(catalog.defines_bytes().len() < MAX_MICHIGAN_CAPTURED_CONTENT_BYTES);
     let (mut session, foundation_bytes) = captured_session(&catalog);
     let compile_time = started.elapsed();
     let mut fulfilled = BTreeMap::new();
@@ -293,11 +289,11 @@ fn synthetic_statewide_roster_completes_sixteen_authenticated_periods_with_nativ
         let prepared = prepare(&session);
         let bytes = prepared.material().receipt_bytes();
         assert_eq!(sha256_of(bytes), prepared.identity().receipt_digest());
-        let receipts = decode_material_receipts_v4(bytes).unwrap();
+        let receipts = decode_material_receipts(bytes).unwrap();
         assert_eq!(receipts.resolve_tick, period);
         let register = prepared.material().register();
         assert_eq!(
-            MaterialWorldRegisterV3::decode(register.canonical_bytes()).unwrap(),
+            MaterialWorldRegister::decode(register.canonical_bytes()).unwrap(),
             *register
         );
         maximum_register_bytes = maximum_register_bytes.max(register.canonical_bytes().len());
@@ -315,13 +311,13 @@ fn synthetic_statewide_roster_completes_sixteen_authenticated_periods_with_nativ
         local_count += receipts.local_transfers.len();
         session
             .commit_prepared_and_publish(&mut CollectingSink::default(), prepared, |_| {
-                Ok::<_, ()>(ReplayCommitDispositionV1::Committed)
+                Ok::<_, ()>(ReplayCommitDisposition::Committed)
             })
             .unwrap();
     }
-    assert!(maximum_register_bytes < MAX_MATERIAL_WORLD_REGISTER_BYTES_V3);
-    assert!(maximum_receipt_bytes < MAX_MATERIAL_WORLD_REGISTER_BYTES_V3);
-    assert!(maximum_rows < MAX_MATERIAL_CIRCUIT_ROWS_V1);
+    assert!(maximum_register_bytes < MAX_MATERIAL_WORLD_REGISTER_BYTES);
+    assert!(maximum_receipt_bytes < MAX_MATERIAL_WORLD_REGISTER_BYTES);
+    assert!(maximum_rows < MAX_MATERIAL_CIRCUIT_ROWS);
     assert!(dispatch_count > 0 && local_count > 0 && !fulfilled.is_empty());
     let state = session.material().state();
     let unsold = unsold_merchandise(state);
@@ -334,11 +330,11 @@ fn synthetic_statewide_roster_completes_sixteen_authenticated_periods_with_nativ
         .count();
     let before = session.current_world_hash().unwrap();
     let actions =
-        OrderedPracticeActionBatchV1::empty(session.graph_session().session_identity().clone(), 17)
+        OrderedPracticeActionBatch::empty(session.graph_session().session_identity().clone(), 17)
             .unwrap();
     assert!(matches!(
         session.prepare_advance(&actions),
-        Err(MaterialReplayErrorV3::Horizon)
+        Err(MaterialReplayError::Horizon)
     ));
     assert_eq!(before, session.current_world_hash().unwrap());
     assert_eq!(session.completed_tick(), 16);
@@ -349,7 +345,7 @@ fn synthetic_statewide_roster_completes_sixteen_authenticated_periods_with_nativ
     );
 }
 
-fn unsold_merchandise(state: &MaterialCircuitStateV3) -> Goods {
+fn unsold_merchandise(state: &MaterialCircuitState) -> Goods {
     let merchants: BTreeMap<_, _> = state
         .merchants
         .iter()
@@ -359,7 +355,7 @@ fn unsold_merchandise(state: &MaterialCircuitStateV3) -> Goods {
     for row in &state.inventory {
         if matches!(
             merchants.get(&row.site_id),
-            Some(MerchantRoleV3::Wholesale | MerchantRoleV3::Retail)
+            Some(MerchantRole::Wholesale | MerchantRole::Retail)
         ) {
             *unsold.entry((row.good_id, row.unit_id)).or_default() += u128::from(row.quantity);
         }
@@ -367,11 +363,11 @@ fn unsold_merchandise(state: &MaterialCircuitStateV3) -> Goods {
     unsold
 }
 
-fn captured_session(catalog: &MichiganMaterialCatalogV1) -> (Session, usize) {
-    let preset = MichiganContentPresetV1::new_campaign(MichiganDeliveryPresetV1::StatewideBaseline);
+fn captured_session(catalog: &MichiganMaterialCatalog) -> (Session, usize) {
+    let preset = MichiganContentPreset::new_campaign(MichiganDeliveryPreset::StatewideBaseline);
     let foundation = preset.create_foundation(catalog).unwrap();
     let foundation_bytes = foundation.canonical_bytes().len();
-    assert!(foundation_bytes < MAX_MATERIAL_WORLD_REGISTER_BYTES_V3);
+    assert!(foundation_bytes < MAX_MATERIAL_WORLD_REGISTER_BYTES);
     assert_eq!(
         foundation
             .initial_register()
@@ -387,7 +383,7 @@ fn captured_session(catalog: &MichiganMaterialCatalogV1) -> (Session, usize) {
     assert_eq!(state.supplier_routes.len(), catalog.routes().len());
     assert_eq!(state.final_demand_orders.len(), 233);
     assert_eq!(state.labor.len(), 397);
-    let admitted = admit_michigan_content_v1(
+    let admitted = admit_michigan_content(
         preset.id(),
         16,
         &foundation.spec().content_digest,
@@ -399,7 +395,7 @@ fn captured_session(catalog: &MichiganMaterialCatalogV1) -> (Session, usize) {
     assert_eq!(admitted.digest(), foundation.digest());
     let mut corrupted = foundation.canonical_bytes().to_vec();
     *corrupted.last_mut().unwrap() ^= 1;
-    assert!(admit_michigan_content_v1(
+    assert!(admit_michigan_content(
         preset.id(),
         16,
         &foundation.spec().content_digest,
@@ -412,7 +408,7 @@ fn captured_session(catalog: &MichiganMaterialCatalogV1) -> (Session, usize) {
 }
 
 fn named_goods(
-    catalog: &MichiganMaterialCatalogV1,
+    catalog: &MichiganMaterialCatalog,
     quantities: &Goods,
 ) -> Vec<(String, String, u128)> {
     catalog
@@ -430,13 +426,13 @@ fn named_goods(
 
 #[test]
 fn new_reads_pinned_siblings_and_saved_open_survives_changed_or_missing_source_files() {
-    use babylon_persistence::michigan_material::MichiganMaterialErrorV1;
-    use babylon_persistence::MichiganDefinesErrorV1;
+    use babylon_persistence::michigan_material::MichiganMaterialError;
+    use babylon_persistence::MichiganDefinesError;
     let sources = synthetic::SyntheticSources::create();
     let defines_path = sources.path("defines.toml");
-    let delivery = MichiganDeliveryPresetV1::StatewideBoth;
-    let preset = MichiganContentPresetV1::new_campaign(delivery);
-    let catalog = MichiganMaterialCatalogV1::load_for_preset(&defines_path, delivery).unwrap();
+    let delivery = MichiganDeliveryPreset::StatewideBoth;
+    let preset = MichiganContentPreset::new_campaign(delivery);
+    let catalog = MichiganMaterialCatalog::load_for_preset(&defines_path, delivery).unwrap();
     let selected = catalog.with_preset(delivery).unwrap();
     assert_eq!(selected.sites().len(), 397);
     assert_eq!(
@@ -466,9 +462,9 @@ fn new_reads_pinned_siblings_and_saved_open_survives_changed_or_missing_source_f
         *changed.last_mut().unwrap() ^= 1;
         std::fs::write(&path, changed).unwrap();
         assert!(matches!(
-            MichiganMaterialCatalogV1::load_for_preset(&defines_path, delivery),
-            Err(MichiganDefinesErrorV1::Material(
-                MichiganMaterialErrorV1::ArtifactDigest
+            MichiganMaterialCatalog::load_for_preset(&defines_path, delivery),
+            Err(MichiganDefinesError::Material(
+                MichiganMaterialError::ArtifactDigest
             ))
         ));
         std::fs::write(path, original).unwrap();
@@ -483,8 +479,8 @@ fn new_reads_pinned_siblings_and_saved_open_survives_changed_or_missing_source_f
     ] {
         std::fs::remove_file(sources.path(name)).unwrap();
     }
-    assert!(MichiganMaterialCatalogV1::load_for_preset(&defines_path, delivery).is_err());
-    let opened = admit_michigan_content_v1(
+    assert!(MichiganMaterialCatalog::load_for_preset(&defines_path, delivery).is_err());
+    let opened = admit_michigan_content(
         preset.id(),
         16,
         &foundation.spec().content_digest,

@@ -1,8 +1,8 @@
 use super::*;
-use babylon_material_circuit::{ArrivalReceiptV1, DeliveryReceiptV1, RealizationReceiptV1};
+use babylon_material_circuit::{ArrivalReceipt, DeliveryReceipt, RealizationReceipt};
 
-fn delivery_receipts(order_id: OrderIdV1) -> MaterialTickReceiptsV4 {
-    MaterialTickReceiptsV4 {
+fn delivery_receipts(order_id: OrderId) -> MaterialTickReceipts {
+    MaterialTickReceipts {
         resolve_tick: 2,
         production: Vec::new(),
         dispatches: Vec::new(),
@@ -12,13 +12,13 @@ fn delivery_receipts(order_id: OrderIdV1) -> MaterialTickReceiptsV4 {
         local_transfers: Vec::new(),
         // Two distinct original receipt rows on the same exact principal.
         arrivals: [3, 5]
-            .map(|quantity| ArrivalReceiptV1 { order_id, quantity })
+            .map(|quantity| ArrivalReceipt { order_id, quantity })
             .to_vec(),
-        deliveries: vec![DeliveryReceiptV1 {
+        deliveries: vec![DeliveryReceipt {
             order_id,
             quantity: 8,
         }],
-        realizations: vec![RealizationReceiptV1 {
+        realizations: vec![RealizationReceipt {
             order_id,
             quantity: 8,
         }],
@@ -39,12 +39,12 @@ fn typed_delivery_preserves_original_rows_identifiers_sequence_and_descriptions(
     project_events(&catalog, &receipts, [2; 32], &mut events).unwrap();
     assert_eq!(events.len(), 8);
     let expected = [
-        ("arrival", ProductionDeliveryStageV1::Arrival, 3),
-        ("arrival", ProductionDeliveryStageV1::Arrival, 5),
-        ("delivery", ProductionDeliveryStageV1::Delivery, 8),
+        ("arrival", ProductionDeliveryStage::Arrival, 3),
+        ("arrival", ProductionDeliveryStage::Arrival, 5),
+        ("delivery", ProductionDeliveryStage::Delivery, 8),
         (
             "quantity realization",
-            ProductionDeliveryStageV1::QuantityRealization,
+            ProductionDeliveryStage::QuantityRealization,
             8,
         ),
     ];
@@ -72,7 +72,7 @@ fn typed_delivery_preserves_original_rows_identifiers_sequence_and_descriptions(
         );
         assert_eq!(
             event.delivery_evidence,
-            Some(ProductionDeliveryEvidenceV1 {
+            Some(ProductionDeliveryEvidence {
                 stage,
                 order_id: digest_hex(&route.order_id().as_bytes()),
                 route_id: digest_hex(&route.id().as_bytes()),
@@ -87,7 +87,7 @@ fn typed_delivery_preserves_original_rows_identifiers_sequence_and_descriptions(
 #[test]
 fn undisclosed_orders_refuse_typed_delivery_projection() {
     let catalog = crate::test_support::catalog();
-    let missing = OrderIdV1::from_bytes([0xfa; 32]);
+    let missing = OrderId::from_bytes([0xfa; 32]);
     assert!(!catalog.routes().iter().any(|row| row.order_id() == missing));
     assert_eq!(
         project_events(
@@ -96,6 +96,6 @@ fn undisclosed_orders_refuse_typed_delivery_projection() {
             [1; 32],
             &mut Vec::new()
         ),
-        Err(ProductionProjectionErrorV1::State)
+        Err(ProductionProjectionError::State)
     );
 }

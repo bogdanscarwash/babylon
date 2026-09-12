@@ -9,20 +9,6 @@ use std::sync::{Mutex, MutexGuard};
 
 static BEVY_APP_TEST_MUTEX: Mutex<()> = Mutex::new(());
 
-static UNKNOWN_STORY: babylon_client::story::Story = babylon_client::story::Story {
-    id: "not-in-catalog",
-    title: "Unknown",
-    premise: "",
-    premise_source: "",
-    scenario_src: "",
-    rule_srcs: &[],
-    session_id: "unknown",
-    map_binding: None,
-    arc: None,
-    validated_horizon: 0,
-    delays: &[],
-};
-
 fn add_visual_asset_plugins(app: &mut App) {
     app.add_plugins((
         MinimalPlugins,
@@ -51,35 +37,6 @@ fn visual_asset_gallery_app() -> App {
     app.finish();
     app.update();
     app
-}
-
-fn visual_presentation_app(
-    story: &'static babylon_client::story::Story,
-    story_card_visible: bool,
-) -> App {
-    let mut app = App::new();
-    add_visual_asset_plugins(&mut app);
-    app.insert_resource(babylon_client::story::SelectedStory(story));
-    app.insert_resource(babylon_client::ui::story_card::StoryCardVisible(
-        story_card_visible,
-    ));
-    app.add_plugins(babylon_client::visual_assets::VisualPresentationPlugin);
-    app.add_systems(Startup, babylon_client::ui::story_card::spawn_story_card);
-    app.finish();
-    app.update();
-    app
-}
-
-fn story_banner_state(app: &mut App) -> (Handle<Image>, Visibility) {
-    let world = app.world_mut();
-    let mut query = world.query_filtered::<
-        (&ImageNode, &Visibility),
-        With<babylon_client::visual_assets::StoryBanner>,
-    >();
-    let (image, visibility) = query
-        .single(world)
-        .expect("exactly one story banner entity");
-    (image.image.clone(), *visibility)
 }
 
 type ExpectedVisualAsset = (
@@ -448,134 +405,6 @@ fn gallery_cards_are_non_shrinking_and_require_scroll_at_1080p() {
 }
 
 #[test]
-fn presentation_spawns_the_title_mark_readable_title_and_counties_banner() {
-    let _guard = bevy_app_test_guard();
-    let mut app = visual_presentation_app(babylon_client::story::counties(), true);
-
-    let title_mark_image = {
-        let world = app.world_mut();
-        let mut query =
-            world.query_filtered::<&ImageNode, With<babylon_client::visual_assets::TitleMark>>();
-        query
-            .single(world)
-            .expect("exactly one title mark entity")
-            .image
-            .clone()
-    };
-    let readable_title = {
-        let world = app.world_mut();
-        let mut query =
-            world.query_filtered::<&Text, With<babylon_client::visual_assets::ReadableTitle>>();
-        query
-            .single(world)
-            .expect("exactly one readable title entity")
-            .0
-            .clone()
-    };
-    let (banner_image, visibility) = story_banner_state(&mut app);
-    let assets = app
-        .world()
-        .resource::<babylon_client::visual_assets::VisualAssets>();
-
-    assert_eq!(title_mark_image, assets.title_mark);
-    assert_eq!(readable_title, "BABYLON");
-    assert_eq!(banner_image, assets.banner_counties);
-    assert_eq!(visibility, Visibility::Visible);
-}
-
-#[test]
-fn story_banner_tracks_the_selected_story_and_story_card_visibility() {
-    let _guard = bevy_app_test_guard();
-    let mut app = visual_presentation_app(babylon_client::story::counties(), true);
-
-    app.world_mut()
-        .resource_mut::<babylon_client::story::SelectedStory>()
-        .0 = babylon_client::story::carceral();
-    app.update();
-
-    let (banner_image, visibility) = story_banner_state(&mut app);
-    let assets = app
-        .world()
-        .resource::<babylon_client::visual_assets::VisualAssets>();
-    assert_eq!(banner_image, assets.banner_carceral);
-    assert_eq!(visibility, Visibility::Visible);
-
-    app.world_mut()
-        .resource_mut::<babylon_client::ui::story_card::StoryCardVisible>()
-        .0 = false;
-    app.update();
-
-    let (_, visibility) = story_banner_state(&mut app);
-    assert_eq!(visibility, Visibility::Hidden);
-}
-
-#[test]
-fn story_banner_is_globally_below_the_readable_story_card_layer() {
-    let _guard = bevy_app_test_guard();
-    let mut app = visual_presentation_app(babylon_client::story::counties(), true);
-    let world = app.world_mut();
-    let mut banner_query =
-        world.query_filtered::<&GlobalZIndex, With<babylon_client::visual_assets::StoryBanner>>();
-    let banner_z = banner_query
-        .single(world)
-        .expect("story banner must declare an explicit global z-index")
-        .0;
-    let mut story_card_query = world.query_filtered::<
-        Option<&GlobalZIndex>,
-        With<babylon_client::ui::story_card::StoryCardText>,
-    >();
-    let story_card_z = story_card_query
-        .single(world)
-        .expect("exactly one readable story-card layer")
-        .map_or(0, |z_index| z_index.0);
-
-    assert!(
-        banner_z < story_card_z,
-        "story banner z-index {banner_z} must remain below story-card z-index {story_card_z}"
-    );
-}
-
-#[test]
-#[should_panic(expected = "story banner singleton invariant violated: No entities fit the query")]
-fn story_banner_sync_rejects_a_missing_banner_entity() {
-    let _guard = bevy_app_test_guard();
-    let mut app = visual_presentation_app(babylon_client::story::counties(), true);
-    let banner = {
-        let world = app.world_mut();
-        let mut query =
-            world.query_filtered::<Entity, With<babylon_client::visual_assets::StoryBanner>>();
-        query.single(world).expect("exactly one story banner")
-    };
-    assert!(
-        app.world_mut().despawn(banner),
-        "story banner entity must still exist"
-    );
-
-    app.update();
-}
-
-#[test]
-#[should_panic(
-    expected = "story banner singleton invariant violated: Multiple entities fit the query"
-)]
-fn story_banner_sync_rejects_multiple_banner_entities() {
-    let _guard = bevy_app_test_guard();
-    let mut app = visual_presentation_app(babylon_client::story::counties(), true);
-    let image = app
-        .world()
-        .resource::<babylon_client::visual_assets::VisualAssets>()
-        .banner_counties
-        .clone();
-    app.world_mut().spawn((
-        ImageNode::new(image),
-        Visibility::Visible,
-        babylon_client::visual_assets::StoryBanner,
-    ));
-
-    app.update();
-}
-
-#[test]
 #[should_panic(
     expected = "gallery scroll-root singleton invariant violated: No entities fit the query"
 )]
@@ -620,11 +449,4 @@ fn gallery_scroll_rejects_multiple_scroll_roots() {
     });
 
     app.update();
-}
-
-#[test]
-#[should_panic(expected = "no visual banner declared for story \"not-in-catalog\"")]
-fn presentation_rejects_an_unknown_story_id() {
-    let _guard = bevy_app_test_guard();
-    let _app = visual_presentation_app(&UNKNOWN_STORY, true);
 }

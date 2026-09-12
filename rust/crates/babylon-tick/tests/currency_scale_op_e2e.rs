@@ -77,7 +77,9 @@ fn a_rule_scaling_currency_by_a_declared_domain_ratio_runs_through_run_once() {
     // multiply, no binary64 rounding ambiguity at these values.
     assert_eq!(
         *value,
-        Value::Currency(babylon_kernel::Currency::from_micro_units(3_001_000_000)),
+        Value::Currency(babylon_kernel::currency::Currency::from_micro_units(
+            3_001_000_000
+        )),
         "1500.5$ * 2.0r must equal exactly 3001.0$"
     );
 }
@@ -153,7 +155,9 @@ fn an_uncapped_declared_domain_ratio_also_clears_the_whole_seam() {
     let (_, value) = &payload[0];
     assert_eq!(
         *value,
-        Value::Currency(babylon_kernel::Currency::from_micro_units(7_502_500_000)),
+        Value::Currency(babylon_kernel::currency::Currency::from_micro_units(
+            7_502_500_000
+        )),
         "1500.5$ * 5.0r must equal exactly 7502.5$"
     );
 }
@@ -201,7 +205,9 @@ fn a_rule_scaling_currency_by_a_floored_and_capped_ratio_runs_through_run_once()
     let (_, value) = &payload[0];
     assert_eq!(
         *value,
-        Value::Currency(babylon_kernel::Currency::from_micro_units(1_500_000_000)),
+        Value::Currency(babylon_kernel::currency::Currency::from_micro_units(
+            1_500_000_000
+        )),
         "1000$ * 1.5r must equal exactly 1500.0$"
     );
 }
@@ -332,7 +338,9 @@ fn a_guard_gated_ratio_multiply_fires_when_the_channel_is_active() {
     let (_, value) = &payload[0];
     assert_eq!(
         *value,
-        Value::Currency(babylon_kernel::Currency::from_micro_units(1_240_000_000)),
+        Value::Currency(babylon_kernel::currency::Currency::from_micro_units(
+            1_240_000_000
+        )),
         "1000$ * 1.24r must equal exactly 1240.0$"
     );
 }

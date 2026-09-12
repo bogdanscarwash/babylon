@@ -1,42 +1,40 @@
 //! Explicit New/Open admission reuses the single durable material runtime.
 
 use babylon_bsl::structural_verbs::CollectingSink;
-use babylon_practice_contract::ordered_action_v1::OrderedPracticeActionBatchV1;
+use babylon_practice_contract::OrderedPracticeActionBatch;
 use postgres::{Config, NoTls};
 
-use super::{
-    RuntimeSessionErrorCodeV3, RuntimeSessionTailV3, RuntimeSessionTargetV3, SessionBackend,
-};
+use super::{RuntimeSessionErrorCode, RuntimeSessionTail, RuntimeSessionTarget, SessionBackend};
 use crate::{
-    material_runtime::{DurableMaterialRuntimeV3, MaterialRuntimeErrorV3},
-    michigan_content::{admit_michigan_content_v1, MichiganContentPresetV1},
+    identity::CampaignId,
+    material_runtime::{DurableMaterialRuntime, MaterialRuntimeError},
+    michigan_content::{admit_michigan_content, MichiganContentPreset},
     michigan_economy::digest_hex,
-    CampaignId, SemanticArchiveStoreV1,
 };
 
 pub(super) struct DurableBackend {
     config: Config,
     campaign: CampaignId,
-    runtime: DurableMaterialRuntimeV3,
-    tail: RuntimeSessionTailV3,
+    runtime: DurableMaterialRuntime,
+    tail: RuntimeSessionTail,
 }
 impl SessionBackend for DurableBackend {
-    fn tail(&self) -> RuntimeSessionTailV3 {
+    fn tail(&self) -> RuntimeSessionTail {
         self.tail.clone()
     }
     fn advance(
         &mut self,
-        expected: &RuntimeSessionTailV3,
-    ) -> Result<RuntimeSessionTailV3, RuntimeSessionErrorCodeV3> {
+        expected: &RuntimeSessionTail,
+    ) -> Result<RuntimeSessionTail, RuntimeSessionErrorCode> {
         if expected != &self.tail || durable_tail(&self.config, self.campaign)? != self.tail {
-            return Err(RuntimeSessionErrorCodeV3::StaleExpectedTail);
+            return Err(RuntimeSessionErrorCode::StaleExpectedTail);
         }
         let tick = self
             .tail
             .resolve_tick
             .checked_add(1)
-            .ok_or(RuntimeSessionErrorCodeV3::CommitRefused)?;
-        let actions = OrderedPracticeActionBatchV1::empty(
+            .ok_or(RuntimeSessionErrorCode::CommitRefused)?;
+        let actions = OrderedPracticeActionBatch::empty(
             self.runtime
                 .session()
                 .graph_session()
@@ -44,23 +42,23 @@ impl SessionBackend for DurableBackend {
                 .clone(),
             tick,
         )
-        .map_err(|_| RuntimeSessionErrorCodeV3::CommitRefused)?;
+        .map_err(|_| RuntimeSessionErrorCode::CommitRefused)?;
         let receipt = self
             .runtime
             .advance_and_commit(&mut CollectingSink::default(), &actions)
             .map_err(|error| match error {
-                MaterialRuntimeErrorV3::Replay(
-                    babylon_tick::material_replay::MaterialReplayErrorV3::Horizon,
-                ) => RuntimeSessionErrorCodeV3::HorizonComplete,
-                MaterialRuntimeErrorV3::DatabaseLockRefused(_) => {
-                    RuntimeSessionErrorCodeV3::StorageBusy
+                MaterialRuntimeError::Replay(
+                    babylon_tick::material_replay::MaterialReplayError::Horizon,
+                ) => RuntimeSessionErrorCode::HorizonComplete,
+                MaterialRuntimeError::DatabaseLockRefused(_) => {
+                    RuntimeSessionErrorCode::StorageBusy
                 }
-                MaterialRuntimeErrorV3::DatabaseStatementCanceled(_) => {
-                    RuntimeSessionErrorCodeV3::StorageCanceled
+                MaterialRuntimeError::DatabaseStatementCanceled(_) => {
+                    RuntimeSessionErrorCode::StorageCanceled
                 }
-                _ => RuntimeSessionErrorCodeV3::CommitRefused,
+                _ => RuntimeSessionErrorCode::CommitRefused,
             })?;
-        self.tail = RuntimeSessionTailV3 {
+        self.tail = RuntimeSessionTail {
             resolve_tick: receipt.resolve_tick(),
             tick_content_hash: Some(digest_hex(receipt.tick_content_hash().as_bytes())),
         };
@@ -71,31 +69,31 @@ impl SessionBackend for DurableBackend {
 fn durable_tail(
     config: &Config,
     campaign: CampaignId,
-) -> Result<RuntimeSessionTailV3, RuntimeSessionErrorCodeV3> {
-    let bounded = crate::material_runtime::bounded_material_writer_config_v3(config)
-        .map_err(|_| RuntimeSessionErrorCodeV3::StorageRefused)?;
+) -> Result<RuntimeSessionTail, RuntimeSessionErrorCode> {
+    let bounded = crate::material_runtime::bounded_material_writer_config(config)
+        .map_err(|_| RuntimeSessionErrorCode::StorageRefused)?;
     let mut client = bounded
         .connect(NoTls)
-        .map_err(|_| RuntimeSessionErrorCodeV3::StorageRefused)?;
-    let row = client.query_opt("SELECT resolve_tick, tick_content_hash FROM babylon_state.tick_commit WHERE campaign_id = $1 ORDER BY resolve_tick DESC LIMIT 1", &[campaign.as_uuid()]).map_err(|_| RuntimeSessionErrorCodeV3::StorageRefused)?;
+        .map_err(|_| RuntimeSessionErrorCode::StorageRefused)?;
+    let row = client.query_opt("SELECT resolve_tick, tick_content_hash FROM babylon_state.tick_commit WHERE campaign_id = $1 ORDER BY resolve_tick DESC LIMIT 1", &[campaign.as_uuid()]).map_err(|_| RuntimeSessionErrorCode::StorageRefused)?;
     match row {
-        None => Ok(RuntimeSessionTailV3 {
+        None => Ok(RuntimeSessionTail {
             resolve_tick: 0,
             tick_content_hash: None,
         }),
         Some(row) => {
             let tick: i64 = row
                 .try_get(0)
-                .map_err(|_| RuntimeSessionErrorCodeV3::StorageRefused)?;
+                .map_err(|_| RuntimeSessionErrorCode::StorageRefused)?;
             let hash: Vec<u8> = row
                 .try_get(1)
-                .map_err(|_| RuntimeSessionErrorCodeV3::StorageRefused)?;
+                .map_err(|_| RuntimeSessionErrorCode::StorageRefused)?;
             if tick <= 0 || hash.len() != 32 {
-                return Err(RuntimeSessionErrorCodeV3::StorageRefused);
+                return Err(RuntimeSessionErrorCode::StorageRefused);
             }
-            Ok(RuntimeSessionTailV3 {
+            Ok(RuntimeSessionTail {
                 resolve_tick: u64::try_from(tick)
-                    .map_err(|_| RuntimeSessionErrorCodeV3::StorageRefused)?,
+                    .map_err(|_| RuntimeSessionErrorCode::StorageRefused)?,
                 tick_content_hash: Some(digest_hex(&hash)),
             })
         }
@@ -104,57 +102,54 @@ fn durable_tail(
 
 pub(super) fn open(
     config: &Config,
-    target: &RuntimeSessionTargetV3,
+    target: &RuntimeSessionTarget,
     defines_path: &std::path::Path,
-) -> Result<(DurableBackend, String), RuntimeSessionErrorCodeV3> {
+) -> Result<(DurableBackend, String), RuntimeSessionErrorCode> {
     let campaign = target.campaign()?;
     let requested_catalog = catalog_for_target(target, defines_path)?;
-    let bounded = crate::material_runtime::bounded_material_writer_config_v3(config)
-        .map_err(|_| RuntimeSessionErrorCodeV3::StorageRefused)?;
-    crate::material_runtime::install_material_runtime_schema_v3(config)
-        .map_err(|_| RuntimeSessionErrorCodeV3::StorageRefused)?;
-    SemanticArchiveStoreV1::new(config)
-        .install_schema()
-        .map_err(|_| RuntimeSessionErrorCodeV3::StorageRefused)?;
-    crate::install_reader_role_v1(config).map_err(|_| RuntimeSessionErrorCodeV3::StorageRefused)?;
-    crate::install_observer_economy_schema_v1(config)
-        .map_err(|_| RuntimeSessionErrorCodeV3::StorageRefused)?;
+    let bounded = crate::material_runtime::bounded_material_writer_config(config)
+        .map_err(|_| RuntimeSessionErrorCode::StorageRefused)?;
+    crate::runtime::verify_runtime_schema(config)
+        .map_err(|_| RuntimeSessionErrorCode::StorageRefused)?;
+    crate::install_reader_role(config).map_err(|_| RuntimeSessionErrorCode::StorageRefused)?;
+    crate::observer_reader::provision_observer_role(config)
+        .map_err(|_| RuntimeSessionErrorCode::StorageRefused)?;
     let (runtime, foundation_digest) = match target {
-        RuntimeSessionTargetV3::Open { .. } => {
+        RuntimeSessionTarget::Open { .. } => {
             let mut client = bounded
                 .connect(NoTls)
-                .map_err(|_| RuntimeSessionErrorCodeV3::StorageRefused)?;
+                .map_err(|_| RuntimeSessionErrorCode::StorageRefused)?;
             let admitted = runtime_content(&mut client, campaign)?;
             (
-                DurableMaterialRuntimeV3::open(config, campaign, admitted.digest()),
+                DurableMaterialRuntime::open(config, campaign, admitted.digest()),
                 digest_hex(&admitted.digest()),
             )
         }
-        RuntimeSessionTargetV3::New { preset, .. } => {
+        RuntimeSessionTarget::New { preset, .. } => {
             let catalog = requested_catalog
                 .as_ref()
-                .ok_or(RuntimeSessionErrorCodeV3::DefinesInvalid)?;
-            let foundation = MichiganContentPresetV1::new_campaign(preset.delivery())
+                .ok_or(RuntimeSessionErrorCode::DefinesInvalid)?;
+            let foundation = MichiganContentPreset::new_campaign(preset.delivery())
                 .create_foundation(catalog)
-                .map_err(|_| RuntimeSessionErrorCodeV3::ScenarioMismatch)?;
+                .map_err(|_| RuntimeSessionErrorCode::ScenarioMismatch)?;
             let digest = digest_hex(&foundation.digest());
             (
-                DurableMaterialRuntimeV3::create_new(config, campaign, foundation),
+                DurableMaterialRuntime::create_new(config, campaign, foundation),
                 digest,
             )
         }
     };
     let runtime = runtime.map_err(|error| match error {
-        MaterialRuntimeErrorV3::AlreadyExists => RuntimeSessionErrorCodeV3::CampaignAlreadyExists,
-        MaterialRuntimeErrorV3::MissingCampaign => RuntimeSessionErrorCodeV3::CampaignAbsent,
-        MaterialRuntimeErrorV3::LegacyCampaign | MaterialRuntimeErrorV3::FoundationMismatch => {
-            RuntimeSessionErrorCodeV3::ScenarioMismatch
+        MaterialRuntimeError::AlreadyExists => RuntimeSessionErrorCode::CampaignAlreadyExists,
+        MaterialRuntimeError::MissingCampaign => RuntimeSessionErrorCode::CampaignAbsent,
+        MaterialRuntimeError::LegacyCampaign | MaterialRuntimeError::FoundationMismatch => {
+            RuntimeSessionErrorCode::ScenarioMismatch
         }
-        _ => RuntimeSessionErrorCodeV3::StorageRefused,
+        _ => RuntimeSessionErrorCode::StorageRefused,
     })?;
     let tail = durable_tail(config, campaign)?;
     if runtime.session().completed_tick() != tail.resolve_tick {
-        return Err(RuntimeSessionErrorCodeV3::StorageRefused);
+        return Err(RuntimeSessionErrorCode::StorageRefused);
     }
     Ok((
         DurableBackend {
@@ -168,27 +163,26 @@ pub(super) fn open(
 }
 
 fn catalog_for_target(
-    target: &RuntimeSessionTargetV3,
+    target: &RuntimeSessionTarget,
     defines_path: &std::path::Path,
-) -> Result<Option<crate::michigan_material::MichiganMaterialCatalogV1>, RuntimeSessionErrorCodeV3>
-{
-    let RuntimeSessionTargetV3::New { preset, .. } = target else {
+) -> Result<Option<crate::michigan_material::MichiganMaterialCatalog>, RuntimeSessionErrorCode> {
+    let RuntimeSessionTarget::New { preset, .. } = target else {
         return Ok(None);
     };
     // Load for each New request. Open never touches the mutable source file.
-    let catalog = crate::michigan_material::MichiganMaterialCatalogV1::load_for_preset(
+    let catalog = crate::michigan_material::MichiganMaterialCatalog::load_for_preset(
         defines_path,
         preset.delivery(),
     )
     .map_err(|error| {
         eprintln!("{error}");
         match error {
-            crate::MichiganDefinesErrorV1::Read(_) => RuntimeSessionErrorCodeV3::DefinesMissing,
-            crate::MichiganDefinesErrorV1::TooLarge => RuntimeSessionErrorCodeV3::DefinesTooLarge,
-            crate::MichiganDefinesErrorV1::Toml(_) | crate::MichiganDefinesErrorV1::Utf8(_) => {
-                RuntimeSessionErrorCodeV3::DefinesMalformed
+            crate::MichiganDefinesError::Read(_) => RuntimeSessionErrorCode::DefinesMissing,
+            crate::MichiganDefinesError::TooLarge => RuntimeSessionErrorCode::DefinesTooLarge,
+            crate::MichiganDefinesError::Toml(_) | crate::MichiganDefinesError::Utf8(_) => {
+                RuntimeSessionErrorCode::DefinesMalformed
             }
-            _ => RuntimeSessionErrorCodeV3::DefinesInvalid,
+            _ => RuntimeSessionErrorCode::DefinesInvalid,
         }
     })?;
     Ok(Some(catalog))
@@ -197,38 +191,38 @@ fn catalog_for_target(
 fn runtime_content(
     client: &mut impl postgres::GenericClient,
     campaign: CampaignId,
-) -> Result<crate::michigan_content::MichiganContentAdmissionV1, RuntimeSessionErrorCodeV3> {
+) -> Result<crate::michigan_content::MichiganContentAdmission, RuntimeSessionErrorCode> {
     let row = client.query_opt("SELECT f.preset_id,f.horizon_ticks,f.content_sha256,f.foundation_sha256,g.foundation_sha256,pg_catalog.sha256(pg_catalog.convert_to(g.scenario_source,'UTF8')),f.foundation_bytes FROM babylon_state.material_campaign_foundation_v2 f JOIN babylon_state.campaign_foundation g USING(campaign_id) WHERE campaign_id=$1::uuid", &[campaign.as_uuid()])
-        .map_err(|_| RuntimeSessionErrorCodeV3::StorageRefused)?;
+        .map_err(|_| RuntimeSessionErrorCode::StorageRefused)?;
     let Some(row) = row else {
-        return Err(RuntimeSessionErrorCodeV3::CampaignAbsent);
+        return Err(RuntimeSessionErrorCode::CampaignAbsent);
     };
     let id: String = row
         .try_get(0)
-        .map_err(|_| RuntimeSessionErrorCodeV3::StorageRefused)?;
+        .map_err(|_| RuntimeSessionErrorCode::StorageRefused)?;
     let horizon: i64 = row
         .try_get(1)
-        .map_err(|_| RuntimeSessionErrorCodeV3::StorageRefused)?;
+        .map_err(|_| RuntimeSessionErrorCode::StorageRefused)?;
     let content: Vec<u8> = row
         .try_get(2)
-        .map_err(|_| RuntimeSessionErrorCodeV3::StorageRefused)?;
+        .map_err(|_| RuntimeSessionErrorCode::StorageRefused)?;
     let foundation: Vec<u8> = row
         .try_get(3)
-        .map_err(|_| RuntimeSessionErrorCodeV3::StorageRefused)?;
+        .map_err(|_| RuntimeSessionErrorCode::StorageRefused)?;
     let graph: Vec<u8> = row
         .try_get(4)
-        .map_err(|_| RuntimeSessionErrorCodeV3::StorageRefused)?;
+        .map_err(|_| RuntimeSessionErrorCode::StorageRefused)?;
     let scenario: Vec<u8> = row
         .try_get(5)
-        .map_err(|_| RuntimeSessionErrorCodeV3::StorageRefused)?;
+        .map_err(|_| RuntimeSessionErrorCode::StorageRefused)?;
     let bytes: Vec<u8> = row
         .try_get(6)
-        .map_err(|_| RuntimeSessionErrorCodeV3::StorageRefused)?;
-    let admitted = admit_michigan_content_v1(&id, horizon, &content, &foundation, 0, &bytes)
-        .map_err(|_| RuntimeSessionErrorCodeV3::ScenarioMismatch)?;
+        .map_err(|_| RuntimeSessionErrorCode::StorageRefused)?;
+    let admitted = admit_michigan_content(&id, horizon, &content, &foundation, 0, &bytes)
+        .map_err(|_| RuntimeSessionErrorCode::ScenarioMismatch)?;
     admitted
         .validate_graph(&graph, &scenario)
-        .map_err(|_| RuntimeSessionErrorCodeV3::ScenarioMismatch)?;
+        .map_err(|_| RuntimeSessionErrorCode::ScenarioMismatch)?;
     Ok(admitted)
 }
 
@@ -237,7 +231,7 @@ mod defines_tests {
     use super::*;
     #[test]
     fn statewide_new_requires_qualified_sources_before_storage_admission() {
-        use super::super::RuntimeSessionPresetV3;
+        use super::super::RuntimeSessionPreset;
         let directory =
             std::env::temp_dir().join(format!("babylon-statewide-defines-{}", std::process::id()));
         std::fs::create_dir(&directory).unwrap();
@@ -252,29 +246,29 @@ mod defines_tests {
         )
         .unwrap();
         for preset in [
-            RuntimeSessionPresetV3::StatewideBaseline,
-            RuntimeSessionPresetV3::StatewideFreightConstraint,
-            RuntimeSessionPresetV3::StatewidePackagingShortage,
-            RuntimeSessionPresetV3::StatewideBoth,
+            RuntimeSessionPreset::StatewideBaseline,
+            RuntimeSessionPreset::StatewideFreightConstraint,
+            RuntimeSessionPreset::StatewidePackagingShortage,
+            RuntimeSessionPreset::StatewideBoth,
         ] {
-            let target = RuntimeSessionTargetV3::New {
+            let target = RuntimeSessionTarget::New {
                 campaign_id: uuid::Uuid::from_u128(31).to_string(),
                 preset,
             };
             assert!(matches!(
                 catalog_for_target(&target, &path),
-                Err(RuntimeSessionErrorCodeV3::DefinesMissing)
+                Err(RuntimeSessionErrorCode::DefinesMissing)
             ));
             std::fs::write(&manifest, b"{}").unwrap();
             assert!(matches!(
                 catalog_for_target(&target, &path),
-                Err(RuntimeSessionErrorCodeV3::DefinesInvalid)
+                Err(RuntimeSessionErrorCode::DefinesInvalid)
             ));
             std::fs::remove_file(&manifest).unwrap();
         }
         std::fs::remove_file(&path).unwrap();
         std::fs::remove_dir(&directory).unwrap();
-        let open = RuntimeSessionTargetV3::Open {
+        let open = RuntimeSessionTarget::Open {
             campaign_id: uuid::Uuid::from_u128(31).to_string(),
         };
         assert!(catalog_for_target(&open, &path).unwrap().is_none());
@@ -283,17 +277,17 @@ mod defines_tests {
     fn new_reloads_config_while_open_never_reads_it() {
         let path =
             std::env::temp_dir().join(format!("babylon-defines-{}.toml", std::process::id()));
-        let new = RuntimeSessionTargetV3::New {
+        let new = RuntimeSessionTarget::New {
             campaign_id: uuid::Uuid::from_u128(17).to_string(),
-            preset: super::super::RuntimeSessionPresetV3::Standard,
+            preset: super::super::RuntimeSessionPreset::Standard,
         };
-        let open = RuntimeSessionTargetV3::Open {
+        let open = RuntimeSessionTarget::Open {
             campaign_id: uuid::Uuid::from_u128(17).to_string(),
         };
         assert!(catalog_for_target(&open, &path).unwrap().is_none());
         assert!(matches!(
             catalog_for_target(&new, &path),
-            Err(RuntimeSessionErrorCodeV3::DefinesMissing)
+            Err(RuntimeSessionErrorCode::DefinesMissing)
         ));
         let source = include_str!(concat!(
             env!("CARGO_MANIFEST_DIR"),
@@ -314,7 +308,7 @@ mod defines_tests {
         std::fs::write(&path, "malformed = [").unwrap();
         assert!(matches!(
             catalog_for_target(&new, &path),
-            Err(RuntimeSessionErrorCodeV3::DefinesMalformed)
+            Err(RuntimeSessionErrorCode::DefinesMalformed)
         ));
         assert!(catalog_for_target(&open, &path).unwrap().is_none());
         std::fs::remove_file(path).unwrap();

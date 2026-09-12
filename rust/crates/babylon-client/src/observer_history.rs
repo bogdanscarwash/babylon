@@ -2,7 +2,10 @@
 
 mod delivery_groups;
 
-use babylon_persistence::{ObserverEconomyReaderV1, ProductionEventV1, ProductionProcessV2};
+use babylon_persistence::{
+    observer_reader::ObserverEconomyReader, production_observation::ProductionEvent,
+    production_observation::ProductionProcess,
+};
 use bevy::ecs::{query::QueryData, system::SystemParam};
 use bevy::input_focus::tab_navigation::TabGroup;
 use bevy::prelude::*;
@@ -16,9 +19,8 @@ use crate::observer_io::ObserverSet;
 use crate::observer_layout::ObserverRegion;
 use crate::observer_theme as theme;
 use crate::observer_ui::{grouped, ObserverFeedback, ObserverFrame, ObserverUiState};
-use crate::production::{
-    readings_panel_visible, PrimaryView, ProductionCommand, ProductionNavigation,
-};
+use crate::production::navigation::readings_panel_visible;
+use crate::production::{PrimaryView, ProductionCommand, ProductionNavigation};
 use crate::ui::dossier_card::DossierRefresh;
 use delivery_groups::{
     delivery_log_entries, DeliveryGroup, DeliveryGroupKey, DeliveryLog, DeliveryLogEntry,
@@ -42,7 +44,7 @@ struct PeriodOutput {
 }
 
 impl PeriodOutput {
-    fn from_process(period: u64, site: &ProductionProcessV2) -> Result<Self, String> {
+    fn from_process(period: u64, site: &ProductionProcess) -> Result<Self, String> {
         let quantity = |batches: Option<u64>| {
             batches
                 .map(|batches| {
@@ -68,7 +70,7 @@ struct HistoryState {
     pending: Option<HistoryTask>,
     points: Vec<PeriodOutput>,
     error: Option<String>,
-    selected_event: Option<(ObservationContext, ProductionEventV1)>,
+    selected_event: Option<(ObservationContext, ProductionEvent)>,
     focus_selected_event: bool,
     expanded_delivery: Option<(ObservationContext, DeliveryGroupKey)>,
 }
@@ -89,7 +91,7 @@ enum HistoryButton {
     },
     Event {
         context: ObservationContext,
-        event: ProductionEventV1,
+        event: ProductionEvent,
     },
     DeliveryEvidence {
         context: ObservationContext,
@@ -231,7 +233,7 @@ fn history_control_visibility(
     ui: &ObserverUiState,
     navigation: &ProductionNavigation,
     view: PrimaryView,
-    snapshot: Option<&babylon_persistence::ProductionSnapshotV2>,
+    snapshot: Option<&babylon_persistence::production_observation::ProductionSnapshot>,
 ) -> ControlAvailability {
     use ControlAvailability::{Disabled, Enabled};
     if ui.menu_open || ui.splash_visible || ui.comparison_open {
@@ -403,8 +405,8 @@ fn fetch(scope: &HistoryScope) -> Result<Vec<PeriodOutput>, String> {
         return Ok(Vec::new());
     };
     let reader = match scope.context.perspective {
-        Perspective::FullObserver => ObserverEconomyReaderV1::from_observer_env(),
-        Perspective::PlayerKnowledge => ObserverEconomyReaderV1::from_known_env(),
+        Perspective::FullObserver => ObserverEconomyReader::from_observer_env(),
+        Perspective::PlayerKnowledge => ObserverEconomyReader::from_known_env(),
     }
     .map_err(|error| error.to_string())?;
     let mut points = Vec::new();
@@ -788,7 +790,7 @@ fn paint_log(
 
 fn spawn_log_entries(
     panel: &mut ChildSpawnerCommands,
-    snapshot: &babylon_persistence::ProductionSnapshotV2,
+    snapshot: &babylon_persistence::production_observation::ProductionSnapshot,
     context: &ObservationContext,
     history: &HistoryState,
 ) {
@@ -831,7 +833,7 @@ fn spawn_log_entries(
 
 fn spawn_event_entry(
     panel: &mut ChildSpawnerCommands,
-    event: &ProductionEventV1,
+    event: &ProductionEvent,
     context: &ObservationContext,
 ) {
     panel
@@ -971,13 +973,14 @@ impl Plugin for ObserverHistoryPlugin {
 mod tests {
     use super::*;
     use crate::observer::SessionPhase;
-    use babylon_persistence::ProductionSiteV2;
+    use babylon_persistence::production_observation::ProductionSite;
     use babylon_persistence::{
-        CampaignId, ObserverEconomySnapshotV1, ObserverVisibilityV1, ProductionSnapshotV2,
+        identity::CampaignId, observer_reader::ObserverEconomySnapshot,
+        observer_reader::ObserverVisibility, production_observation::ProductionSnapshot,
     };
 
-    fn event(period: u64) -> ProductionEventV1 {
-        ProductionEventV1 {
+    fn event(period: u64) -> ProductionEvent {
+        ProductionEvent {
             id: format!("delivery-{period}"),
             period,
             subject_site_ids: vec!["producer".into()],
@@ -988,21 +991,21 @@ mod tests {
         }
     }
 
-    fn history_app(event: ProductionEventV1) -> (App, Entity) {
+    fn history_app(event: ProductionEvent) -> (App, Entity) {
         let mut session = ObserverSession::new(CampaignId::from_uuid(uuid::Uuid::from_u128(1)));
         session.ready(3, None);
         session.foundation_digest = Some("foundation".into());
         assert!(session.installed(&session.context()));
-        let frame = ObserverFrame(Some(ObserverEconomySnapshotV1 {
+        let frame = ObserverFrame(Some(ObserverEconomySnapshot {
             campaign_id: session.campaign.as_uuid().to_string(),
             resolve_tick: 3,
             foundation_digest: "foundation".into(),
             nominal_world_hash: None,
             tick_content_hash: None,
             envelope_digest: None,
-            visibility: ObserverVisibilityV1::FullObserver,
+            visibility: ObserverVisibility::FullObserver,
             counties: vec![],
-            production: Some(ProductionSnapshotV2 {
+            production: Some(ProductionSnapshot {
                 content_authority_sha256: "a".repeat(64),
                 road_source: None,
                 physical_edges: Vec::new(),
@@ -1160,36 +1163,40 @@ mod tests {
         assert_eq!(app.world().resource::<DossierRefresh>().0, generation);
     }
 
-    fn delivery_site(id: &str, name: &str) -> ProductionSiteV2 {
-        ProductionSiteV2 {
+    fn delivery_site(id: &str, name: &str) -> ProductionSite {
+        ProductionSite {
             id: id.into(),
             county_geoid: "26163".into(),
             name: name.into(),
             industry_code: "331".into(),
             observed_employment: None,
             inventory: vec![],
-            role: babylon_persistence::ProductionSiteRoleV2::Production,
+            role: babylon_persistence::production_observation::ProductionSiteRole::Production,
             sector_code: "31-33".into(),
-            processes: vec![babylon_persistence::ProductionProcessV2 {
-                id: "fixture-process".into(),
-                name: "Fixture process".into(),
-                output_good_id: "sheet".into(),
-                output_unit_id: "tonnes".into(),
-                output_good: "Sheet metal".into(),
-                output_unit: "tonnes".into(),
-                output_per_batch: 1,
-                available_batches: 1,
-                planned_batches: None,
-                produced_batches: None,
-                inputs: vec![],
-                labor: vec![],
-            }],
+            processes: vec![
+                babylon_persistence::production_observation::ProductionProcess {
+                    id: "fixture-process".into(),
+                    name: "Fixture process".into(),
+                    output_good_id: "sheet".into(),
+                    output_unit_id: "tonnes".into(),
+                    output_good: "Sheet metal".into(),
+                    output_unit: "tonnes".into(),
+                    output_per_batch: 1,
+                    available_batches: 1,
+                    planned_batches: None,
+                    produced_batches: None,
+                    inputs: vec![],
+                    labor: vec![],
+                },
+            ],
         }
     }
 
     fn delivery_app(parts: usize, period: u64) -> App {
         use babylon_persistence::{
-            ProductionDeliveryEvidenceV1, ProductionDeliveryStageV1, ProductionRouteV2,
+            production_observation::ProductionDeliveryEvidence,
+            production_observation::ProductionDeliveryStage,
+            production_observation::ProductionRoute,
         };
         let (mut app, _) = history_app(event(period));
         app.world_mut()
@@ -1201,10 +1208,11 @@ mod tests {
             delivery_site("supplier", "Wayne metal"),
             delivery_site("buyer", "Macomb parts"),
         ];
-        snapshot.routes = vec![ProductionRouteV2 {
+        snapshot.routes = vec![ProductionRoute {
             physical_edge_ids: Vec::new(),
             distance_mm: None,
-            transport_kind: babylon_persistence::ProductionRouteTransportV2::Staged,
+            transport_kind:
+                babylon_persistence::production_observation::ProductionRouteTransport::Staged,
             grams_per_unit: 1000,
             stages: Vec::new(),
             id: "route".into(),
@@ -1225,20 +1233,20 @@ mod tests {
         snapshot.events = (0..parts)
             .flat_map(|part| {
                 [
-                    ProductionDeliveryStageV1::Arrival,
-                    ProductionDeliveryStageV1::Delivery,
-                    ProductionDeliveryStageV1::QuantityRealization,
+                    ProductionDeliveryStage::Arrival,
+                    ProductionDeliveryStage::Delivery,
+                    ProductionDeliveryStage::QuantityRealization,
                 ]
                 .into_iter()
                 .enumerate()
-                .map(move |(index, stage)| ProductionEventV1 {
+                .map(move |(index, stage)| ProductionEvent {
                     id: format!("part-{part}-stage-{index}"),
                     period,
                     subject_site_ids: vec!["supplier".into(), "buyer".into()],
                     kind: format!("Original stage {index}"),
                     description: format!("Original part {part} stage {index}"),
                     receipt_digest: "a".repeat(64),
-                    delivery_evidence: Some(ProductionDeliveryEvidenceV1 {
+                    delivery_evidence: Some(ProductionDeliveryEvidence {
                         stage,
                         order_id: "order".into(),
                         route_id: "route".into(),
@@ -1670,7 +1678,7 @@ mod tests {
     fn idle_history_with_sixty_events_keeps_entities_and_components_unchanged() {
         let (mut app, _) = history_app(event(3));
         let events = (0..60)
-            .map(|index| ProductionEventV1 {
+            .map(|index| ProductionEvent {
                 id: format!("delivery-3-{index}"),
                 ..event(3)
             })
@@ -2057,29 +2065,31 @@ mod tests {
 
     #[test]
     fn exact_history_distinguishes_foundation_zero_and_overflow() {
-        let mut site = ProductionSiteV2 {
+        let mut site = ProductionSite {
             id: "site".into(),
             county_geoid: "26163".into(),
             name: "cohort".into(),
             industry_code: "331".into(),
             observed_employment: None,
             inventory: vec![],
-            role: babylon_persistence::ProductionSiteRoleV2::Production,
+            role: babylon_persistence::production_observation::ProductionSiteRole::Production,
             sector_code: "31-33".into(),
-            processes: vec![babylon_persistence::ProductionProcessV2 {
-                id: "fixture-process".into(),
-                name: "Fixture process".into(),
-                output_good_id: "a".repeat(64),
-                output_unit_id: "b".repeat(64),
-                output_good: "sheet".into(),
-                output_unit: "kg".into(),
-                output_per_batch: 10,
-                available_batches: 8,
-                planned_batches: None,
-                produced_batches: None,
-                inputs: vec![],
-                labor: vec![],
-            }],
+            processes: vec![
+                babylon_persistence::production_observation::ProductionProcess {
+                    id: "fixture-process".into(),
+                    name: "Fixture process".into(),
+                    output_good_id: "a".repeat(64),
+                    output_unit_id: "b".repeat(64),
+                    output_good: "sheet".into(),
+                    output_unit: "kg".into(),
+                    output_per_batch: 10,
+                    available_batches: 8,
+                    planned_batches: None,
+                    produced_batches: None,
+                    inputs: vec![],
+                    labor: vec![],
+                },
+            ],
         };
         assert_eq!(
             PeriodOutput::from_process(0, &site.processes[0])

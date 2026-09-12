@@ -1,44 +1,43 @@
 use babylon_persistence::{
-    archive_batch_matches_receipt_v1, archive_contiguous_watermark_v1, classify_archive_receipt_v1,
-    classify_archive_sweep_v1, model_archive_sweep_pages_v1,
-    model_archive_sweep_pages_with_bounds_v1, ArchiveCitationV1, ArchiveDirtyBatchV1,
-    ArchiveDossierProducerV1, ArchiveLinkV1, ArchivePageInputV1, ArchivePageRefV1,
-    ArchiveProducerOutcomeV1, ArchiveReceiptDispositionV1, ArchiveReceiptPlanV1, ArchiveSignalV1,
-    ArchiveSubjectKindV1, ArchiveSubjectV1, ArchiveWorkerSweepReportV1,
-    CompositeArchiveDossierProducerV1, NullArchiveDossierProducerV1, PendingArchiveReceiptV1,
-    SemanticArchiveErrorV1, ARCHIVE_PENDING_RECEIPTS_SQL_V1, ARCHIVE_SWEEP_MAX_RECEIPTS_V1,
-    ARCHIVE_SWEEP_MAX_SCAN_V1, ARCHIVE_SWEEP_WATERMARK_SQL_V1,
+    archive_batch_matches_receipt, archive_contiguous_watermark, classify_archive_receipt,
+    classify_archive_sweep, model_archive_sweep_pages, model_archive_sweep_pages_with_bounds,
+    ArchiveCitation, ArchiveDirtyBatch, ArchiveDossierProducer, ArchiveLink, ArchivePageInput,
+    ArchivePageRef, ArchiveProducerOutcome, ArchiveReceiptDisposition, ArchiveReceiptPlan,
+    ArchiveSignal, ArchiveSubject, ArchiveSubjectKind, ArchiveWorkerSweepReport,
+    CompositeArchiveDossierProducer, NullArchiveDossierProducer, PendingArchiveReceipt,
+    SemanticArchiveError, ARCHIVE_PENDING_RECEIPTS_SQL, ARCHIVE_SWEEP_MAX_RECEIPTS,
+    ARCHIVE_SWEEP_MAX_SCAN, ARCHIVE_SWEEP_WATERMARK_SQL,
 };
 use uuid::Uuid;
 
-fn county_subject() -> ArchiveSubjectV1 {
-    ArchiveSubjectV1::try_new(
-        ArchiveSubjectKindV1::County,
+fn county_subject() -> ArchiveSubject {
+    ArchiveSubject::try_new(
+        ArchiveSubjectKind::County,
         "26163".to_owned(),
         "Wayne County".to_owned(),
     )
     .expect("county identity")
 }
 
-fn county_page_input(resolve_tick: u64, tick_content_hash: [u8; 32]) -> ArchivePageInputV1 {
-    ArchivePageInputV1::try_new(
+fn county_page_input(resolve_tick: u64, tick_content_hash: [u8; 32]) -> ArchivePageInput {
+    ArchivePageInput::try_new(
         county_subject(),
         resolve_tick,
         tick_content_hash,
         "Which neighboring place should organizers investigate next?".to_owned(),
-        vec![ArchiveSignalV1::try_new(
+        vec![ArchiveSignal::try_new(
             "employment".to_owned(),
             "Employment".to_owned(),
             "728576 jobs".to_owned(),
-            ArchiveCitationV1::try_new(
+            ArchiveCitation::try_new(
                 "qcew-2024".to_owned(),
                 "fact_qcew_county_rollup county_fips=26163".to_owned(),
             )
             .expect("citation"),
         )
         .expect("signal")],
-        vec![ArchiveLinkV1::try_new(
-            ArchivePageRefV1::try_new(ArchiveSubjectKindV1::Place, "2622000".to_owned())
+        vec![ArchiveLink::try_new(
+            ArchivePageRef::try_new(ArchiveSubjectKind::Place, "2622000".to_owned())
                 .expect("Detroit ref"),
             "Detroit".to_owned(),
         )
@@ -47,12 +46,12 @@ fn county_page_input(resolve_tick: u64, tick_content_hash: [u8; 32]) -> ArchiveP
     .expect("page input")
 }
 
-fn empty_batch(resolve_tick: u64, tick_content_hash: [u8; 32]) -> ArchiveDirtyBatchV1 {
-    ArchiveDirtyBatchV1::try_new(resolve_tick, tick_content_hash, Vec::new()).expect("empty batch")
+fn empty_batch(resolve_tick: u64, tick_content_hash: [u8; 32]) -> ArchiveDirtyBatch {
+    ArchiveDirtyBatch::try_new(resolve_tick, tick_content_hash, Vec::new()).expect("empty batch")
 }
 
-fn non_empty_batch(resolve_tick: u64, tick_content_hash: [u8; 32]) -> ArchiveDirtyBatchV1 {
-    ArchiveDirtyBatchV1::try_new(
+fn non_empty_batch(resolve_tick: u64, tick_content_hash: [u8; 32]) -> ArchiveDirtyBatch {
+    ArchiveDirtyBatch::try_new(
         resolve_tick,
         tick_content_hash,
         vec![county_page_input(resolve_tick, tick_content_hash)],
@@ -60,81 +59,64 @@ fn non_empty_batch(resolve_tick: u64, tick_content_hash: [u8; 32]) -> ArchiveDir
     .expect("non-empty batch")
 }
 
-fn outcome(batch: ArchiveDirtyBatchV1, remaining: usize) -> ArchiveProducerOutcomeV1 {
-    ArchiveProducerOutcomeV1::new(batch, remaining)
+fn outcome(batch: ArchiveDirtyBatch, remaining: usize) -> ArchiveProducerOutcome {
+    ArchiveProducerOutcome::new(batch, remaining)
 }
 
-fn full_outcome(resolve_tick: u64, tick_content_hash: [u8; 32]) -> ArchiveProducerOutcomeV1 {
+fn full_outcome(resolve_tick: u64, tick_content_hash: [u8; 32]) -> ArchiveProducerOutcome {
     outcome(non_empty_batch(resolve_tick, tick_content_hash), 0)
 }
 
 #[test]
 fn pending_receipts_sql_finds_unconsumed_receipts_in_keyset_order_without_locking() {
-    assert!(ARCHIVE_PENDING_RECEIPTS_SQL_V1
+    assert!(ARCHIVE_PENDING_RECEIPTS_SQL
         .contains("LEFT JOIN babylon_meta.archive_receipt_consumption_v1"));
-    assert!(ARCHIVE_PENDING_RECEIPTS_SQL_V1.contains("JOIN babylon_state.tick_commit AS marker"));
-    assert!(ARCHIVE_PENDING_RECEIPTS_SQL_V1.contains("marker.campaign_id = d.campaign_id"));
-    assert!(ARCHIVE_PENDING_RECEIPTS_SQL_V1.contains("marker.resolve_tick = d.resolve_tick"));
-    assert!(ARCHIVE_PENDING_RECEIPTS_SQL_V1.contains("IS NULL"));
-    assert!(ARCHIVE_PENDING_RECEIPTS_SQL_V1.contains("d.campaign_id = $1"));
+    assert!(ARCHIVE_PENDING_RECEIPTS_SQL.contains("JOIN babylon_state.tick_commit AS marker"));
+    assert!(ARCHIVE_PENDING_RECEIPTS_SQL.contains("marker.campaign_id = d.campaign_id"));
+    assert!(ARCHIVE_PENDING_RECEIPTS_SQL.contains("marker.resolve_tick = d.resolve_tick"));
+    assert!(ARCHIVE_PENDING_RECEIPTS_SQL.contains("IS NULL"));
+    assert!(ARCHIVE_PENDING_RECEIPTS_SQL.contains("d.campaign_id = $1"));
     assert!(
-        ARCHIVE_PENDING_RECEIPTS_SQL_V1.contains("d.resolve_tick > $3"),
+        ARCHIVE_PENDING_RECEIPTS_SQL.contains("d.resolve_tick > $3"),
         "the sweep pages through pending receipts by keyset cursor, never OFFSET"
     );
-    assert!(!ARCHIVE_PENDING_RECEIPTS_SQL_V1.contains("OFFSET"));
-    assert!(ARCHIVE_PENDING_RECEIPTS_SQL_V1.contains("ORDER BY d.resolve_tick ASC"));
+    assert!(!ARCHIVE_PENDING_RECEIPTS_SQL.contains("OFFSET"));
+    assert!(ARCHIVE_PENDING_RECEIPTS_SQL.contains("ORDER BY d.resolve_tick ASC"));
     assert!(
-        ARCHIVE_PENDING_RECEIPTS_SQL_V1.contains("LIMIT $2"),
+        ARCHIVE_PENDING_RECEIPTS_SQL.contains("LIMIT $2"),
         "each pending page is a bounded chunk, not unbounded history"
     );
-    assert!(!ARCHIVE_PENDING_RECEIPTS_SQL_V1.contains("FOR UPDATE"));
-    assert!(!ARCHIVE_PENDING_RECEIPTS_SQL_V1.contains("SKIP LOCKED"));
-    assert!(!ARCHIVE_PENDING_RECEIPTS_SQL_V1.contains("NOWAIT"));
+    assert!(!ARCHIVE_PENDING_RECEIPTS_SQL.contains("FOR UPDATE"));
+    assert!(!ARCHIVE_PENDING_RECEIPTS_SQL.contains("SKIP LOCKED"));
+    assert!(!ARCHIVE_PENDING_RECEIPTS_SQL.contains("NOWAIT"));
 }
 
 #[test]
 fn pending_receipts_sweep_chunk_and_scan_bound_are_positive_bounded_constants() {
-    assert_eq!(ARCHIVE_SWEEP_MAX_RECEIPTS_V1, 256);
-    assert_eq!(ARCHIVE_SWEEP_MAX_SCAN_V1, 4096);
+    assert_eq!(ARCHIVE_SWEEP_MAX_RECEIPTS, 256);
+    assert_eq!(ARCHIVE_SWEEP_MAX_SCAN, 4096);
 }
 
 #[test]
 fn watermark_sql_derives_the_contiguous_consumed_prefix_from_durable_state() {
-    assert!(ARCHIVE_SWEEP_WATERMARK_SQL_V1.contains("JOIN babylon_state.tick_commit AS marker"));
-    assert!(ARCHIVE_SWEEP_WATERMARK_SQL_V1.contains("MIN(d.resolve_tick)"));
-    assert!(ARCHIVE_SWEEP_WATERMARK_SQL_V1.contains("MAX(d.resolve_tick)"));
-    assert!(ARCHIVE_SWEEP_WATERMARK_SQL_V1.contains("c.campaign_id IS NULL"));
-    assert!(ARCHIVE_SWEEP_WATERMARK_SQL_V1.contains("d.campaign_id = $1::uuid"));
-}
-
-#[test]
-fn worker_identity_is_the_store_contract_not_a_local_claim() {
-    let source = std::include_str!("../src/archive_worker.rs");
-    assert!(
-        !source.contains("INSERT INTO babylon_meta.archive_receipt_consumption_v1"),
-        "the worker must not re-implement the store's claim-by-insert"
-    );
-    assert!(
-        source.contains("materialize_receipt"),
-        "the worker must delegate consumption to the store"
-    );
-    assert!(
-        source.contains("archive_worker_contract_sha256_v1"),
-        "the worker must bind to the store's worker identity"
-    );
+    assert!(ARCHIVE_SWEEP_WATERMARK_SQL.contains("JOIN babylon_state.tick_commit AS marker"));
+    assert!(ARCHIVE_SWEEP_WATERMARK_SQL.contains("MIN(d.resolve_tick)"));
+    assert!(ARCHIVE_SWEEP_WATERMARK_SQL.contains("MAX(d.resolve_tick)"));
+    assert!(ARCHIVE_SWEEP_WATERMARK_SQL.contains("c.campaign_id IS NULL"));
+    assert!(ARCHIVE_SWEEP_WATERMARK_SQL.contains("d.campaign_id = $1::uuid"));
 }
 
 #[test]
 fn null_producer_returns_empty_but_valid_outcome() {
-    let producer = NullArchiveDossierProducerV1::new();
-    let receipt = PendingArchiveReceiptV1::try_new(1, [0x11; 32]).expect("valid receipt");
+    let producer = NullArchiveDossierProducer::new();
+    let receipt = PendingArchiveReceipt::try_new(1, [0x11; 32]).expect("valid receipt");
     let outcome = producer
         .produce(
             Uuid::nil(),
             &receipt,
-            &babylon_persistence::ArchiveKnowledgeV1::try_new(Vec::new())
+            &babylon_persistence::ArchiveKnowledge::try_new(Vec::new())
                 .expect("empty scripted knowledge"),
-            ArchiveDirtyBatchV1::MAX_PAGES,
+            ArchiveDirtyBatch::MAX_PAGES,
         )
         .expect("null outcome is valid");
     let batch = outcome.batch();
@@ -147,18 +129,18 @@ fn null_producer_returns_empty_but_valid_outcome() {
 #[test]
 fn pending_receipt_refuses_tick_zero_and_bigint_overflow() {
     assert_eq!(
-        PendingArchiveReceiptV1::try_new(0, [0x11; 32]),
-        Err(SemanticArchiveErrorV1::InvalidVerifiedTick)
+        PendingArchiveReceipt::try_new(0, [0x11; 32]),
+        Err(SemanticArchiveError::InvalidVerifiedTick)
     );
     assert_eq!(
-        PendingArchiveReceiptV1::try_new(i64::MAX as u64 + 1, [0x11; 32]),
-        Err(SemanticArchiveErrorV1::InvalidVerifiedTick)
+        PendingArchiveReceipt::try_new(i64::MAX as u64 + 1, [0x11; 32]),
+        Err(SemanticArchiveError::InvalidVerifiedTick)
     );
 }
 
 #[test]
 fn empty_sweep_report_has_zero_counts_and_verified_tick() {
-    let report = ArchiveWorkerSweepReportV1::default();
+    let report = ArchiveWorkerSweepReport::default();
 
     assert!(report.dispositions().is_empty());
     assert_eq!(report.applied_count(), 0);
@@ -169,17 +151,16 @@ fn empty_sweep_report_has_zero_counts_and_verified_tick() {
 
 #[test]
 fn sweep_report_aggregates_dispositions_and_carries_the_persisted_watermark() {
-    let report = ArchiveWorkerSweepReportV1::new(
+    let report = ArchiveWorkerSweepReport::new(
         vec![
-            (1, ArchiveReceiptDispositionV1::Paged),
-            (2, ArchiveReceiptDispositionV1::Applied),
-            (3, ArchiveReceiptDispositionV1::AlreadyConsumed),
-            (4, ArchiveReceiptDispositionV1::Paged),
-            (5, ArchiveReceiptDispositionV1::Paged),
+            (1, ArchiveReceiptDisposition::Paged),
+            (2, ArchiveReceiptDisposition::Applied),
+            (3, ArchiveReceiptDisposition::AlreadyConsumed),
+            (4, ArchiveReceiptDisposition::Paged),
+            (5, ArchiveReceiptDisposition::Paged),
         ],
         9,
         7,
-        true,
         true,
     );
 
@@ -192,37 +173,34 @@ fn sweep_report_aggregates_dispositions_and_carries_the_persisted_watermark() {
 
 #[test]
 fn batch_identity_must_match_the_receipt_exactly() {
-    let receipt = PendingArchiveReceiptV1::try_new(2, [0x22; 32]).expect("valid receipt");
+    let receipt = PendingArchiveReceipt::try_new(2, [0x22; 32]).expect("valid receipt");
     let matching = non_empty_batch(2, [0x22; 32]);
     let wrong_tick = non_empty_batch(3, [0x22; 32]);
     let wrong_hash = non_empty_batch(2, [0x33; 32]);
 
+    assert_eq!(archive_batch_matches_receipt(&matching, &receipt), Ok(()));
     assert_eq!(
-        archive_batch_matches_receipt_v1(&matching, &receipt),
-        Ok(())
+        archive_batch_matches_receipt(&wrong_tick, &receipt),
+        Err(SemanticArchiveError::ReceiptMismatch)
     );
     assert_eq!(
-        archive_batch_matches_receipt_v1(&wrong_tick, &receipt),
-        Err(SemanticArchiveErrorV1::ReceiptMismatch)
-    );
-    assert_eq!(
-        archive_batch_matches_receipt_v1(&wrong_hash, &receipt),
-        Err(SemanticArchiveErrorV1::ReceiptMismatch)
+        archive_batch_matches_receipt(&wrong_hash, &receipt),
+        Err(SemanticArchiveError::ReceiptMismatch)
     );
 }
 
 #[test]
 fn contiguous_watermark_never_advances_past_a_pending_tick() {
     // No receipts at all: the watermark stays at zero.
-    assert_eq!(archive_contiguous_watermark_v1(None, 0), 0);
+    assert_eq!(archive_contiguous_watermark(None, 0), 0);
     // Everything consumed: the watermark is the highest committed receipt.
-    assert_eq!(archive_contiguous_watermark_v1(None, 7), 7);
+    assert_eq!(archive_contiguous_watermark(None, 7), 7);
     // Nothing consumed yet: an empty sweep still reports zero, not the backlog max.
-    assert_eq!(archive_contiguous_watermark_v1(Some(1), 5), 0);
+    assert_eq!(archive_contiguous_watermark(Some(1), 5), 0);
     // An undrained earlier tick caps the watermark even though later ticks applied.
-    assert_eq!(archive_contiguous_watermark_v1(Some(3), 5), 2);
+    assert_eq!(archive_contiguous_watermark(Some(3), 5), 2);
     // A single pending receipt at the backlog tail leaves the prefix before it.
-    assert_eq!(archive_contiguous_watermark_v1(Some(5), 5), 4);
+    assert_eq!(archive_contiguous_watermark(Some(5), 5), 4);
 }
 
 #[test]
@@ -233,22 +211,22 @@ fn classify_receipt_consumes_quiet_ticks_and_stages_undrained_pages() {
     let paged = outcome(non_empty_batch(4, [0x44; 32]), 316);
 
     assert_eq!(
-        classify_archive_receipt_v1(&empty),
-        ArchiveReceiptPlanV1::Consume
+        classify_archive_receipt(&empty),
+        ArchiveReceiptPlan::Consume
     );
     assert_eq!(
-        classify_archive_receipt_v1(&non_empty),
-        ArchiveReceiptPlanV1::Consume
+        classify_archive_receipt(&non_empty),
+        ArchiveReceiptPlan::Consume
     );
     assert_eq!(
-        classify_archive_receipt_v1(&empty_but_undrained),
-        ArchiveReceiptPlanV1::Stage,
+        classify_archive_receipt(&empty_but_undrained),
+        ArchiveReceiptPlan::Stage,
         "an exhausted page budget with dirty pages left still materializes (a no-op stage) \
          instead of deferring forever"
     );
     assert_eq!(
-        classify_archive_receipt_v1(&paged),
-        ArchiveReceiptPlanV1::Stage,
+        classify_archive_receipt(&paged),
+        ArchiveReceiptPlan::Stage,
         "a bounded head batch with an undrained tail materializes without consuming"
     );
     assert_eq!(paged.remaining(), 316);
@@ -256,7 +234,7 @@ fn classify_receipt_consumes_quiet_ticks_and_stages_undrained_pages() {
 
 #[test]
 fn classify_sweep_preserves_order_and_consumes_complete_receipts() {
-    let plans = classify_archive_sweep_v1(vec![
+    let plans = classify_archive_sweep(vec![
         Ok(outcome(empty_batch(1, [0x11; 32]), 0)),
         Ok(full_outcome(2, [0x22; 32])),
         Ok(outcome(empty_batch(3, [0x33; 32]), 0)),
@@ -266,22 +244,22 @@ fn classify_sweep_preserves_order_and_consumes_complete_receipts() {
     assert_eq!(
         plans,
         vec![
-            ArchiveReceiptPlanV1::Consume,
-            ArchiveReceiptPlanV1::Consume,
-            ArchiveReceiptPlanV1::Consume,
+            ArchiveReceiptPlan::Consume,
+            ArchiveReceiptPlan::Consume,
+            ArchiveReceiptPlan::Consume,
         ]
     );
 }
 
 #[test]
 fn classify_sweep_stops_at_first_producer_error() {
-    let result = classify_archive_sweep_v1(vec![
+    let result = classify_archive_sweep(vec![
         Ok(outcome(empty_batch(1, [0x11; 32]), 0)),
-        Err(SemanticArchiveErrorV1::InvalidText),
+        Err(SemanticArchiveError::InvalidText),
         Ok(outcome(empty_batch(3, [0x33; 32]), 0)),
     ]);
 
-    assert_eq!(result, Err(SemanticArchiveErrorV1::InvalidText));
+    assert_eq!(result, Err(SemanticArchiveError::InvalidText));
 }
 
 #[test]
@@ -289,43 +267,42 @@ fn paged_sweep_model_enforces_the_consume_cap_across_keyset_pages() {
     // The reviewer's composition: one full 256-row page of 255 materializable
     // receipts plus a quiet tail, then another page. The quiet receipt also
     // consumes; the cap must stop this pass at tick 256.
-    let mut page_one: Vec<Result<ArchiveProducerOutcomeV1, SemanticArchiveErrorV1>> = (1..=255)
+    let mut page_one: Vec<Result<ArchiveProducerOutcome, SemanticArchiveError>> = (1..=255)
         .map(|tick| Ok(full_outcome(tick, [0x11; 32])))
         .collect();
     page_one.push(Ok(outcome(empty_batch(256, [0x11; 32]), 0)));
-    let page_two: Vec<Result<ArchiveProducerOutcomeV1, SemanticArchiveErrorV1>> = (257..=258)
+    let page_two: Vec<Result<ArchiveProducerOutcome, SemanticArchiveError>> = (257..=258)
         .map(|tick| Ok(full_outcome(tick, [0x22; 32])))
         .collect();
 
-    let model = model_archive_sweep_pages_v1(vec![page_one, page_two]).expect("paged model");
+    let model = model_archive_sweep_pages(vec![page_one, page_two]).expect("paged model");
 
     assert_eq!(
         model.consumed(),
-        ARCHIVE_SWEEP_MAX_RECEIPTS_V1,
+        ARCHIVE_SWEEP_MAX_RECEIPTS,
         "one sweep never consumes past the declared cap, whatever the page composition"
     );
     assert_eq!(
         model.scanned(),
-        ARCHIVE_SWEEP_MAX_RECEIPTS_V1,
+        ARCHIVE_SWEEP_MAX_RECEIPTS,
         "the quiet tail consumes the final slot in this sweep"
     );
     assert_eq!(
         model.plans().len(),
         usize::try_from(model.scanned()).unwrap()
     );
-    assert_eq!(model.plans()[255], ArchiveReceiptPlanV1::Consume);
+    assert_eq!(model.plans()[255], ArchiveReceiptPlan::Consume);
     assert_eq!(model.plans().len(), 256, "the remainder stays pending");
 }
 
 #[test]
 fn paged_sweep_model_keeps_the_scan_bound_as_the_outer_bound() {
     // Even a fully quiet campaign stops at the independent scan bound.
-    let page: Vec<Result<ArchiveProducerOutcomeV1, SemanticArchiveErrorV1>> = (1..=10)
+    let page: Vec<Result<ArchiveProducerOutcome, SemanticArchiveError>> = (1..=10)
         .map(|tick| Ok(outcome(empty_batch(tick, [0x11; 32]), 0)))
         .collect();
 
-    let model =
-        model_archive_sweep_pages_with_bounds_v1(vec![page], 256, 4).expect("bounded model");
+    let model = model_archive_sweep_pages_with_bounds(vec![page], 256, 4).expect("bounded model");
 
     assert_eq!(model.scanned(), 4);
     assert_eq!(model.consumed(), 4);
@@ -333,7 +310,7 @@ fn paged_sweep_model_keeps_the_scan_bound_as_the_outer_bound() {
         model
             .plans()
             .iter()
-            .all(|plan| *plan == ArchiveReceiptPlanV1::Consume),
+            .all(|plan| *plan == ArchiveReceiptPlan::Consume),
         "every evaluated quiet receipt settles"
     );
 }
@@ -347,7 +324,7 @@ fn foundation_receipt_pages_its_drain_until_the_tail_converges() {
     // page materializes, and zero remaining is what permits consumption.
     const PLACE_DIRTY: usize = 745;
     const COUNTY_DIRTY: usize = 83;
-    const BUDGET: usize = ArchiveDirtyBatchV1::MAX_PAGES;
+    const BUDGET: usize = ArchiveDirtyBatch::MAX_PAGES;
 
     let first_place_head = BUDGET - COUNTY_DIRTY;
     assert_eq!(PLACE_DIRTY - first_place_head, 572);
@@ -355,8 +332,8 @@ fn foundation_receipt_pages_its_drain_until_the_tail_converges() {
     // Sweep 1: 83 county pages + 173 place pages = 256, 572 places left.
     let sweep_one = outcome(non_empty_batch(42, [0x11; 32]), 572);
     assert_eq!(
-        classify_archive_receipt_v1(&sweep_one),
-        ArchiveReceiptPlanV1::Stage
+        classify_archive_receipt(&sweep_one),
+        ArchiveReceiptPlan::Stage
     );
     assert_eq!(
         sweep_one.remaining(),
@@ -381,11 +358,11 @@ fn foundation_receipt_pages_its_drain_until_the_tail_converges() {
         ("sweep four", &sweep_four),
     ] {
         assert_eq!(
-            classify_archive_receipt_v1(step),
+            classify_archive_receipt(step),
             if step.remaining() == 0 {
-                ArchiveReceiptPlanV1::Consume
+                ArchiveReceiptPlan::Consume
             } else {
-                ArchiveReceiptPlanV1::Stage
+                ArchiveReceiptPlan::Stage
             },
             "{label} keeps materializing the pending receipt"
         );
@@ -397,67 +374,41 @@ fn foundation_receipt_pages_its_drain_until_the_tail_converges() {
     );
 }
 
-#[test]
-fn ordered_worker_bounds_every_receipt_evaluation_and_stops_at_stage() {
-    let source = include_str!("../src/archive_revision/worker.rs");
-    let loop_at = source
-        .find("for _ in 0..crate::ARCHIVE_SWEEP_MAX_RECEIPTS_V1")
-        .expect("the sole ordered worker caps the entire evaluation loop");
-    let next_at = source
-        .find("publication::next_work(&mut tx, campaign)")
-        .expect("each iteration selects only the earliest unsettled receipt");
-    let produce_at = source
-        .find("producer.produce(")
-        .expect("bounded producer evaluation");
-    let publish_at = source
-        .find("publication::publish(")
-        .expect("atomic publication");
-    assert!(
-        loop_at < next_at && next_at < produce_at && produce_at < publish_at,
-        "the cap encloses selection, evaluation and publication, including quiet receipts"
-    );
-    assert!(
-        source.contains("if mode == ArchiveMaterializeModeV1::Stage {\n            break;"),
-        "no later receipt is evaluated against an incomplete earlier publication"
-    );
-    assert_eq!(ARCHIVE_SWEEP_MAX_RECEIPTS_V1, 256);
-}
-
 /// Stub producer returning one scripted outcome per receipt, honoring the
 /// page budget like a production producer.
-struct ScriptedProducer(ArchiveProducerOutcomeV1);
+struct ScriptedProducer(ArchiveProducerOutcome);
 
-impl ArchiveDossierProducerV1 for ScriptedProducer {
+impl ArchiveDossierProducer for ScriptedProducer {
     fn produce(
         &self,
         _campaign_id: Uuid,
-        _receipt: &PendingArchiveReceiptV1,
-        _knowledge: &babylon_persistence::ArchiveKnowledgeV1,
+        _receipt: &PendingArchiveReceipt,
+        _knowledge: &babylon_persistence::ArchiveKnowledge,
         page_budget: usize,
-    ) -> Result<ArchiveProducerOutcomeV1, SemanticArchiveErrorV1> {
+    ) -> Result<ArchiveProducerOutcome, SemanticArchiveError> {
         let batch = self.0.batch();
         let pages = batch.pages().len().min(page_budget);
-        let head = ArchiveDirtyBatchV1::try_new(
+        let head = ArchiveDirtyBatch::try_new(
             batch.resolve_tick(),
             *batch.tick_content_hash(),
             batch.pages().iter().take(pages).cloned().collect(),
         )
         .expect("budget-respecting head batch");
-        Ok(ArchiveProducerOutcomeV1::new(
+        Ok(ArchiveProducerOutcome::new(
             head,
             self.0.remaining() + batch.pages().len() - pages,
         ))
     }
 }
 
-fn scripted(batch: ArchiveDirtyBatchV1, remaining: usize) -> ScriptedProducer {
-    ScriptedProducer(ArchiveProducerOutcomeV1::new(batch, remaining))
+fn scripted(batch: ArchiveDirtyBatch, remaining: usize) -> ScriptedProducer {
+    ScriptedProducer(ArchiveProducerOutcome::new(batch, remaining))
 }
 
-fn place_page_input(resolve_tick: u64, tick_content_hash: [u8; 32]) -> ArchivePageInputV1 {
-    ArchivePageInputV1::try_new(
-        ArchiveSubjectV1::try_new(
-            ArchiveSubjectKindV1::Place,
+fn place_page_input(resolve_tick: u64, tick_content_hash: [u8; 32]) -> ArchivePageInput {
+    ArchivePageInput::try_new(
+        ArchiveSubject::try_new(
+            ArchiveSubjectKind::Place,
             "2622000".to_owned(),
             "Detroit city".to_owned(),
         )
@@ -473,11 +424,11 @@ fn place_page_input(resolve_tick: u64, tick_content_hash: [u8; 32]) -> ArchivePa
 
 #[test]
 fn composite_merges_producer_pages_sorted_and_refuses_duplicate_subjects() {
-    let receipt = PendingArchiveReceiptV1::try_new(1, [0x11; 32]).expect("receipt");
-    let county_first = CompositeArchiveDossierProducerV1::new(vec![
+    let receipt = PendingArchiveReceipt::try_new(1, [0x11; 32]).expect("receipt");
+    let county_first = CompositeArchiveDossierProducer::new(vec![
         Box::new(scripted(non_empty_batch(1, [0x11; 32]), 0)),
         Box::new(scripted(
-            ArchiveDirtyBatchV1::try_new(1, [0x11; 32], vec![place_page_input(1, [0x11; 32])])
+            ArchiveDirtyBatch::try_new(1, [0x11; 32], vec![place_page_input(1, [0x11; 32])])
                 .expect("place batch"),
             0,
         )),
@@ -486,9 +437,9 @@ fn composite_merges_producer_pages_sorted_and_refuses_duplicate_subjects() {
         .produce(
             Uuid::nil(),
             &receipt,
-            &babylon_persistence::ArchiveKnowledgeV1::try_new(Vec::new())
+            &babylon_persistence::ArchiveKnowledge::try_new(Vec::new())
                 .expect("empty scripted knowledge"),
-            ArchiveDirtyBatchV1::MAX_PAGES,
+            ArchiveDirtyBatch::MAX_PAGES,
         )
         .expect("composite merge");
     let order = produced
@@ -500,9 +451,9 @@ fn composite_merges_producer_pages_sorted_and_refuses_duplicate_subjects() {
     assert_eq!(
         order,
         vec![
-            ArchivePageRefV1::try_new(ArchiveSubjectKindV1::County, "26163".to_owned())
+            ArchivePageRef::try_new(ArchiveSubjectKind::County, "26163".to_owned())
                 .expect("county ref"),
-            ArchivePageRefV1::try_new(ArchiveSubjectKindV1::Place, "2622000".to_owned())
+            ArchivePageRef::try_new(ArchiveSubjectKind::Place, "2622000".to_owned())
                 .expect("place ref"),
         ],
         "merged pages follow deterministic page-reference order"
@@ -513,7 +464,7 @@ fn composite_merges_producer_pages_sorted_and_refuses_duplicate_subjects() {
         "both producers drained: nothing keeps the receipt pending"
     );
 
-    let duplicate = CompositeArchiveDossierProducerV1::new(vec![
+    let duplicate = CompositeArchiveDossierProducer::new(vec![
         Box::new(scripted(non_empty_batch(1, [0x11; 32]), 0)),
         Box::new(scripted(non_empty_batch(1, [0x11; 32]), 0)),
     ]);
@@ -521,23 +472,23 @@ fn composite_merges_producer_pages_sorted_and_refuses_duplicate_subjects() {
         duplicate.produce(
             Uuid::nil(),
             &receipt,
-            &babylon_persistence::ArchiveKnowledgeV1::try_new(Vec::new())
+            &babylon_persistence::ArchiveKnowledge::try_new(Vec::new())
                 .expect("empty scripted knowledge"),
-            ArchiveDirtyBatchV1::MAX_PAGES
+            ArchiveDirtyBatch::MAX_PAGES
         ),
-        Err(SemanticArchiveErrorV1::DuplicateKey),
+        Err(SemanticArchiveError::DuplicateKey),
         "two producers may not claim the same page subject"
     );
 }
 
 #[test]
 fn composite_threads_the_page_budget_and_sums_the_undrained_remainder() {
-    let receipt = PendingArchiveReceiptV1::try_new(1, [0x11; 32]).expect("receipt");
+    let receipt = PendingArchiveReceipt::try_new(1, [0x11; 32]).expect("receipt");
     let county_pages = (0..200)
         .map(|index| {
-            ArchivePageInputV1::try_new(
-                ArchiveSubjectV1::try_new(
-                    ArchiveSubjectKindV1::County,
+            ArchivePageInput::try_new(
+                ArchiveSubject::try_new(
+                    ArchiveSubjectKind::County,
                     format!("26{index:03}"),
                     "County".to_owned(),
                 )
@@ -551,13 +502,13 @@ fn composite_threads_the_page_budget_and_sums_the_undrained_remainder() {
             .expect("county page")
         })
         .collect::<Vec<_>>();
-    let composite = CompositeArchiveDossierProducerV1::new(vec![
+    let composite = CompositeArchiveDossierProducer::new(vec![
         Box::new(scripted(
-            ArchiveDirtyBatchV1::try_new(1, [0x11; 32], county_pages).expect("county batch"),
+            ArchiveDirtyBatch::try_new(1, [0x11; 32], county_pages).expect("county batch"),
             100,
         )),
         Box::new(scripted(
-            ArchiveDirtyBatchV1::try_new(1, [0x11; 32], vec![place_page_input(1, [0x11; 32])])
+            ArchiveDirtyBatch::try_new(1, [0x11; 32], vec![place_page_input(1, [0x11; 32])])
                 .expect("place batch"),
             316,
         )),
@@ -566,9 +517,9 @@ fn composite_threads_the_page_budget_and_sums_the_undrained_remainder() {
         .produce(
             Uuid::nil(),
             &receipt,
-            &babylon_persistence::ArchiveKnowledgeV1::try_new(Vec::new())
+            &babylon_persistence::ArchiveKnowledge::try_new(Vec::new())
                 .expect("empty scripted knowledge"),
-            ArchiveDirtyBatchV1::MAX_PAGES,
+            ArchiveDirtyBatch::MAX_PAGES,
         )
         .expect("paged composite merge");
 
@@ -585,20 +536,20 @@ fn composite_threads_the_page_budget_and_sums_the_undrained_remainder() {
     assert_composite_preserves_unfunded_pages(&receipt);
 }
 
-fn assert_composite_preserves_unfunded_pages(receipt: &PendingArchiveReceiptV1) {
+fn assert_composite_preserves_unfunded_pages(receipt: &PendingArchiveReceipt) {
     // A producer arriving after the budget is exhausted sees no room and
     // reports its whole dirty set as remainder, exactly like the county side
     // of a foundation receipt that the place head already filled.
-    let exhausted = CompositeArchiveDossierProducerV1::new(vec![
+    let exhausted = CompositeArchiveDossierProducer::new(vec![
         Box::new(scripted(
-            ArchiveDirtyBatchV1::try_new(
+            ArchiveDirtyBatch::try_new(
                 1,
                 [0x11; 32],
-                (0..ArchiveDirtyBatchV1::MAX_PAGES)
+                (0..ArchiveDirtyBatch::MAX_PAGES)
                     .map(|index| {
-                        ArchivePageInputV1::try_new(
-                            ArchiveSubjectV1::try_new(
-                                ArchiveSubjectKindV1::County,
+                        ArchivePageInput::try_new(
+                            ArchiveSubject::try_new(
+                                ArchiveSubjectKind::County,
                                 format!("26{index:03}"),
                                 "County".to_owned(),
                             )
@@ -618,7 +569,7 @@ fn assert_composite_preserves_unfunded_pages(receipt: &PendingArchiveReceiptV1) 
             0,
         )),
         Box::new(scripted(
-            ArchiveDirtyBatchV1::try_new(1, [0x11; 32], vec![place_page_input(1, [0x11; 32])])
+            ArchiveDirtyBatch::try_new(1, [0x11; 32], vec![place_page_input(1, [0x11; 32])])
                 .expect("overflow batch"),
             0,
         )),
@@ -627,12 +578,12 @@ fn assert_composite_preserves_unfunded_pages(receipt: &PendingArchiveReceiptV1) 
         .produce(
             Uuid::nil(),
             receipt,
-            &babylon_persistence::ArchiveKnowledgeV1::try_new(Vec::new())
+            &babylon_persistence::ArchiveKnowledge::try_new(Vec::new())
                 .expect("empty scripted knowledge"),
-            ArchiveDirtyBatchV1::MAX_PAGES,
+            ArchiveDirtyBatch::MAX_PAGES,
         )
         .expect("the budget-exhausted composite pages instead of overflowing");
-    assert_eq!(paged.batch().pages().len(), ArchiveDirtyBatchV1::MAX_PAGES);
+    assert_eq!(paged.batch().pages().len(), ArchiveDirtyBatch::MAX_PAGES);
     assert_eq!(
         paged.remaining(),
         1,
@@ -642,7 +593,7 @@ fn assert_composite_preserves_unfunded_pages(receipt: &PendingArchiveReceiptV1) 
     for page in paged.batch().pages() {
         assert_eq!(
             page.subject().page_ref().kind(),
-            ArchiveSubjectKindV1::County,
+            ArchiveSubjectKind::County,
             "the funded head drains before any unfunded producer contributes"
         );
     }
@@ -656,19 +607,19 @@ fn composite_still_refuses_a_producer_that_ignores_the_page_budget() {
     // over-bound batch.
     struct OverBoundProducer;
 
-    impl ArchiveDossierProducerV1 for OverBoundProducer {
+    impl ArchiveDossierProducer for OverBoundProducer {
         fn produce(
             &self,
             _campaign_id: Uuid,
-            receipt: &PendingArchiveReceiptV1,
-            _knowledge: &babylon_persistence::ArchiveKnowledgeV1,
+            receipt: &PendingArchiveReceipt,
+            _knowledge: &babylon_persistence::ArchiveKnowledge,
             _page_budget: usize,
-        ) -> Result<ArchiveProducerOutcomeV1, SemanticArchiveErrorV1> {
-            let pages = (0..=ArchiveDirtyBatchV1::MAX_PAGES)
+        ) -> Result<ArchiveProducerOutcome, SemanticArchiveError> {
+            let pages = (0..=ArchiveDirtyBatch::MAX_PAGES)
                 .map(|index| {
-                    ArchivePageInputV1::try_new(
-                        ArchiveSubjectV1::try_new(
-                            ArchiveSubjectKindV1::County,
+                    ArchivePageInput::try_new(
+                        ArchiveSubject::try_new(
+                            ArchiveSubjectKind::County,
                             format!("26{index:03}"),
                             "County".to_owned(),
                         )
@@ -682,26 +633,26 @@ fn composite_still_refuses_a_producer_that_ignores_the_page_budget() {
                     .expect("over-bound page")
                 })
                 .collect::<Vec<_>>();
-            let batch = ArchiveDirtyBatchV1::try_new(
+            let batch = ArchiveDirtyBatch::try_new(
                 receipt.resolve_tick(),
                 *receipt.tick_content_hash(),
                 pages,
             )?;
-            Ok(ArchiveProducerOutcomeV1::new(batch, 0))
+            Ok(ArchiveProducerOutcome::new(batch, 0))
         }
     }
 
-    let receipt = PendingArchiveReceiptV1::try_new(1, [0x11; 32]).expect("receipt");
-    let composite = CompositeArchiveDossierProducerV1::new(vec![Box::new(OverBoundProducer)]);
+    let receipt = PendingArchiveReceipt::try_new(1, [0x11; 32]).expect("receipt");
+    let composite = CompositeArchiveDossierProducer::new(vec![Box::new(OverBoundProducer)]);
     assert_eq!(
         composite.produce(
             Uuid::nil(),
             &receipt,
-            &babylon_persistence::ArchiveKnowledgeV1::try_new(Vec::new())
+            &babylon_persistence::ArchiveKnowledge::try_new(Vec::new())
                 .expect("empty scripted knowledge"),
-            ArchiveDirtyBatchV1::MAX_PAGES
+            ArchiveDirtyBatch::MAX_PAGES
         ),
-        Err(SemanticArchiveErrorV1::CollectionBound),
+        Err(SemanticArchiveError::CollectionBound),
         "the batch bound refuses a budget-ignoring producer; paging never truncates"
     );
 }

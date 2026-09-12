@@ -4,19 +4,19 @@ use std::fmt::Write as _;
 use std::io::Read as _;
 use std::sync::OnceLock;
 
-use babylon_kernel::sha256_of;
+use babylon_kernel::content_digest::sha256_of;
 use serde::{Deserialize, Serialize};
 
 use crate::michigan_economy::digest_hex;
 
 /// Exact compressed artifact identity from `QcewCountySectorsV1`.
-pub const QCEW_SECTORS_ARTIFACT_SHA256_V1: &str =
+pub const QCEW_SECTORS_ARTIFACT_SHA256: &str =
     "1cac80bee20c086be2e1f268643b0caab5d8d63030251817a9f149123755d71a";
 /// Exact typed-row identity, including disclosure and source lineage.
-pub const QCEW_SECTORS_SEMANTIC_SHA256_V1: &str =
+pub const QCEW_SECTORS_SEMANTIC_SHA256: &str =
     "e117a5cbbe22e6a133c212cb254aaeeb543732344ca049de8a404eb4fd90e6d9";
 /// Fixed public-record vintage, not the campaign's simulated year.
-pub const QCEW_SECTORS_VINTAGE_V1: u16 = 2024;
+pub const QCEW_SECTORS_VINTAGE: u16 = 2024;
 const SOURCE_MANIFEST_SHA256: &str =
     "048c02b5890115e655e0a61553472adf2cbf8ef5c016731c0ffc0bfd0f2f667e";
 const ARTIFACT: &[u8] = include_bytes!(
@@ -48,37 +48,37 @@ const SECTOR_CODES: [&str; 20] = [
 
 /// One exact admitted code. Composite sectors retain their complete identity.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub struct MichiganSectorCodeV1(&'static str);
-impl MichiganSectorCodeV1 {
+pub struct MichiganSectorCode(&'static str);
+impl MichiganSectorCode {
     #[must_use]
     pub const fn as_str(self) -> &'static str {
         self.0
     }
     #[must_use]
-    pub fn disposition(self) -> MichiganSectorDispositionV1 {
+    pub fn disposition(self) -> MichiganSectorDisposition {
         if self.0 == "99" {
-            MichiganSectorDispositionV1::Unclassified
+            MichiganSectorDisposition::Unclassified
         } else {
-            MichiganSectorDispositionV1::Classified
+            MichiganSectorDisposition::Classified
         }
     }
-    fn parse(value: &str) -> Result<Self, MichiganSectorsErrorV1> {
+    fn parse(value: &str) -> Result<Self, MichiganSectorsError> {
         SECTOR_CODES
             .iter()
             .find(|code| **code == value)
             .copied()
             .map(Self)
-            .ok_or(MichiganSectorsErrorV1::RowIdentity)
+            .ok_or(MichiganSectorsError::RowIdentity)
     }
 }
 
 /// Code 99 remains unclassified, without an invented classified membership.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum MichiganSectorDispositionV1 {
+pub enum MichiganSectorDisposition {
     Classified,
     Unclassified,
 }
-impl MichiganSectorDispositionV1 {
+impl MichiganSectorDisposition {
     #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
@@ -90,11 +90,11 @@ impl MichiganSectorDispositionV1 {
 
 /// Establishments remain observed in suppressed cells; other measures are absent.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum MichiganSectorDisclosureV1 {
+pub enum MichiganSectorDisclosure {
     Disclosed,
     Suppressed,
 }
-impl MichiganSectorDisclosureV1 {
+impl MichiganSectorDisclosure {
     #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
@@ -106,11 +106,11 @@ impl MichiganSectorDisclosureV1 {
 
 /// Immutable source cell. Jobs are annual averages, never allocated workers.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct MichiganCountySectorV1 {
+pub struct MichiganCountySector {
     county_geoid: String,
-    sector_code: MichiganSectorCodeV1,
+    sector_code: MichiganSectorCode,
     sector_title: String,
-    disclosure: MichiganSectorDisclosureV1,
+    disclosure: MichiganSectorDisclosure,
     annual_avg_estabs_count: u64,
     annual_avg_emplvl: Option<u64>,
     total_annual_wages: Option<u64>,
@@ -118,13 +118,13 @@ pub struct MichiganCountySectorV1 {
     source_file: String,
     source_sha256: String,
 }
-impl MichiganCountySectorV1 {
+impl MichiganCountySector {
     #[must_use]
     pub fn county_geoid(&self) -> &str {
         &self.county_geoid
     }
     #[must_use]
-    pub const fn sector_code(&self) -> MichiganSectorCodeV1 {
+    pub const fn sector_code(&self) -> MichiganSectorCode {
         self.sector_code
     }
     #[must_use]
@@ -132,7 +132,7 @@ impl MichiganCountySectorV1 {
         &self.sector_title
     }
     #[must_use]
-    pub const fn disclosure(&self) -> MichiganSectorDisclosureV1 {
+    pub const fn disclosure(&self) -> MichiganSectorDisclosure {
         self.disclosure
     }
     #[must_use]
@@ -163,19 +163,19 @@ impl MichiganCountySectorV1 {
 
 /// Fully checked reference rows. A missing county-sector row does not mean zero.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct MichiganCountySectorsV1 {
-    rows: Vec<MichiganCountySectorV1>,
+pub struct MichiganCountySectors {
+    rows: Vec<MichiganCountySector>,
 }
-impl MichiganCountySectorsV1 {
+impl MichiganCountySectors {
     #[must_use]
-    pub fn rows(&self) -> &[MichiganCountySectorV1] {
+    pub fn rows(&self) -> &[MichiganCountySector] {
         &self.rows
     }
 }
 
 /// Closed admission failures, without dumping withheld cells or source contents.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum MichiganSectorsErrorV1 {
+pub enum MichiganSectorsError {
     ArtifactDigest,
     SourceDigest,
     SourceManifest,
@@ -190,12 +190,12 @@ pub enum MichiganSectorsErrorV1 {
     Coverage,
     SemanticDigest,
 }
-impl std::fmt::Display for MichiganSectorsErrorV1 {
+impl std::fmt::Display for MichiganSectorsError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "Michigan county sectors refused: {self:?}")
     }
 }
-impl std::error::Error for MichiganSectorsErrorV1 {}
+impl std::error::Error for MichiganSectorsError {}
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -211,17 +211,17 @@ struct SourcePin {
     sha256: String,
 }
 
-fn source_pins(raw: &[u8]) -> Result<Vec<SourcePin>, MichiganSectorsErrorV1> {
+fn source_pins(raw: &[u8]) -> Result<Vec<SourcePin>, MichiganSectorsError> {
     if raw.len() > MAX_SOURCE_BYTES || digest_hex(&sha256_of(raw)) != SOURCE_MANIFEST_SHA256 {
-        return Err(MichiganSectorsErrorV1::SourceDigest);
+        return Err(MichiganSectorsError::SourceDigest);
     }
     let manifest: SourceManifest =
-        serde_json::from_slice(raw).map_err(|_| MichiganSectorsErrorV1::SourceManifest)?;
+        serde_json::from_slice(raw).map_err(|_| MichiganSectorsError::SourceManifest)?;
     if manifest.contract != "QcewCountyEconomicsV1"
         || manifest.version != 1
         || manifest.entries.len() != 83
     {
-        return Err(MichiganSectorsErrorV1::SourceManifest);
+        return Err(MichiganSectorsError::SourceManifest);
     }
     for (index, pin) in manifest.entries.iter().enumerate() {
         let prefix = format!("2024.annual {} ", 26_001 + index * 2);
@@ -233,18 +233,18 @@ fn source_pins(raw: &[u8]) -> Result<Vec<SourcePin>, MichiganSectorsErrorV1> {
                 .bytes()
                 .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
         {
-            return Err(MichiganSectorsErrorV1::SourceManifest);
+            return Err(MichiganSectorsError::SourceManifest);
         }
     }
     Ok(manifest.entries)
 }
 
-fn decode_gzip(raw: &[u8]) -> Result<String, MichiganSectorsErrorV1> {
+fn decode_gzip(raw: &[u8]) -> Result<String, MichiganSectorsError> {
     if raw.len() > MAX_BYTES {
-        return Err(MichiganSectorsErrorV1::ArtifactSize);
+        return Err(MichiganSectorsError::ArtifactSize);
     }
     if raw.len() < 10 || raw[..8] != [0x1f, 0x8b, 8, 0, 0, 0, 0, 0] {
-        return Err(MichiganSectorsErrorV1::ArtifactDecode);
+        return Err(MichiganSectorsError::ArtifactDecode);
     }
     let mut decoder = flate2::bufread::GzDecoder::new(raw);
     let mut source_text = String::new();
@@ -252,24 +252,24 @@ fn decode_gzip(raw: &[u8]) -> Result<String, MichiganSectorsErrorV1> {
         .by_ref()
         .take(u64::try_from(MAX_BYTES).expect("bounded constant") + 1)
         .read_to_string(&mut source_text)
-        .map_err(|_| MichiganSectorsErrorV1::ArtifactDecode)?;
+        .map_err(|_| MichiganSectorsError::ArtifactDecode)?;
     if source_text.len() > MAX_BYTES {
-        return Err(MichiganSectorsErrorV1::ArtifactSize);
+        return Err(MichiganSectorsError::ArtifactSize);
     }
     if !decoder.into_inner().is_empty() {
-        return Err(MichiganSectorsErrorV1::ArtifactDecode);
+        return Err(MichiganSectorsError::ArtifactDecode);
     }
     Ok(source_text)
 }
 
 // The contract forbids control/newline characters within fields. Parse its
 // single-line CSV records with quoted commas and doubled quotes, never split(',').
-fn csv_record(line: &str) -> Result<Vec<String>, MichiganSectorsErrorV1> {
+fn csv_record(line: &str) -> Result<Vec<String>, MichiganSectorsError> {
     let mut input = line.chars().peekable();
     let mut fields = Vec::with_capacity(COLUMNS.len());
     loop {
         if fields.len() == COLUMNS.len() {
-            return Err(MichiganSectorsErrorV1::CsvShape);
+            return Err(MichiganSectorsError::CsvShape);
         }
         let mut field = String::new();
         if input.peek() == Some(&'"') {
@@ -282,14 +282,14 @@ fn csv_record(line: &str) -> Result<Vec<String>, MichiganSectorsErrorV1> {
                     }
                     Some('"') => break,
                     Some(value) if !value.is_control() => field.push(value),
-                    _ => return Err(MichiganSectorsErrorV1::CsvShape),
+                    _ => return Err(MichiganSectorsError::CsvShape),
                 }
             }
         } else {
             while input.peek().is_some_and(|value| *value != ',') {
                 let value = input.next().expect("peeked character");
                 if value == '"' || value.is_control() {
-                    return Err(MichiganSectorsErrorV1::CsvShape);
+                    return Err(MichiganSectorsError::CsvShape);
                 }
                 field.push(value);
             }
@@ -298,63 +298,63 @@ fn csv_record(line: &str) -> Result<Vec<String>, MichiganSectorsErrorV1> {
         match input.next() {
             Some(',') => {}
             None if fields.len() == COLUMNS.len() => return Ok(fields),
-            _ => return Err(MichiganSectorsErrorV1::CsvShape),
+            _ => return Err(MichiganSectorsError::CsvShape),
         }
     }
 }
 
-fn integer(value: &str) -> Result<u64, MichiganSectorsErrorV1> {
+fn integer(value: &str) -> Result<u64, MichiganSectorsError> {
     if value.is_empty()
         || value.len() > 19
         || !value.bytes().all(|byte| byte.is_ascii_digit())
         || (value.len() > 1 && value.starts_with('0'))
     {
-        return Err(MichiganSectorsErrorV1::Value);
+        return Err(MichiganSectorsError::Value);
     }
     let result = value
         .parse::<u64>()
-        .map_err(|_| MichiganSectorsErrorV1::Value)?;
-    i64::try_from(result).map_err(|_| MichiganSectorsErrorV1::Value)?;
+        .map_err(|_| MichiganSectorsError::Value)?;
+    i64::try_from(result).map_err(|_| MichiganSectorsError::Value)?;
     Ok(result)
 }
 
-fn county_index(geoid: &str) -> Result<usize, MichiganSectorsErrorV1> {
-    let value = integer(geoid).map_err(|_| MichiganSectorsErrorV1::RowIdentity)?;
+fn county_index(geoid: &str) -> Result<usize, MichiganSectorsError> {
+    let value = integer(geoid).map_err(|_| MichiganSectorsError::RowIdentity)?;
     if geoid.len() != 5 || !(26_001..=26_165).contains(&value) || value % 2 == 0 {
-        return Err(MichiganSectorsErrorV1::RowIdentity);
+        return Err(MichiganSectorsError::RowIdentity);
     }
-    usize::try_from((value - 26_001) / 2).map_err(|_| MichiganSectorsErrorV1::RowIdentity)
+    usize::try_from((value - 26_001) / 2).map_err(|_| MichiganSectorsError::RowIdentity)
 }
 
 fn parse_row(
     fields: &[String],
     sources: &[SourcePin],
-) -> Result<MichiganCountySectorV1, MichiganSectorsErrorV1> {
+) -> Result<MichiganCountySector, MichiganSectorsError> {
     let index = county_index(&fields[0])?;
-    let sector_code = MichiganSectorCodeV1::parse(&fields[1])?;
+    let sector_code = MichiganSectorCode::parse(&fields[1])?;
     if fields[2].is_empty()
         || fields[2].chars().count() > 256
         || fields[2]
             .chars()
             .any(|ch| ch.is_control() || (ch.is_whitespace() && ch != ' '))
     {
-        return Err(MichiganSectorsErrorV1::Value);
+        return Err(MichiganSectorsError::Value);
     }
     if fields[3] != sector_code.disposition().as_str() {
-        return Err(MichiganSectorsErrorV1::RowIdentity);
+        return Err(MichiganSectorsError::RowIdentity);
     }
     let disclosure = match fields[4].as_str() {
-        "" => MichiganSectorDisclosureV1::Disclosed,
-        "N" => MichiganSectorDisclosureV1::Suppressed,
-        _ => return Err(MichiganSectorsErrorV1::Disclosure),
+        "" => MichiganSectorDisclosure::Disclosed,
+        "N" => MichiganSectorDisclosure::Suppressed,
+        _ => return Err(MichiganSectorsError::Disclosure),
     };
     let annual_avg_estabs_count = integer(&fields[5])?;
     if annual_avg_estabs_count == 0 {
-        return Err(MichiganSectorsErrorV1::Value);
+        return Err(MichiganSectorsError::Value);
     }
-    let measures = if disclosure == MichiganSectorDisclosureV1::Suppressed {
+    let measures = if disclosure == MichiganSectorDisclosure::Suppressed {
         if fields[6..9].iter().any(|field| !field.is_empty()) {
-            return Err(MichiganSectorsErrorV1::Disclosure);
+            return Err(MichiganSectorsError::Disclosure);
         }
         [None; 3]
     } else {
@@ -364,13 +364,11 @@ fn parse_row(
             Some(integer(&fields[8])?),
         ]
     };
-    let source = sources
-        .get(index)
-        .ok_or(MichiganSectorsErrorV1::Provenance)?;
+    let source = sources.get(index).ok_or(MichiganSectorsError::Provenance)?;
     if fields[9] != source.file || fields[10] != source.sha256 {
-        return Err(MichiganSectorsErrorV1::Provenance);
+        return Err(MichiganSectorsError::Provenance);
     }
-    Ok(MichiganCountySectorV1 {
+    Ok(MichiganCountySector {
         county_geoid: fields[0].clone(),
         sector_code,
         sector_title: fields[2].clone(),
@@ -387,8 +385,8 @@ fn parse_row(
 fn ascii_json_line(
     output: &mut String,
     value: &impl Serialize,
-) -> Result<(), MichiganSectorsErrorV1> {
-    let json = serde_json::to_string(value).map_err(|_| MichiganSectorsErrorV1::SemanticDigest)?;
+) -> Result<(), MichiganSectorsError> {
+    let json = serde_json::to_string(value).map_err(|_| MichiganSectorsError::SemanticDigest)?;
     for ch in json.chars() {
         if ch.is_ascii() && ch != '\u{007f}' {
             output.push(ch);
@@ -403,7 +401,7 @@ fn ascii_json_line(
     Ok(())
 }
 
-fn semantic_digest(rows: &[MichiganCountySectorV1]) -> Result<String, MichiganSectorsErrorV1> {
+fn semantic_digest(rows: &[MichiganCountySector]) -> Result<String, MichiganSectorsError> {
     let mut source = DOMAIN.to_owned();
     ascii_json_line(&mut source, &COLUMNS)?;
     for row in rows {
@@ -430,37 +428,36 @@ fn semantic_digest(rows: &[MichiganCountySectorV1]) -> Result<String, MichiganSe
 fn checked_csv(
     source: &str,
     pins: &[SourcePin],
-) -> Result<MichiganCountySectorsV1, MichiganSectorsErrorV1> {
+) -> Result<MichiganCountySectors, MichiganSectorsError> {
     if source.len() > MAX_BYTES {
-        return Err(MichiganSectorsErrorV1::ArtifactSize);
+        return Err(MichiganSectorsError::ArtifactSize);
     }
     if !source.ends_with('\n') || source.contains('\r') {
-        return Err(MichiganSectorsErrorV1::CsvShape);
+        return Err(MichiganSectorsError::CsvShape);
     }
     let mut lines = source.split_terminator('\n');
     if lines.next() != Some(COLUMNS.join(",").as_str()) {
-        return Err(MichiganSectorsErrorV1::CsvShape);
+        return Err(MichiganSectorsError::CsvShape);
     }
-    let mut rows = Vec::<MichiganCountySectorV1>::with_capacity(MAX_ROWS);
+    let mut rows = Vec::<MichiganCountySector>::with_capacity(MAX_ROWS);
     let mut counties = [false; 83];
     let mut suppressed = 0;
     let mut unclassified = 0;
     for line in lines {
         if rows.len() == MAX_ROWS {
-            return Err(MichiganSectorsErrorV1::Coverage);
+            return Err(MichiganSectorsError::Coverage);
         }
         let row = parse_row(&csv_record(line)?, pins)?;
         if rows.last().is_some_and(|previous| {
             (previous.county_geoid(), previous.sector_code())
                 >= (row.county_geoid(), row.sector_code())
         }) {
-            return Err(MichiganSectorsErrorV1::Ordering);
+            return Err(MichiganSectorsError::Ordering);
         }
         counties[county_index(row.county_geoid())?] = true;
-        suppressed += usize::from(row.disclosure() == MichiganSectorDisclosureV1::Suppressed);
-        unclassified += usize::from(
-            row.sector_code().disposition() == MichiganSectorDispositionV1::Unclassified,
-        );
+        suppressed += usize::from(row.disclosure() == MichiganSectorDisclosure::Suppressed);
+        unclassified +=
+            usize::from(row.sector_code().disposition() == MichiganSectorDisposition::Unclassified);
         rows.push(row);
     }
     if rows.len() != 1603
@@ -468,21 +465,21 @@ fn checked_csv(
         || suppressed != 416
         || unclassified != 81
     {
-        return Err(MichiganSectorsErrorV1::Coverage);
+        return Err(MichiganSectorsError::Coverage);
     }
-    if semantic_digest(&rows)? != QCEW_SECTORS_SEMANTIC_SHA256_V1 {
-        return Err(MichiganSectorsErrorV1::SemanticDigest);
+    if semantic_digest(&rows)? != QCEW_SECTORS_SEMANTIC_SHA256 {
+        return Err(MichiganSectorsError::SemanticDigest);
     }
-    Ok(MichiganCountySectorsV1 { rows })
+    Ok(MichiganCountySectors { rows })
 }
 
-fn admit(raw: &[u8], manifest: &[u8]) -> Result<MichiganCountySectorsV1, MichiganSectorsErrorV1> {
+fn admit(raw: &[u8], manifest: &[u8]) -> Result<MichiganCountySectors, MichiganSectorsError> {
     let pins = source_pins(manifest)?;
     if raw.len() > MAX_BYTES {
-        return Err(MichiganSectorsErrorV1::ArtifactSize);
+        return Err(MichiganSectorsError::ArtifactSize);
     }
-    if digest_hex(&sha256_of(raw)) != QCEW_SECTORS_ARTIFACT_SHA256_V1 {
-        return Err(MichiganSectorsErrorV1::ArtifactDigest);
+    if digest_hex(&sha256_of(raw)) != QCEW_SECTORS_ARTIFACT_SHA256 {
+        return Err(MichiganSectorsError::ArtifactDigest);
     }
     checked_csv(&decode_gzip(raw)?, &pins)
 }
@@ -491,10 +488,8 @@ fn admit(raw: &[u8], manifest: &[u8]) -> Result<MichiganCountySectorsV1, Michiga
 /// # Errors
 /// Refuses changed pins, invalid gzip/CSV, lost source lineage, missing coverage,
 /// altered disclosure or noncanonical ordering and values.
-pub fn michigan_county_sectors_v1(
-) -> Result<&'static MichiganCountySectorsV1, MichiganSectorsErrorV1> {
-    static SECTORS: OnceLock<Result<MichiganCountySectorsV1, MichiganSectorsErrorV1>> =
-        OnceLock::new();
+pub fn michigan_county_sectors() -> Result<&'static MichiganCountySectors, MichiganSectorsError> {
+    static SECTORS: OnceLock<Result<MichiganCountySectors, MichiganSectorsError>> = OnceLock::new();
     SECTORS
         .get_or_init(|| admit(ARTIFACT, SOURCE_MANIFEST))
         .as_ref()

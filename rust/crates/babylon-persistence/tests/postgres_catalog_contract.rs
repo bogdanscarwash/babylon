@@ -1,9 +1,12 @@
 //! Current catalog parser, exact-census and local-target contracts.
 use babylon_persistence::{
-    compare_catalog_census, parse_catalog_census, validate_connection_target, CatalogCensus,
-    CatalogCensusEntry, CatalogCensusParseError, CatalogError, CatalogObjectKey, CatalogObjectKind,
-    ConnectionTargetRejection, MAX_CATALOG_CENSUS_FIXTURE_BYTES, MAX_CATALOG_CENSUS_ROWS,
-    POSTGRES_IDENTIFIER_MAX_BYTES,
+    postgres_catalog::compare_catalog_census, postgres_catalog::parse_catalog_census,
+    postgres_catalog::validate_connection_target, postgres_catalog::CatalogCensus,
+    postgres_catalog::CatalogCensusEntry, postgres_catalog::CatalogCensusParseError,
+    postgres_catalog::CatalogError, postgres_catalog::CatalogObjectKey,
+    postgres_catalog::CatalogObjectKind, postgres_catalog::ConnectionTargetRejection,
+    postgres_catalog::MAX_CATALOG_CENSUS_FIXTURE_BYTES, postgres_catalog::MAX_CATALOG_CENSUS_ROWS,
+    postgres_catalog::POSTGRES_IDENTIFIER_MAX_BYTES,
 };
 use postgres::Config;
 use std::fmt::Write as _;
@@ -11,10 +14,7 @@ use std::net::{IpAddr, Ipv4Addr};
 const ZERO_DIGEST: &str = "0000000000000000000000000000000000000000000000000000000000000000";
 
 fn expected_census() -> CatalogCensus {
-    parse_catalog_census(include_str!(
-        "../src/fixtures/fresh_schema_epoch_census_v2.txt"
-    ))
-    .unwrap()
+    parse_catalog_census(include_str!("../src/fixtures/fresh_schema_census.txt")).unwrap()
 }
 
 #[test]

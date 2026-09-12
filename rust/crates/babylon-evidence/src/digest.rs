@@ -1,6 +1,6 @@
 //! Private-field digest wrappers for canonical evidence records.
 
-use babylon_kernel::sha256_of;
+use babylon_kernel::content_digest::sha256_of;
 
 use crate::wire::{canonical_envelope, SfsWireError, T3Record};
 

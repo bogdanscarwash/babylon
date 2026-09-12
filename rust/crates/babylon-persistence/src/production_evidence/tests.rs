@@ -1,55 +1,49 @@
 use std::sync::OnceLock;
 
 use babylon_bsl::structural_verbs::CollectingSink;
-use babylon_graph::{hypergraph_store::HypergraphStore, stable_state::StableGraphStateV1};
-use babylon_practice_contract::ordered_action_v1::OrderedPracticeActionBatchV1;
+use babylon_graph::{hypergraph_store::HypergraphStore, stable_state::StableGraphState};
+use babylon_practice_contract::OrderedPracticeActionBatch;
 use babylon_tick::{
-    material_replay::{MaterialLaborV1, PreparedMaterialTickV3},
-    material_staffing::StaffingCompositionV1,
-    material_world::decode_material_receipts_v4,
-    replay_session::ReplayCommitDispositionV1,
+    material_replay::PreparedMaterialTick, material_staffing::StaffingComposition,
+    material_world::decode_material_receipts, replay_session::ReplayCommitDisposition,
 };
 use serde_json::Value;
 
 use super::*;
 use crate::{
-    material_envelope::CommittedMaterialTickEnvelopeV3,
-    michigan_content::MichiganContentPresetV1,
+    identity::CampaignId,
+    material_envelope::CommittedMaterialTickEnvelope,
+    michigan_content::MichiganContentPreset,
     michigan_economy::digest_hex,
-    michigan_material::MichiganDeliveryPresetV1,
-    production_projection::{
-        project_material_observation_v1, staffing::project_staffing_accounts_v1,
-    },
-    runtime::prepare_committed_tick_v2,
-    CampaignId,
+    michigan_material::MichiganDeliveryPreset,
+    production_projection::{project_material_observation, staffing::project_staffing_accounts},
+    runtime::prepare_committed_tick,
 };
 
 /// Exercises the existing engine, canonical envelope, publication and projector.
 /// The commit callback is an in-memory sink; this is not live-Postgres evidence.
-fn published_observations() -> &'static [ObserverEconomySnapshotV1] {
-    static OBSERVATIONS: OnceLock<Vec<ObserverEconomySnapshotV1>> = OnceLock::new();
+fn published_observations() -> &'static [ObserverEconomySnapshot] {
+    static OBSERVATIONS: OnceLock<Vec<ObserverEconomySnapshot>> = OnceLock::new();
     OBSERVATIONS.get_or_init(|| {
-        let preset = MichiganDeliveryPresetV1::Standard;
-        let foundation = MichiganContentPresetV1::new_campaign(preset)
+        let preset = MichiganDeliveryPreset::Standard;
+        let foundation = MichiganContentPreset::new_campaign(preset)
             .create_foundation(&crate::test_support::catalog())
             .unwrap();
         let foundation_digest = foundation.digest();
-        let MaterialLaborV1::Staffed(composition) = foundation.labor().clone() else {
-            panic!("current Michigan foundation is staffed");
-        };
+        let composition = foundation.labor().clone();
         let mut session = foundation.into_session().unwrap();
         let campaign = CampaignId::from_uuid(uuid::Uuid::from_u128(293));
-        let mut observation = ObserverEconomySnapshotV1 {
+        let mut observation = ObserverEconomySnapshot {
             campaign_id: campaign.as_uuid().to_string(),
             resolve_tick: 0,
             foundation_digest: digest_hex(&foundation_digest),
             nominal_world_hash: None,
             tick_content_hash: None,
             envelope_digest: None,
-            visibility: ObserverVisibilityV1::FullObserver,
+            visibility: ObserverVisibility::FullObserver,
             counties: vec![],
             production: Some(
-                project_material_observation_v1(
+                project_material_observation(
                     &crate::test_support::catalog(),
                     preset,
                     session.material(),
@@ -59,7 +53,7 @@ fn published_observations() -> &'static [ObserverEconomySnapshotV1] {
                 .unwrap(),
             ),
         };
-        observation.production.as_mut().unwrap().staffing_accounts = project_staffing_accounts_v1(
+        observation.production.as_mut().unwrap().staffing_accounts = project_staffing_accounts(
             &composition,
             &session.graph_session().stable_graph_state().unwrap(),
             session.material(),
@@ -71,7 +65,7 @@ fn published_observations() -> &'static [ObserverEconomySnapshotV1] {
         let mut history = Vec::new();
         let mut sink = CollectingSink::default();
         for tick in 1..=3 {
-            let actions = OrderedPracticeActionBatchV1::empty(
+            let actions = OrderedPracticeActionBatch::empty(
                 session.graph_session().session_identity().clone(),
                 tick,
             )
@@ -81,12 +75,12 @@ fn published_observations() -> &'static [ObserverEconomySnapshotV1] {
             let prepared = session.prepare_advance(&actions).unwrap();
             let staffing = prepared_staffing(&composition, &opening_graph, &prepared);
             let identity = *prepared.identity();
-            let receipt = decode_material_receipts_v4(prepared.material().receipt_bytes()).unwrap();
-            let families = prepare_committed_tick_v2(prepared.graph_report())
+            let receipt = decode_material_receipts(prepared.material().receipt_bytes()).unwrap();
+            let families = prepare_committed_tick(prepared.graph_report())
                 .unwrap()
                 .into_material_families(identity.tick_content_hash())
                 .unwrap();
-            let envelope = CommittedMaterialTickEnvelopeV3::compose(
+            let envelope = CommittedMaterialTickEnvelope::compose(
                 campaign,
                 &identity,
                 families,
@@ -96,7 +90,7 @@ fn published_observations() -> &'static [ObserverEconomySnapshotV1] {
             .unwrap();
             let (ack, _) = session
                 .commit_prepared_and_publish(&mut sink, prepared, |_| {
-                    Ok::<_, ()>(ReplayCommitDispositionV1::Committed)
+                    Ok::<_, ()>(ReplayCommitDisposition::Committed)
                 })
                 .unwrap();
             history.push((receipt, ack.receipt_digest()));
@@ -105,7 +99,7 @@ fn published_observations() -> &'static [ObserverEconomySnapshotV1] {
             observation.envelope_digest = Some(digest_hex(&envelope.digest()));
             observation.nominal_world_hash = Some(digest_hex(&ack.result_world_hash()));
             observation.production = Some(
-                project_material_observation_v1(
+                project_material_observation(
                     &crate::test_support::catalog(),
                     preset,
                     session.material(),
@@ -122,25 +116,25 @@ fn published_observations() -> &'static [ObserverEconomySnapshotV1] {
 }
 
 fn prepared_staffing(
-    composition: &StaffingCompositionV1,
-    opening: &StableGraphStateV1,
-    prepared: &PreparedMaterialTickV3<HypergraphStore>,
-) -> Vec<crate::ProductionStaffingAccountV1> {
+    composition: &StaffingComposition,
+    opening: &StableGraphState,
+    prepared: &PreparedMaterialTick<HypergraphStore>,
+) -> Vec<crate::production_observation::ProductionStaffingAccount> {
     let report = prepared.graph_report();
     let events = report
         .successful_event_batch()
         .events()
         .iter()
-        .map(|event| crate::stored_tick::StoredEventV2 {
+        .map(|event| crate::stored_tick::StoredEvent {
             emitting_rule: event.emitting_rule().to_owned(),
             choice_receipt_ordinal: event
                 .choice_receipt()
-                .map(babylon_tick::choice_receipt::ChoiceReceiptRefV1::encounter_ordinal),
+                .map(babylon_tick::choice_receipt::ChoiceReceiptRef::encounter_ordinal),
             event_type: event.event_type().to_owned(),
             fields: event.fields().to_vec(),
         })
         .collect::<Vec<_>>();
-    project_staffing_accounts_v1(
+    project_staffing_accounts(
         composition,
         report.result_stable_graph(),
         prepared.material().register(),
@@ -150,30 +144,35 @@ fn prepared_staffing(
     .unwrap()
 }
 
-fn committed() -> ObserverEconomySnapshotV1 {
+fn committed() -> ObserverEconomySnapshot {
     published_observations()[1].clone()
 }
 
-fn digest(snapshot: &ObserverEconomySnapshotV1) -> ProductionEvidenceDigestV6 {
+fn digest(snapshot: &ObserverEconomySnapshot) -> ProductionEvidenceDigest {
     snapshot.production_evidence_digest().unwrap().unwrap()
 }
 
 /// Add the disclosure families absent from the small regional engine fixture.
 /// All state/receipt projections are tested at their authenticated seams; this
 /// fixture tests that the public evidence encoder binds every disclosed field.
-fn full_disclosure() -> ObserverEconomySnapshotV1 {
-    use crate::*;
+fn full_disclosure() -> ObserverEconomySnapshot {
+    use crate::production_observation::{
+        CompletedProductionFinalDemand, CompletedProductionMerchantHandling,
+        ProductionFinalDemandAccount, ProductionFinalDemandOrder, ProductionHandlingCoefficient,
+        ProductionMerchantHandlingAccount, ProductionMerchantHandlingOrder, ProductionOutboundKind,
+        ProductionPhysicalEdge, ProductionRoadSource,
+    };
     let mut observation = committed();
     let production = observation.production.as_mut().unwrap();
     let site = production.sites[0].id.clone();
     let stock = production.sites[0].inventory[0].clone();
     production.physical_edges = vec![
-        ProductionPhysicalEdgeV2 {
+        ProductionPhysicalEdge {
             id: "edge-a".to_owned(),
             shape_e7: vec![[-830_000_000, 420_000_000], [-830_001_000, 420_001_000]],
             distance_mm: 17_000,
         },
-        ProductionPhysicalEdgeV2 {
+        ProductionPhysicalEdge {
             id: "edge-b".to_owned(),
             shape_e7: vec![[-830_001_000, 420_001_000], [-830_003_000, 420_003_000]],
             distance_mm: 33_000,
@@ -185,7 +184,7 @@ fn full_disclosure() -> ObserverEconomySnapshotV1 {
         "edge-a".to_owned(),
     ];
     production.routes[0].distance_mm = Some(67_000);
-    production.road_source = Some(ProductionRoadSourceV2 {
+    production.road_source = Some(ProductionRoadSource {
         pbf_sha256: "pbf-sha".to_owned(),
         pbf_bytes: 100,
         pbf_url: "https://example.org/roads.pbf".to_owned(),
@@ -199,24 +198,24 @@ fn full_disclosure() -> ObserverEconomySnapshotV1 {
     });
     production
         .merchant_handling_accounts
-        .push(ProductionMerchantHandlingAccountV2 {
+        .push(ProductionMerchantHandlingAccount {
             site_id: site.clone(),
             capacity_id: "handling-capacity".to_owned(),
             labor_unit_id: "labor".to_owned(),
-            coefficients: vec![ProductionHandlingCoefficientV2 {
+            coefficients: vec![ProductionHandlingCoefficient {
                 good_id: stock.good_id.clone(),
                 unit_id: stock.unit_id.clone(),
                 grams_per_unit: 10,
                 hours_per_unit: 2,
             }],
-            completed: Some(CompletedProductionMerchantHandlingV2 {
+            completed: Some(CompletedProductionMerchantHandling {
                 period: 1,
                 needed_hours: 12,
                 used_hours: 6,
                 handled_grams: 30,
-                orders: vec![ProductionMerchantHandlingOrderV2 {
+                orders: vec![ProductionMerchantHandlingOrder {
                     order_id: "final-order".to_owned(),
-                    kind: ProductionOutboundKindV2::LocalFinalDemand,
+                    kind: ProductionOutboundKind::LocalFinalDemand,
                     good_id: stock.good_id.clone(),
                     unit_id: stock.unit_id.clone(),
                     requested: 10,
@@ -230,7 +229,7 @@ fn full_disclosure() -> ObserverEconomySnapshotV1 {
         });
     production
         .final_demand_accounts
-        .push(ProductionFinalDemandAccountV2 {
+        .push(ProductionFinalDemandAccount {
             demand_principal_id: "county-demand".to_owned(),
             county_geoid: "26163".to_owned(),
             good_id: stock.good_id.clone(),
@@ -242,14 +241,14 @@ fn full_disclosure() -> ObserverEconomySnapshotV1 {
             outstanding: 7,
             retail_stock_on_hand: 7,
             retailer_site_ids: vec![site.clone()],
-            orders: vec![ProductionFinalDemandOrderV2 {
+            orders: vec![ProductionFinalDemandOrder {
                 order_id: "final-order".to_owned(),
                 retailer_site_id: site,
                 ordered: 10,
                 fulfilled: 3,
                 outstanding: 7,
             }],
-            completed: Some(CompletedProductionFinalDemandV2 {
+            completed: Some(CompletedProductionFinalDemand {
                 period: 1,
                 opening_fulfilled: 0,
                 newly_fulfilled: 3,
@@ -307,16 +306,16 @@ fn presentation_multisets_permute_without_changing_evidence_identity() {
 fn physical_path_repetition_vertex_order_and_event_sequence_remain_semantic() {
     let before = full_disclosure();
     for mutation in [
-        |rows: &mut ProductionSnapshotV2| {
+        |rows: &mut ProductionSnapshot| {
             rows.routes[0].physical_edge_ids.swap(0, 1);
         },
-        |rows: &mut ProductionSnapshotV2| {
+        |rows: &mut ProductionSnapshot| {
             rows.routes[0].physical_edge_ids.pop();
         },
-        |rows: &mut ProductionSnapshotV2| {
+        |rows: &mut ProductionSnapshot| {
             rows.physical_edges[0].shape_e7.reverse();
         },
-        |rows: &mut ProductionSnapshotV2| {
+        |rows: &mut ProductionSnapshot| {
             rows.events.reverse();
         },
     ] {
@@ -381,7 +380,7 @@ fn every_disclosed_scalar_is_bound_or_refused_including_new_accounting_families(
         let mut changed = json.clone();
         *changed.pointer_mut(&pointer).unwrap() = replacement;
         // An unknown enum is rejected at the disclosure boundary before hashing.
-        let Ok(changed) = serde_json::from_value::<ObserverEconomySnapshotV1>(changed) else {
+        let Ok(changed) = serde_json::from_value::<ObserverEconomySnapshot>(changed) else {
             continue;
         };
         assert_ne!(
@@ -401,25 +400,25 @@ fn every_disclosed_scalar_is_bound_or_refused_including_new_accounting_families(
 fn scope_completed_zero_and_absent_preview_are_distinct() {
     let before = committed();
     for mutate in [
-        |row: &mut ObserverEconomySnapshotV1| {
+        |row: &mut ObserverEconomySnapshot| {
             row.campaign_id.push('x');
         },
-        |row: &mut ObserverEconomySnapshotV1| {
+        |row: &mut ObserverEconomySnapshot| {
             row.resolve_tick += 1;
         },
-        |row: &mut ObserverEconomySnapshotV1| {
+        |row: &mut ObserverEconomySnapshot| {
             row.foundation_digest.push('x');
         },
-        |row: &mut ObserverEconomySnapshotV1| {
+        |row: &mut ObserverEconomySnapshot| {
             row.tick_content_hash = None;
         },
-        |row: &mut ObserverEconomySnapshotV1| {
+        |row: &mut ObserverEconomySnapshot| {
             row.envelope_digest = None;
         },
-        |row: &mut ObserverEconomySnapshotV1| {
+        |row: &mut ObserverEconomySnapshot| {
             row.nominal_world_hash = None;
         },
-        |row: &mut ObserverEconomySnapshotV1| {
+        |row: &mut ObserverEconomySnapshot| {
             row.production.as_mut().unwrap().labor_accounts[0].completed = None;
         },
     ] {
@@ -429,10 +428,10 @@ fn scope_completed_zero_and_absent_preview_are_distinct() {
     }
     assert_ne!(digest(&published_observations()[0]), digest(&before));
     let mut preview = before;
-    preview.visibility = ObserverVisibilityV1::KnownPreview;
+    preview.visibility = ObserverVisibility::KnownPreview;
     assert_eq!(
         preview.production_evidence_digest(),
-        Err(ProductionEvidenceErrorV6::InvalidIdentity)
+        Err(ProductionEvidenceError::InvalidIdentity)
     );
     preview.production = None;
     assert_eq!(preview.production_evidence_digest(), Ok(None));
@@ -442,21 +441,21 @@ fn scope_completed_zero_and_absent_preview_are_distinct() {
 fn duplicate_principals_and_row_bounds_refuse_instead_of_acquiring_a_digest() {
     let before = full_disclosure();
     for mutate in [
-        |rows: &mut ProductionSnapshotV2| {
+        |rows: &mut ProductionSnapshot| {
             rows.sites.push(rows.sites[0].clone());
         },
-        |rows: &mut ProductionSnapshotV2| {
+        |rows: &mut ProductionSnapshot| {
             rows.physical_edges.push(rows.physical_edges[0].clone());
         },
-        |rows: &mut ProductionSnapshotV2| {
+        |rows: &mut ProductionSnapshot| {
             rows.freight_capacity_accounts
                 .push(rows.freight_capacity_accounts[0].clone());
         },
-        |rows: &mut ProductionSnapshotV2| {
+        |rows: &mut ProductionSnapshot| {
             rows.merchant_handling_accounts
                 .push(rows.merchant_handling_accounts[0].clone());
         },
-        |rows: &mut ProductionSnapshotV2| {
+        |rows: &mut ProductionSnapshot| {
             rows.final_demand_accounts
                 .push(rows.final_demand_accounts[0].clone());
         },
@@ -465,7 +464,7 @@ fn duplicate_principals_and_row_bounds_refuse_instead_of_acquiring_a_digest() {
         mutate(changed.production.as_mut().unwrap());
         assert_eq!(
             changed.production_evidence_digest(),
-            Err(ProductionEvidenceErrorV6::InvalidIdentity)
+            Err(ProductionEvidenceError::InvalidIdentity)
         );
     }
     let mut bounded = before;
@@ -473,7 +472,7 @@ fn duplicate_principals_and_row_bounds_refuse_instead_of_acquiring_a_digest() {
         vec![bounded.production.as_ref().unwrap().routes[0].clone(); MAX_ROWS + 1];
     assert_eq!(
         bounded.production_evidence_digest(),
-        Err(ProductionEvidenceErrorV6::Bound)
+        Err(ProductionEvidenceError::Bound)
     );
 }
 

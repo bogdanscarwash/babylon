@@ -2,27 +2,27 @@
 
 use std::collections::{BTreeMap, BTreeSet, HashMap, TryReserveError};
 
-use babylon_kernel::sha256_of;
+use babylon_kernel::content_digest::sha256_of;
 
 use crate::state_hash::CanonicalState;
 use crate::substrate::{GraphSubstrate, HyperedgeId, NodeId};
 
 /// Stable element layout version.
-pub const STABLE_ELEMENT_LAYOUT_VERSION_V1: u32 = 1;
+pub const STABLE_ELEMENT_LAYOUT_VERSION: u32 = 1;
 /// Stable resolver-manifest layout version.
-pub const STABLE_ELEMENT_RESOLVER_MANIFEST_LAYOUT_VERSION_V1: u32 = 1;
+pub const STABLE_ELEMENT_RESOLVER_MANIFEST_LAYOUT_VERSION: u32 = 1;
 /// Maximum resolved active-element stack depth in one V2 carrier.
-pub const MAX_STABLE_CARRIER_ACTIVE_ELEMENTS_V2: usize = 256;
+pub const MAX_STABLE_CARRIER_ACTIVE_ELEMENTS: usize = 256;
 /// Maximum canonical V2 carrier byte length.
-pub const MAX_STABLE_CARRIER_BYTES_V2: usize = 105_962;
+pub const MAX_STABLE_CARRIER_BYTES: usize = 105_962;
 /// Maximum combined node and hyperedge rows in one resolver manifest.
-pub const MAX_STABLE_RESOLVER_ROWS_V1: usize = 65_536;
+pub const MAX_STABLE_RESOLVER_ROWS: usize = 65_536;
 /// Maximum members in one hyperedge while sealing a stable resolver.
-pub const MAX_STABLE_RESOLVER_HYPEREDGE_MEMBERS_V1: usize = 65_534;
+pub const MAX_STABLE_RESOLVER_HYPEREDGE_MEMBERS: usize = 65_534;
 /// Maximum topology rows plus member references while sealing a resolver.
-pub const MAX_STABLE_RESOLVER_FACT_UNITS_V1: usize = 1_048_576;
+pub const MAX_STABLE_RESOLVER_FACT_UNITS: usize = 1_048_576;
 /// Maximum canonical resolver-manifest byte length.
-pub const MAX_STABLE_RESOLVER_MANIFEST_BYTES_V1: usize = 8_388_608;
+pub const MAX_STABLE_RESOLVER_MANIFEST_BYTES: usize = 8_388_608;
 
 const STABLE_ELEMENT_DOMAIN: &[u8] = b"babylon.stable-element";
 const STABLE_RESOLVER_DOMAIN: &[u8] = b"babylon.stable-element-resolver";
@@ -30,20 +30,17 @@ const MAX_SYMBOL_BYTES: usize = 64;
 const MAX_QNAME_BYTES: usize = 128;
 const MAX_QNAME_SEGMENTS: usize = 4;
 const MAX_STRUCTURAL_TYPE_BYTES: usize = 128;
-const MAX_STABLE_EDGES_V1: usize = 65_536;
+const MAX_STABLE_EDGES: usize = 65_536;
 
-type StableNodeMaps = (
-    HashMap<NodeId, StableElementKeyV1>,
-    BTreeMap<String, NodeId>,
-);
+type StableNodeMaps = (HashMap<NodeId, StableElementKey>, BTreeMap<String, NodeId>);
 type StableHyperedgeMaps = (
-    HashMap<HyperedgeId, StableElementKeyV1>,
+    HashMap<HyperedgeId, StableElementKey>,
     BTreeMap<String, HyperedgeId>,
 );
 
 /// A stable graph element, independent of runtime handle allocation.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum StableElementKeyV1 {
+pub enum StableElementKey {
     /// One authored scenario node.
     Node {
         /// Scenario scope qname.
@@ -71,7 +68,7 @@ pub enum StableElementKeyV1 {
     },
 }
 
-impl StableElementKeyV1 {
+impl StableElementKey {
     /// Decode one exact standalone binary stable-element key.
     ///
     /// # Errors
@@ -83,7 +80,7 @@ impl StableElementKeyV1 {
             || !input.starts_with(STABLE_ELEMENT_DOMAIN)
             || input.get(STABLE_ELEMENT_DOMAIN.len()) != Some(&0)
             || input.get(STABLE_ELEMENT_DOMAIN.len() + 1..STABLE_ELEMENT_DOMAIN.len() + 5)
-                != Some(STABLE_ELEMENT_LAYOUT_VERSION_V1.to_be_bytes().as_slice())
+                != Some(STABLE_ELEMENT_LAYOUT_VERSION.to_be_bytes().as_slice())
         {
             return Err(StableIdentityError::CanonicalBytes {
                 field: "stable element header",
@@ -175,7 +172,7 @@ impl StableElementKeyV1 {
         let mut output = reserve_bytes("stable element key", capacity)?;
         output.extend_from_slice(STABLE_ELEMENT_DOMAIN);
         output.push(0);
-        output.extend_from_slice(&STABLE_ELEMENT_LAYOUT_VERSION_V1.to_be_bytes());
+        output.extend_from_slice(&STABLE_ELEMENT_LAYOUT_VERSION.to_be_bytes());
         match self {
             Self::Node {
                 scenario,
@@ -214,7 +211,7 @@ impl StableElementKeyV1 {
     ///
     /// # Errors
     /// Returns a semantic string, arithmetic, or allocation error.
-    pub fn carrier_segment(&self) -> Result<StableElementCarrierSegmentV1, StableIdentityError> {
+    pub fn carrier_segment(&self) -> Result<StableElementCarrierSegment, StableIdentityError> {
         self.validate()?;
         let framed = match self {
             Self::Node {
@@ -250,7 +247,7 @@ impl StableElementKeyV1 {
                 usize::MAX,
             )?,
         };
-        Ok(StableElementCarrierSegmentV1(framed))
+        Ok(StableElementCarrierSegment(framed))
     }
 
     fn validate(&self) -> Result<(), StableIdentityError> {
@@ -309,9 +306,9 @@ impl StableElementKeyV1 {
 
 /// The graph-owned ASCII rendering of one stable element.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct StableElementCarrierSegmentV1(String);
+pub struct StableElementCarrierSegment(String);
 
-impl StableElementCarrierSegmentV1 {
+impl StableElementCarrierSegment {
     /// Borrow the exact framed ASCII segment.
     #[must_use]
     pub fn as_str(&self) -> &str {
@@ -321,9 +318,9 @@ impl StableElementCarrierSegmentV1 {
 
 /// One graph-validated final RNG V2 carrier key.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct StableCarrierKeyV2(String);
+pub struct StableCarrierKey(String);
 
-impl StableCarrierKeyV2 {
+impl StableCarrierKey {
     /// Borrow the only bytes low-level RNG code may consume.
     #[must_use]
     pub fn validated_bytes(&self) -> &[u8] {
@@ -333,12 +330,12 @@ impl StableCarrierKeyV2 {
 
 /// Exact canonical stable resolver-manifest identity.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct StableElementResolverManifestV1 {
+pub struct StableElementResolverManifest {
     canonical_bytes: Vec<u8>,
     digest: [u8; 32],
 }
 
-impl StableElementResolverManifestV1 {
+impl StableElementResolverManifest {
     /// Borrow the exact canonical manifest bytes.
     #[must_use]
     pub fn canonical_bytes(&self) -> &[u8] {
@@ -353,7 +350,7 @@ impl StableElementResolverManifestV1 {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct SealedTopologyV1 {
+struct SealedTopology {
     nodes: BTreeMap<NodeId, String>,
     edges: BTreeSet<(String, NodeId, NodeId)>,
     hyperedges: BTreeMap<HyperedgeId, (String, Vec<NodeId>)>,
@@ -361,14 +358,14 @@ struct SealedTopologyV1 {
 
 /// Immutable handle-to-authored-name resolver over one sealed topology.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct StableElementResolverV1 {
+pub struct StableElementResolver {
     scenario_scope: String,
-    node_by_handle: HashMap<NodeId, StableElementKeyV1>,
+    node_by_handle: HashMap<NodeId, StableElementKey>,
     node_by_name: BTreeMap<String, NodeId>,
-    hyperedge_by_handle: HashMap<HyperedgeId, StableElementKeyV1>,
+    hyperedge_by_handle: HashMap<HyperedgeId, StableElementKey>,
     hyperedge_by_name: BTreeMap<String, HyperedgeId>,
-    sealed_topology: SealedTopologyV1,
-    manifest: StableElementResolverManifestV1,
+    sealed_topology: SealedTopology,
+    manifest: StableElementResolverManifest,
 }
 
 /// Checked stable identity, resolver, topology, or bounded-codec failure.
@@ -558,7 +555,7 @@ fn read_canonical_string(
     copy_string(field, value)
 }
 
-impl StableElementResolverV1 {
+impl StableElementResolver {
     /// Seal one complete fixed topology against exact authored identities.
     ///
     /// # Errors
@@ -594,7 +591,7 @@ impl StableElementResolverV1 {
     ///
     /// # Errors
     /// Returns [`StableIdentityError::UnknownNode`] for an unsealed handle.
-    pub fn node_key(&self, node: NodeId) -> Result<&StableElementKeyV1, StableIdentityError> {
+    pub fn node_key(&self, node: NodeId) -> Result<&StableElementKey, StableIdentityError> {
         self.node_by_handle
             .get(&node)
             .ok_or(StableIdentityError::UnknownNode { node })
@@ -607,7 +604,7 @@ impl StableElementResolverV1 {
     pub fn hyperedge_key(
         &self,
         hyperedge: HyperedgeId,
-    ) -> Result<&StableElementKeyV1, StableIdentityError> {
+    ) -> Result<&StableElementKey, StableIdentityError> {
         self.hyperedge_by_handle
             .get(&hyperedge)
             .ok_or(StableIdentityError::UnknownHyperedge { hyperedge })
@@ -622,7 +619,7 @@ impl StableElementResolverV1 {
         edge_type: &str,
         source: NodeId,
         target: NodeId,
-    ) -> Result<StableElementKeyV1, StableIdentityError> {
+    ) -> Result<StableElementKey, StableIdentityError> {
         validate_ascii_graphic("edge type", edge_type, 1, MAX_STRUCTURAL_TYPE_BYTES)?;
         let source_name = self.node_local_name(source)?;
         let target_name = self.node_local_name(target)?;
@@ -634,7 +631,7 @@ impl StableElementResolverV1 {
                 target,
             });
         }
-        Ok(StableElementKeyV1::Edge {
+        Ok(StableElementKey::Edge {
             scenario: copy_string("stable edge scenario", &self.scenario_scope)?,
             edge_type: owned_edge.0,
             source_local_name: copy_string("stable edge source", source_name)?,
@@ -649,14 +646,14 @@ impl StableElementResolverV1 {
     /// error.
     pub fn carrier_key(
         &self,
-        subject: &StableElementKeyV1,
-        active: &[StableElementKeyV1],
+        subject: &StableElementKey,
+        active: &[StableElementKey],
         draw_slot: i64,
-    ) -> Result<StableCarrierKeyV2, StableIdentityError> {
-        if active.len() > MAX_STABLE_CARRIER_ACTIVE_ELEMENTS_V2 {
+    ) -> Result<StableCarrierKey, StableIdentityError> {
+        if active.len() > MAX_STABLE_CARRIER_ACTIVE_ELEMENTS {
             return Err(StableIdentityError::ActiveElementLimit {
                 actual: active.len(),
-                maximum: MAX_STABLE_CARRIER_ACTIVE_ELEMENTS_V2,
+                maximum: MAX_STABLE_CARRIER_ACTIVE_ELEMENTS,
             });
         }
         self.validate_sealed_element(subject)?;
@@ -668,25 +665,19 @@ impl StableElementResolverV1 {
             })?;
         let mut segments = reserve_strings("stable carrier segments", count)?;
         segments.push(subject.carrier_segment()?.0);
-        for key in active
-            .iter()
-            .take(MAX_STABLE_CARRIER_ACTIVE_ELEMENTS_V2 + 1)
-        {
+        for key in active.iter().take(MAX_STABLE_CARRIER_ACTIVE_ELEMENTS + 1) {
             self.validate_sealed_element(key)?;
             segments.push(key.carrier_segment()?.0);
         }
         segments.push(draw_slot.to_string());
         let mut borrowed = reserve_str_refs("stable carrier segment references", segments.len())?;
-        for segment in segments
-            .iter()
-            .take(MAX_STABLE_CARRIER_ACTIVE_ELEMENTS_V2 + 2)
-        {
+        for segment in segments.iter().take(MAX_STABLE_CARRIER_ACTIVE_ELEMENTS + 2) {
             borrowed.push(segment.as_str());
         }
-        Ok(StableCarrierKeyV2(frame_segments(
+        Ok(StableCarrierKey(frame_segments(
             "stable carrier key",
             &borrowed,
-            MAX_STABLE_CARRIER_BYTES_V2,
+            MAX_STABLE_CARRIER_BYTES,
         )?))
     }
 
@@ -708,7 +699,7 @@ impl StableElementResolverV1 {
 
     /// Borrow the exact stable resolver manifest.
     #[must_use]
-    pub const fn manifest(&self) -> &StableElementResolverManifestV1 {
+    pub const fn manifest(&self) -> &StableElementResolverManifest {
         &self.manifest
     }
 
@@ -719,11 +710,11 @@ impl StableElementResolverV1 {
     /// with another authored type returns `Ok(false)`.
     pub fn sealed_node_has_type(
         &self,
-        key: &StableElementKeyV1,
+        key: &StableElementKey,
         expected: &str,
     ) -> Result<bool, StableIdentityError> {
         validate_ascii_graphic("expected node type", expected, 1, MAX_STRUCTURAL_TYPE_BYTES)?;
-        let StableElementKeyV1::Node {
+        let StableElementKey::Node {
             scenario,
             local_name,
         } = key
@@ -754,8 +745,8 @@ impl StableElementResolverV1 {
     pub fn contains_sealed_edge(
         &self,
         edge_type: &str,
-        source: &StableElementKeyV1,
-        target: &StableElementKeyV1,
+        source: &StableElementKey,
+        target: &StableElementKey,
     ) -> Result<bool, StableIdentityError> {
         validate_ascii_graphic("edge type", edge_type, 1, MAX_STRUCTURAL_TYPE_BYTES)?;
         let source = self.sealed_node_handle(source)?;
@@ -771,7 +762,7 @@ impl StableElementResolverV1 {
     ///
     /// # Errors
     /// Returns a stable-key or sealed-membership refusal.
-    pub fn validate_sealed_key(&self, key: &StableElementKeyV1) -> Result<(), StableIdentityError> {
+    pub fn validate_sealed_key(&self, key: &StableElementKey) -> Result<(), StableIdentityError> {
         self.validate_sealed_element(key)
     }
 
@@ -813,15 +804,15 @@ impl StableElementResolverV1 {
 
     pub(crate) fn node_local_name(&self, node: NodeId) -> Result<&str, StableIdentityError> {
         match self.node_key(node)? {
-            StableElementKeyV1::Node { local_name, .. } => Ok(local_name),
-            StableElementKeyV1::Edge { .. } | StableElementKeyV1::Hyperedge { .. } => {
+            StableElementKey::Node { local_name, .. } => Ok(local_name),
+            StableElementKey::Edge { .. } | StableElementKey::Hyperedge { .. } => {
                 Err(StableIdentityError::ElementNotSealed)
             }
         }
     }
 
-    fn sealed_node_handle(&self, key: &StableElementKeyV1) -> Result<NodeId, StableIdentityError> {
-        let StableElementKeyV1::Node {
+    fn sealed_node_handle(&self, key: &StableElementKey) -> Result<NodeId, StableIdentityError> {
+        let StableElementKey::Node {
             scenario,
             local_name,
         } = key
@@ -838,20 +829,20 @@ impl StableElementResolverV1 {
             .ok_or(StableIdentityError::ElementNotSealed)
     }
 
-    fn validate_sealed_element(&self, key: &StableElementKeyV1) -> Result<(), StableIdentityError> {
+    fn validate_sealed_element(&self, key: &StableElementKey) -> Result<(), StableIdentityError> {
         key.validate()?;
         let sealed = match key {
-            StableElementKeyV1::Node {
+            StableElementKey::Node {
                 scenario,
                 local_name,
             } => scenario == &self.scenario_scope && self.node_by_name.contains_key(local_name),
-            StableElementKeyV1::Hyperedge {
+            StableElementKey::Hyperedge {
                 scenario,
                 local_name,
             } => {
                 scenario == &self.scenario_scope && self.hyperedge_by_name.contains_key(local_name)
             }
-            StableElementKeyV1::Edge {
+            StableElementKey::Edge {
                 scenario,
                 edge_type,
                 source_local_name,
@@ -878,9 +869,7 @@ impl StableElementResolverV1 {
     }
 }
 
-fn snapshot_topology<G: CanonicalState>(
-    graph: &G,
-) -> Result<SealedTopologyV1, StableIdentityError> {
+fn snapshot_topology<G: CanonicalState>(graph: &G) -> Result<SealedTopology, StableIdentityError> {
     let raw_nodes = graph.all_nodes();
     let raw_hyperedges = graph.all_hyperedges();
     let raw_edges = graph.all_edges();
@@ -888,7 +877,7 @@ fn snapshot_topology<G: CanonicalState>(
     validate_resolver_edge_count(raw_edges.len())?;
     validate_resolver_fact_units(&raw_nodes, &raw_edges, &raw_hyperedges)?;
     let mut nodes = BTreeMap::new();
-    for (node, node_type) in raw_nodes.into_iter().take(MAX_STABLE_RESOLVER_ROWS_V1 + 1) {
+    for (node, node_type) in raw_nodes.into_iter().take(MAX_STABLE_RESOLVER_ROWS + 1) {
         validate_ascii_graphic("node type", &node_type, 1, MAX_STRUCTURAL_TYPE_BYTES)?;
         if nodes.insert(node, node_type).is_some() {
             return Err(StableIdentityError::TopologyChanged);
@@ -897,7 +886,7 @@ fn snapshot_topology<G: CanonicalState>(
     let mut hyperedges = BTreeMap::new();
     for (hyperedge, hyperedge_type, mut members) in raw_hyperedges
         .into_iter()
-        .take(MAX_STABLE_RESOLVER_ROWS_V1 + 1)
+        .take(MAX_STABLE_RESOLVER_ROWS + 1)
     {
         validate_ascii_graphic(
             "hyperedge type",
@@ -915,7 +904,7 @@ fn snapshot_topology<G: CanonicalState>(
         }
     }
     let mut edges = BTreeSet::new();
-    for (edge_type, source, target, _) in raw_edges.into_iter().take(MAX_STABLE_EDGES_V1 + 1) {
+    for (edge_type, source, target, _) in raw_edges.into_iter().take(MAX_STABLE_EDGES + 1) {
         validate_ascii_graphic("edge type", &edge_type, 1, MAX_STRUCTURAL_TYPE_BYTES)?;
         if !nodes.contains_key(&source) || !nodes.contains_key(&target) {
             return Err(StableIdentityError::UnknownEdge {
@@ -928,7 +917,7 @@ fn snapshot_topology<G: CanonicalState>(
             return Err(StableIdentityError::TopologyChanged);
         }
     }
-    Ok(SealedTopologyV1 {
+    Ok(SealedTopology {
         nodes,
         edges,
         hyperedges,
@@ -936,12 +925,12 @@ fn snapshot_topology<G: CanonicalState>(
 }
 
 fn validate_resolver_edge_count(actual: usize) -> Result<(), StableIdentityError> {
-    if actual <= MAX_STABLE_EDGES_V1 {
+    if actual <= MAX_STABLE_EDGES {
         Ok(())
     } else {
         Err(StableIdentityError::EdgeLimit {
             actual,
-            maximum: MAX_STABLE_EDGES_V1,
+            maximum: MAX_STABLE_EDGES,
         })
     }
 }
@@ -958,7 +947,7 @@ fn validate_resolver_fact_units(
         .ok_or(StableIdentityError::CapacityOverflow {
             field: "stable resolver fact units",
         })?;
-    for (_, _, members) in hyperedges.iter().take(MAX_STABLE_RESOLVER_ROWS_V1 + 1) {
+    for (_, _, members) in hyperedges.iter().take(MAX_STABLE_RESOLVER_ROWS + 1) {
         validate_resolver_member_count(members.len())?;
         actual =
             actual
@@ -971,24 +960,24 @@ fn validate_resolver_fact_units(
 }
 
 fn validate_resolver_fact_unit_count(actual: usize) -> Result<(), StableIdentityError> {
-    if actual <= MAX_STABLE_RESOLVER_FACT_UNITS_V1 {
+    if actual <= MAX_STABLE_RESOLVER_FACT_UNITS {
         Ok(())
     } else {
         Err(StableIdentityError::FactUnitLimit {
             actual,
-            maximum: MAX_STABLE_RESOLVER_FACT_UNITS_V1,
+            maximum: MAX_STABLE_RESOLVER_FACT_UNITS,
         })
     }
 }
 
 fn validate_resolver_member_count(actual: usize) -> Result<(), StableIdentityError> {
-    if actual <= MAX_STABLE_RESOLVER_HYPEREDGE_MEMBERS_V1 {
+    if actual <= MAX_STABLE_RESOLVER_HYPEREDGE_MEMBERS {
         Ok(())
     } else {
         Err(StableIdentityError::StateSectionLimit {
             section: "resolver hyperedge members",
             actual,
-            maximum: MAX_STABLE_RESOLVER_HYPEREDGE_MEMBERS_V1,
+            maximum: MAX_STABLE_RESOLVER_HYPEREDGE_MEMBERS,
         })
     }
 }
@@ -1002,7 +991,7 @@ fn validate_hyperedge_members(
         return Err(StableIdentityError::InvalidHyperedge { hyperedge });
     }
     let mut previous = None;
-    for member in members.iter().take(MAX_STABLE_RESOLVER_ROWS_V1 + 1) {
+    for member in members.iter().take(MAX_STABLE_RESOLVER_ROWS + 1) {
         if !nodes.contains_key(member) || previous == Some(*member) {
             return Err(StableIdentityError::InvalidHyperedge { hyperedge });
         }
@@ -1018,7 +1007,7 @@ fn resolve_nodes(
 ) -> Result<StableNodeMaps, StableIdentityError> {
     let mut by_handle = reserve_hashmap("stable node identities", nodes.len())?;
     let mut by_name = BTreeMap::new();
-    for node in nodes.keys().take(MAX_STABLE_RESOLVER_ROWS_V1 + 1) {
+    for node in nodes.keys().take(MAX_STABLE_RESOLVER_ROWS + 1) {
         let local_name = names
             .get(node)
             .ok_or(StableIdentityError::MissingNodeName { node: *node })?;
@@ -1030,13 +1019,13 @@ fn resolve_nodes(
         }
         by_handle.insert(
             *node,
-            StableElementKeyV1::Node {
+            StableElementKey::Node {
                 scenario: scenario.to_owned(),
                 local_name: local_name.clone(),
             },
         );
     }
-    for node in names.keys().take(MAX_STABLE_RESOLVER_ROWS_V1 + 1) {
+    for node in names.keys().take(MAX_STABLE_RESOLVER_ROWS + 1) {
         if !nodes.contains_key(node) {
             return Err(StableIdentityError::ExtraNodeName { node: *node });
         }
@@ -1051,7 +1040,7 @@ fn resolve_hyperedges(
 ) -> Result<StableHyperedgeMaps, StableIdentityError> {
     let mut by_handle = reserve_hashmap("stable hyperedge identities", hyperedges.len())?;
     let mut by_name = BTreeMap::new();
-    for hyperedge in hyperedges.keys().take(MAX_STABLE_RESOLVER_ROWS_V1 + 1) {
+    for hyperedge in hyperedges.keys().take(MAX_STABLE_RESOLVER_ROWS + 1) {
         let local_name = names
             .get(hyperedge)
             .ok_or(StableIdentityError::MissingHyperedgeName {
@@ -1065,13 +1054,13 @@ fn resolve_hyperedges(
         }
         by_handle.insert(
             *hyperedge,
-            StableElementKeyV1::Hyperedge {
+            StableElementKey::Hyperedge {
                 scenario: scenario.to_owned(),
                 local_name: local_name.clone(),
             },
         );
     }
-    for hyperedge in names.keys().take(MAX_STABLE_RESOLVER_ROWS_V1 + 1) {
+    for hyperedge in names.keys().take(MAX_STABLE_RESOLVER_ROWS + 1) {
         if !hyperedges.contains_key(hyperedge) {
             return Err(StableIdentityError::ExtraHyperedgeName {
                 hyperedge: *hyperedge,
@@ -1083,16 +1072,16 @@ fn resolve_hyperedges(
 
 fn encode_manifest(
     scenario: &str,
-    topology: &SealedTopologyV1,
+    topology: &SealedTopology,
     node_by_name: &BTreeMap<String, NodeId>,
     hyperedge_by_name: &BTreeMap<String, HyperedgeId>,
-) -> Result<StableElementResolverManifestV1, StableIdentityError> {
+) -> Result<StableElementResolverManifest, StableIdentityError> {
     let capacity = manifest_capacity(scenario, topology, node_by_name, hyperedge_by_name)?;
-    if capacity > MAX_STABLE_RESOLVER_MANIFEST_BYTES_V1 {
+    if capacity > MAX_STABLE_RESOLVER_MANIFEST_BYTES {
         return Err(StableIdentityError::ByteLimit {
             field: "stable element resolver manifest",
             actual: capacity,
-            maximum: MAX_STABLE_RESOLVER_MANIFEST_BYTES_V1,
+            maximum: MAX_STABLE_RESOLVER_MANIFEST_BYTES,
         });
     }
     let node_count = checked_u32("stable resolver node count", node_by_name.len())?;
@@ -1101,7 +1090,7 @@ fn encode_manifest(
     canonical_bytes.extend_from_slice(STABLE_RESOLVER_DOMAIN);
     canonical_bytes.push(0);
     canonical_bytes
-        .extend_from_slice(&STABLE_ELEMENT_RESOLVER_MANIFEST_LAYOUT_VERSION_V1.to_be_bytes());
+        .extend_from_slice(&STABLE_ELEMENT_RESOLVER_MANIFEST_LAYOUT_VERSION.to_be_bytes());
     canonical_bytes.push(0x01);
     append_str32(&mut canonical_bytes, "stable resolver scenario", scenario)?;
     canonical_bytes.push(0x02);
@@ -1112,7 +1101,7 @@ fn encode_manifest(
     append_manifest_hyperedges(&mut canonical_bytes, topology, hyperedge_by_name)?;
     debug_assert_eq!(canonical_bytes.len(), capacity);
     let digest = sha256_of(&canonical_bytes);
-    Ok(StableElementResolverManifestV1 {
+    Ok(StableElementResolverManifest {
         canonical_bytes,
         digest,
     })
@@ -1120,10 +1109,10 @@ fn encode_manifest(
 
 fn append_manifest_nodes(
     output: &mut Vec<u8>,
-    topology: &SealedTopologyV1,
+    topology: &SealedTopology,
     node_by_name: &BTreeMap<String, NodeId>,
 ) -> Result<(), StableIdentityError> {
-    for (local_name, node) in node_by_name.iter().take(MAX_STABLE_RESOLVER_ROWS_V1 + 1) {
+    for (local_name, node) in node_by_name.iter().take(MAX_STABLE_RESOLVER_ROWS + 1) {
         let node_type = topology
             .nodes
             .get(node)
@@ -1136,13 +1125,10 @@ fn append_manifest_nodes(
 
 fn append_manifest_hyperedges(
     output: &mut Vec<u8>,
-    topology: &SealedTopologyV1,
+    topology: &SealedTopology,
     hyperedge_by_name: &BTreeMap<String, HyperedgeId>,
 ) -> Result<(), StableIdentityError> {
-    for (local_name, hyperedge) in hyperedge_by_name
-        .iter()
-        .take(MAX_STABLE_RESOLVER_ROWS_V1 + 1)
-    {
+    for (local_name, hyperedge) in hyperedge_by_name.iter().take(MAX_STABLE_RESOLVER_ROWS + 1) {
         let (hyperedge_type, _) = topology
             .hyperedges
             .get(hyperedge)
@@ -1155,7 +1141,7 @@ fn append_manifest_hyperedges(
 
 fn manifest_capacity(
     scenario: &str,
-    topology: &SealedTopologyV1,
+    topology: &SealedTopology,
     node_by_name: &BTreeMap<String, NodeId>,
     hyperedge_by_name: &BTreeMap<String, HyperedgeId>,
 ) -> Result<usize, StableIdentityError> {
@@ -1169,7 +1155,7 @@ fn manifest_capacity(
         1,
         4,
     ])?;
-    for (name, node) in node_by_name.iter().take(MAX_STABLE_RESOLVER_ROWS_V1 + 1) {
+    for (name, node) in node_by_name.iter().take(MAX_STABLE_RESOLVER_ROWS + 1) {
         let node_type = topology
             .nodes
             .get(node)
@@ -1177,10 +1163,7 @@ fn manifest_capacity(
         capacity = checked_sum(&[capacity, 4, name.len(), 4, node_type.len()])?;
     }
     capacity = checked_sum(&[capacity, 1, 4])?;
-    for (name, hyperedge) in hyperedge_by_name
-        .iter()
-        .take(MAX_STABLE_RESOLVER_ROWS_V1 + 1)
-    {
+    for (name, hyperedge) in hyperedge_by_name.iter().take(MAX_STABLE_RESOLVER_ROWS + 1) {
         let (hyperedge_type, _) = topology
             .hyperedges
             .get(hyperedge)
@@ -1196,12 +1179,12 @@ fn validate_resolver_row_count(nodes: usize, hyperedges: usize) -> Result<(), St
         .ok_or(StableIdentityError::CapacityOverflow {
             field: "stable resolver row count",
         })?;
-    if actual <= MAX_STABLE_RESOLVER_ROWS_V1 {
+    if actual <= MAX_STABLE_RESOLVER_ROWS {
         Ok(())
     } else {
         Err(StableIdentityError::ResolverRowLimit {
             actual,
-            maximum: MAX_STABLE_RESOLVER_ROWS_V1,
+            maximum: MAX_STABLE_RESOLVER_ROWS,
         })
     }
 }
@@ -1212,10 +1195,7 @@ fn frame_segments(
     maximum: usize,
 ) -> Result<String, StableIdentityError> {
     let mut capacity = segments.len().saturating_sub(1);
-    for segment in segments
-        .iter()
-        .take(MAX_STABLE_CARRIER_ACTIVE_ELEMENTS_V2 + 2)
-    {
+    for segment in segments.iter().take(MAX_STABLE_CARRIER_ACTIVE_ELEMENTS + 2) {
         let framed = decimal_digits(segment.len())
             .checked_add(1)
             .and_then(|value| value.checked_add(segment.len()))
@@ -1234,7 +1214,7 @@ fn frame_segments(
     let mut output = reserve_string(field, capacity)?;
     for (index, segment) in segments
         .iter()
-        .take(MAX_STABLE_CARRIER_ACTIVE_ELEMENTS_V2 + 2)
+        .take(MAX_STABLE_CARRIER_ACTIVE_ELEMENTS + 2)
         .enumerate()
     {
         if index > 0 {
@@ -1441,13 +1421,12 @@ fn reserve_hashmap<K: Eq + std::hash::Hash, V>(
 
 #[cfg(test)]
 mod tests {
-    use babylon_kernel::Currency;
+    use babylon_kernel::currency::Currency;
 
     use super::{
         frame_segments, snapshot_topology, validate_resolver_edge_count,
         validate_resolver_fact_unit_count, validate_resolver_member_count, StableIdentityError,
-        MAX_STABLE_EDGES_V1, MAX_STABLE_RESOLVER_FACT_UNITS_V1,
-        MAX_STABLE_RESOLVER_HYPEREDGE_MEMBERS_V1,
+        MAX_STABLE_EDGES, MAX_STABLE_RESOLVER_FACT_UNITS, MAX_STABLE_RESOLVER_HYPEREDGE_MEMBERS,
     };
     use crate::state_hash::CanonicalState;
     use crate::substrate::{HyperedgeId, NodeId};
@@ -1532,15 +1511,15 @@ mod tests {
             hyperedges: vec![(
                 HyperedgeId(0),
                 "coalition".to_owned(),
-                vec![NodeId(0); MAX_STABLE_RESOLVER_HYPEREDGE_MEMBERS_V1 + 1],
+                vec![NodeId(0); MAX_STABLE_RESOLVER_HYPEREDGE_MEMBERS + 1],
             )],
         };
         assert_eq!(
             snapshot_topology(&facts),
             Err(StableIdentityError::StateSectionLimit {
                 section: "resolver hyperedge members",
-                actual: MAX_STABLE_RESOLVER_HYPEREDGE_MEMBERS_V1 + 1,
-                maximum: MAX_STABLE_RESOLVER_HYPEREDGE_MEMBERS_V1,
+                actual: MAX_STABLE_RESOLVER_HYPEREDGE_MEMBERS + 1,
+                maximum: MAX_STABLE_RESOLVER_HYPEREDGE_MEMBERS,
             })
         );
     }
@@ -1548,38 +1527,38 @@ mod tests {
     #[test]
     fn resolver_member_ceiling_accepts_maximum_and_refuses_plus_one() {
         assert_eq!(
-            validate_resolver_member_count(MAX_STABLE_RESOLVER_HYPEREDGE_MEMBERS_V1),
+            validate_resolver_member_count(MAX_STABLE_RESOLVER_HYPEREDGE_MEMBERS),
             Ok(())
         );
         assert_eq!(
-            validate_resolver_member_count(MAX_STABLE_RESOLVER_HYPEREDGE_MEMBERS_V1 + 1),
+            validate_resolver_member_count(MAX_STABLE_RESOLVER_HYPEREDGE_MEMBERS + 1),
             Err(StableIdentityError::StateSectionLimit {
                 section: "resolver hyperedge members",
-                actual: MAX_STABLE_RESOLVER_HYPEREDGE_MEMBERS_V1 + 1,
-                maximum: MAX_STABLE_RESOLVER_HYPEREDGE_MEMBERS_V1,
+                actual: MAX_STABLE_RESOLVER_HYPEREDGE_MEMBERS + 1,
+                maximum: MAX_STABLE_RESOLVER_HYPEREDGE_MEMBERS,
             })
         );
         assert_eq!(
-            validate_resolver_fact_unit_count(MAX_STABLE_RESOLVER_FACT_UNITS_V1),
+            validate_resolver_fact_unit_count(MAX_STABLE_RESOLVER_FACT_UNITS),
             Ok(())
         );
         assert_eq!(
-            validate_resolver_fact_unit_count(MAX_STABLE_RESOLVER_FACT_UNITS_V1 + 1),
+            validate_resolver_fact_unit_count(MAX_STABLE_RESOLVER_FACT_UNITS + 1),
             Err(StableIdentityError::FactUnitLimit {
-                actual: MAX_STABLE_RESOLVER_FACT_UNITS_V1 + 1,
-                maximum: MAX_STABLE_RESOLVER_FACT_UNITS_V1,
+                actual: MAX_STABLE_RESOLVER_FACT_UNITS + 1,
+                maximum: MAX_STABLE_RESOLVER_FACT_UNITS,
             })
         );
     }
 
     #[test]
     fn resolver_edge_ceiling_accepts_maximum_and_refuses_plus_one() {
-        assert_eq!(validate_resolver_edge_count(MAX_STABLE_EDGES_V1), Ok(()));
+        assert_eq!(validate_resolver_edge_count(MAX_STABLE_EDGES), Ok(()));
         assert_eq!(
-            validate_resolver_edge_count(MAX_STABLE_EDGES_V1 + 1),
+            validate_resolver_edge_count(MAX_STABLE_EDGES + 1),
             Err(StableIdentityError::EdgeLimit {
-                actual: MAX_STABLE_EDGES_V1 + 1,
-                maximum: MAX_STABLE_EDGES_V1,
+                actual: MAX_STABLE_EDGES + 1,
+                maximum: MAX_STABLE_EDGES,
             })
         );
     }

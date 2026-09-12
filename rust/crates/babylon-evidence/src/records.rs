@@ -2,8 +2,8 @@
 
 use std::cmp::Ordering;
 
-use babylon_kernel::{sha256_of, SessionId};
-use babylon_practice_contract::PracticeIdV1;
+use babylon_kernel::{clock::SessionId, content_digest::sha256_of};
+use babylon_practice_contract::PracticeId;
 
 use crate::classifier::{classify_sfs, SfsClass, SfsClassError};
 use crate::digest::Digest32;
@@ -21,9 +21,9 @@ pub enum SfsRecordError {
     Classifier(SfsClassError),
     /// Session UTF-8 bytes lie outside 1 through 256.
     InvalidSessionLength { actual: usize },
-    /// V1 admits only one committed tick between samples.
+    /// current admits only one committed tick between samples.
     InvalidSampleInterval { found: u16 },
-    /// V1 window width lies outside 2 through 52.
+    /// current window width lies outside 2 through 52.
     InvalidWindowWidth { found: u16 },
     /// A trace does not contain exactly `3w + 1` samples.
     WrongSampleCount { expected: usize, actual: usize },
@@ -35,13 +35,13 @@ pub enum SfsRecordError {
     CandidateProjectionMismatch,
     /// A valid stored class differs from the recomputed class.
     ClassificationMismatch { stored: u8, computed: u8 },
-    /// V1 cadence is not exact flat cadence with a positive stride.
+    /// current cadence is not exact flat cadence with a positive stride.
     InvalidCadence,
-    /// V1 exogenous policy is not exact empty policy.
+    /// current exogenous policy is not exact empty policy.
     InvalidExogenousPolicy,
     /// A practice code is outside the shared practice-contract registry.
     InvalidPracticeCode { value: u8 },
-    /// An attempt disposition code is outside the closed V1 mapping.
+    /// An attempt disposition code is outside the closed current mapping.
     InvalidDisposition { value: u8 },
     /// An attempt disposition digest uses the reserved zero value.
     ZeroDispositionDigest,
@@ -104,7 +104,7 @@ pub enum RunIdentityField {
 
 /// Complete synthetic run identity without a live-envelope authority claim.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RunIdentityV1 {
+pub struct RunIdentity {
     session: SessionId,
     scenario_digest: Digest32,
     prelude_declarations_digest: Digest32,
@@ -125,7 +125,7 @@ pub struct RunIdentityV1 {
     graph_contract_id: String,
 }
 
-impl RunIdentityV1 {
+impl RunIdentity {
     /// Constructs the exact sealed eighteen-field run identity.
     ///
     /// # Errors
@@ -296,7 +296,7 @@ impl RunIdentityV1 {
     }
 }
 
-impl T3Record for RunIdentityV1 {
+impl T3Record for RunIdentity {
     const DOMAIN: &'static [u8] = b"babylon.run-identity.v1";
     const MAX_PAYLOAD_BYTES: usize = 870;
     type Error = SfsRecordError;
@@ -349,7 +349,7 @@ impl T3Record for RunIdentityV1 {
 
 /// One exact post-commit membership aggregate sample.
 #[derive(Debug, Clone, PartialEq)]
-pub struct SfsSampleV1 {
+pub struct SfsSample {
     tick: u64,
     nominal_world_hash: Digest32,
     committed_envelope_digest: Digest32,
@@ -357,7 +357,7 @@ pub struct SfsSampleV1 {
     aggregate: f64,
 }
 
-impl SfsSampleV1 {
+impl SfsSample {
     /// Constructs one finite non-negative sample and normalizes either zero sign.
     ///
     /// # Errors
@@ -380,7 +380,7 @@ impl SfsSampleV1 {
     }
 }
 
-impl T3Record for SfsSampleV1 {
+impl T3Record for SfsSample {
     const DOMAIN: &'static [u8] = b"babylon.sfs-sample.v1";
     const MAX_PAYLOAD_BYTES: usize = 112;
     type Error = SfsRecordError;
@@ -406,18 +406,18 @@ impl T3Record for SfsSampleV1 {
 
 /// One exact completed SFS trace whose class is always recomputed.
 #[derive(Debug, Clone, PartialEq)]
-pub struct SfsTraceV1 {
+pub struct SfsTrace {
     run_identity_digest: Digest32,
     relational_scope_digest: Digest32,
     organization_node_id: u64,
     start_tick: u64,
     sample_interval: u16,
     window_width: u16,
-    samples: Vec<SfsSampleV1>,
+    samples: Vec<SfsSample>,
     classification: SfsClass,
 }
 
-impl SfsTraceV1 {
+impl SfsTrace {
     /// Constructs a consecutive interval-one trace and computes its class.
     ///
     /// # Errors
@@ -429,7 +429,7 @@ impl SfsTraceV1 {
         organization_node_id: u64,
         start_tick: u64,
         window_width: u16,
-        samples: Vec<SfsSampleV1>,
+        samples: Vec<SfsSample>,
     ) -> Result<Self, SfsRecordError> {
         let expected = expected_sample_count(window_width)?;
         if samples.len() != expected {
@@ -480,7 +480,7 @@ impl SfsTraceV1 {
     }
 }
 
-impl T3Record for SfsTraceV1 {
+impl T3Record for SfsTrace {
     const DOMAIN: &'static [u8] = b"babylon.sfs-trace.v1";
     const MAX_PAYLOAD_BYTES: usize = 22_067;
     type Error = SfsRecordError;
@@ -553,14 +553,14 @@ impl T3Record for SfsTraceV1 {
 
 /// One fixed candidate row with its exact stable identity.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PracticeCandidateRowV1 {
+pub struct PracticeCandidateRow {
     stable_row_id_digest: Digest32,
     attempt_tick: u64,
     practice_input_authority_digest: Digest32,
     practice_intent_digest: Digest32,
 }
 
-impl PracticeCandidateRowV1 {
+impl PracticeCandidateRow {
     /// Constructs one row and derives its stable identity from the exact preimage.
     #[must_use]
     pub fn new(
@@ -610,16 +610,16 @@ pub fn practice_attempt_row_id(
 
 /// Predeclared canonical practice candidates without dispositions.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PracticeCandidateScheduleV1 {
-    rows: Vec<PracticeCandidateRowV1>,
+pub struct PracticeCandidateSchedule {
+    rows: Vec<PracticeCandidateRow>,
 }
 
-impl PracticeCandidateScheduleV1 {
+impl PracticeCandidateSchedule {
     /// Preflights, sorts, and rejects duplicate canonical candidate keys.
     ///
     /// # Errors
     /// Returns exact count or duplicate-entry refusals before publishing rows.
-    pub fn new(mut rows: Vec<PracticeCandidateRowV1>) -> Result<Self, SfsRecordError> {
+    pub fn new(mut rows: Vec<PracticeCandidateRow>) -> Result<Self, SfsRecordError> {
         validate_count("candidate_rows", rows.len())?;
         rows.sort_by(candidate_order);
         reject_candidate_duplicates(&rows, "candidate_rows")?;
@@ -628,12 +628,12 @@ impl PracticeCandidateScheduleV1 {
 
     /// Returns the immutable canonical rows.
     #[must_use]
-    pub fn rows(&self) -> &[PracticeCandidateRowV1] {
+    pub fn rows(&self) -> &[PracticeCandidateRow] {
         &self.rows
     }
 }
 
-impl T3Record for PracticeCandidateScheduleV1 {
+impl T3Record for PracticeCandidateSchedule {
     const DOMAIN: &'static [u8] = b"babylon.practice-candidate-schedule.v1";
     const MAX_PAYLOAD_BYTES: usize = 6_815_644;
     type Error = SfsRecordError;
@@ -663,7 +663,7 @@ impl T3Record for PracticeCandidateScheduleV1 {
 
 /// Exact preregistration for the flat synthetic practice schedule.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SfsPreregistrationV1 {
+pub struct SfsPreregistration {
     preregistered_at_tick: u64,
     start_tick: u64,
     relational_scope_digest: Digest32,
@@ -677,13 +677,13 @@ pub struct SfsPreregistrationV1 {
     first_attempt_tick: u64,
     attempt_stride: u16,
     attempt_count: u16,
-    practice_code: PracticeIdV1,
+    practice_code: PracticeId,
     target_selection_policy_digest: Digest32,
-    governed_cost: u32,
+    resource_contract_digest: Digest32,
     parameter_bytes_digest: Digest32,
 }
 
-impl SfsPreregistrationV1 {
+impl SfsPreregistration {
     /// Constructs exact empty-policy, flat-cadence preregistration bytes.
     ///
     /// # Errors
@@ -700,9 +700,9 @@ impl SfsPreregistrationV1 {
         first_attempt_tick: u64,
         attempt_stride: u16,
         attempt_count: u16,
-        practice_code: PracticeIdV1,
+        practice_code: PracticeId,
         target_selection_policy_digest: Digest32,
-        governed_cost: u32,
+        resource_contract_digest: Digest32,
         parameter_bytes_digest: Digest32,
     ) -> Result<Self, SfsRecordError> {
         let start_tick =
@@ -730,7 +730,7 @@ impl SfsPreregistrationV1 {
             attempt_count,
             practice_code,
             target_selection_policy_digest,
-            governed_cost,
+            resource_contract_digest,
             parameter_bytes_digest,
         })
     }
@@ -777,7 +777,7 @@ impl SfsPreregistrationV1 {
     }
     /// Returns the shared governed practice code.
     #[must_use]
-    pub const fn practice_code(&self) -> PracticeIdV1 {
+    pub const fn practice_code(&self) -> PracticeId {
         self.practice_code
     }
     /// Returns the target-selection policy digest.
@@ -785,10 +785,10 @@ impl SfsPreregistrationV1 {
     pub const fn target_selection_policy_digest(&self) -> Digest32 {
         self.target_selection_policy_digest
     }
-    /// Returns the constant governed cost.
+    /// Returns the exact preregistered resource-contract quote.
     #[must_use]
-    pub const fn governed_cost(&self) -> u32 {
-        self.governed_cost
+    pub const fn resource_contract_digest(&self) -> Digest32 {
+        self.resource_contract_digest
     }
     /// Returns the constant parameter-bytes digest.
     #[must_use]
@@ -797,9 +797,9 @@ impl SfsPreregistrationV1 {
     }
 }
 
-impl T3Record for SfsPreregistrationV1 {
-    const DOMAIN: &'static [u8] = b"babylon.sfs-preregistration.v1";
-    const MAX_PAYLOAD_BYTES: usize = 291;
+impl T3Record for SfsPreregistration {
+    const DOMAIN: &'static [u8] = b"babylon.sfs-preregistration.v2";
+    const MAX_PAYLOAD_BYTES: usize = 319;
     type Error = SfsRecordError;
 
     fn encode_payload(&self, out: &mut PayloadEncoder) -> Result<(), SfsWireError> {
@@ -818,7 +818,7 @@ impl T3Record for SfsPreregistrationV1 {
         out.push_u16(self.attempt_count)?;
         out.push_u8(self.practice_code as u8)?;
         out.push_digest(self.target_selection_policy_digest)?;
-        out.push_u32(self.governed_cost)?;
+        out.push_digest(self.resource_contract_digest)?;
         out.push_digest(self.parameter_bytes_digest)
     }
 
@@ -841,13 +841,13 @@ impl T3Record for SfsPreregistrationV1 {
         let stride = cursor.read_u16()?;
         let count = cursor.read_u16()?;
         let practice_value = cursor.read_u8()?;
-        let practice = PracticeIdV1::try_from(practice_value).map_err(|_| {
+        let practice = PracticeId::try_from(practice_value).map_err(|_| {
             SfsRecordError::InvalidPracticeCode {
                 value: practice_value,
             }
         })?;
         let target_digest = cursor.read_digest()?;
-        let governed_cost = cursor.read_u32()?;
+        let resource_contract_digest = cursor.read_digest()?;
         let parameter_digest = cursor.read_digest()?;
         let value = Self::new(
             preregistered_at_tick,
@@ -862,7 +862,7 @@ impl T3Record for SfsPreregistrationV1 {
             count,
             practice,
             target_digest,
-            governed_cost,
+            resource_contract_digest,
             parameter_digest,
         )?;
         if stored_start != value.start_tick {
@@ -878,20 +878,20 @@ impl T3Record for SfsPreregistrationV1 {
 /// Closed attempt disposition codes.
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum PracticeDispositionV1 {
+pub enum PracticeDisposition {
     /// Candidate admitted to the durable pending ledger.
     Accepted = 0,
     /// Candidate received an exact stable rejection.
     Rejected = 1,
 }
 
-impl PracticeDispositionV1 {
-    /// Returns the exact V1 code.
+impl PracticeDisposition {
+    /// Returns the exact current code.
     #[must_use]
     pub const fn code(self) -> u8 {
         self as u8
     }
-    /// Maps one closed V1 code without fallback.
+    /// Maps one closed current code without fallback.
     #[must_use]
     pub const fn from_code(value: u8) -> Option<Self> {
         match value {
@@ -904,20 +904,20 @@ impl PracticeDispositionV1 {
 
 /// One candidate plus its admission disposition and exact disposition digest.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PracticeAttemptRowV1 {
-    candidate: PracticeCandidateRowV1,
-    disposition: PracticeDispositionV1,
+pub struct PracticeAttemptRow {
+    candidate: PracticeCandidateRow,
+    disposition: PracticeDisposition,
     disposition_digest: Digest32,
 }
 
-impl PracticeAttemptRowV1 {
+impl PracticeAttemptRow {
     /// Constructs one attempt row and refuses the reserved zero digest.
     ///
     /// # Errors
     /// Returns `ZeroDispositionDigest` for the reserved zero value.
     pub fn new(
-        candidate: PracticeCandidateRowV1,
-        disposition: PracticeDispositionV1,
+        candidate: PracticeCandidateRow,
+        disposition: PracticeDisposition,
         disposition_digest: Digest32,
     ) -> Result<Self, SfsRecordError> {
         if disposition_digest.is_zero() {
@@ -936,19 +936,19 @@ impl PracticeAttemptRowV1 {
 /// This crate cannot verify `accepted_intent_ledger_digest` against an
 /// authoritative accepted-intent ledger until Gate 5 supplies that contract.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PracticeAttemptLedgerV1 {
+pub struct PracticeAttemptLedger {
     accepted_intent_ledger_digest: Digest32,
-    rows: Vec<PracticeAttemptRowV1>,
+    rows: Vec<PracticeAttemptRow>,
 }
 
-impl PracticeAttemptLedgerV1 {
+impl PracticeAttemptLedger {
     /// Preflights, sorts, and rejects duplicate canonical attempt keys.
     ///
     /// # Errors
     /// Returns exact count or duplicate-entry refusals before publication.
     pub fn new(
         accepted_intent_ledger_digest: Digest32,
-        mut rows: Vec<PracticeAttemptRowV1>,
+        mut rows: Vec<PracticeAttemptRow>,
     ) -> Result<Self, SfsRecordError> {
         validate_count("attempt_rows", rows.len())?;
         rows.sort_by(|left, right| candidate_order(&left.candidate, &right.candidate));
@@ -963,7 +963,7 @@ impl PracticeAttemptLedgerV1 {
     ///
     /// # Errors
     /// Returns an exact count or duplicate refusal if internal invariants fail.
-    pub fn project_candidates(&self) -> Result<PracticeCandidateScheduleV1, SfsRecordError> {
+    pub fn project_candidates(&self) -> Result<PracticeCandidateSchedule, SfsRecordError> {
         let mut rows = Vec::with_capacity(self.rows.len());
         for index in 0..65_535 {
             if index >= self.rows.len() {
@@ -971,11 +971,11 @@ impl PracticeAttemptLedgerV1 {
             }
             rows.push(self.rows[index].candidate.clone());
         }
-        PracticeCandidateScheduleV1::new(rows)
+        PracticeCandidateSchedule::new(rows)
     }
 }
 
-impl T3Record for PracticeAttemptLedgerV1 {
+impl T3Record for PracticeAttemptLedger {
     const DOMAIN: &'static [u8] = b"babylon.practice-attempt-ledger.v1";
     const MAX_PAYLOAD_BYTES: usize = 8_978_331;
     type Error = SfsRecordError;
@@ -1066,18 +1066,18 @@ fn expected_sample_count(window_width: u16) -> Result<usize, SfsRecordError> {
 fn read_samples(
     cursor: &mut PayloadCursor<'_>,
     count: usize,
-) -> Result<Vec<SfsSampleV1>, SfsRecordError> {
+) -> Result<Vec<SfsSample>, SfsRecordError> {
     let mut samples = Vec::with_capacity(count);
     for index in 0..157 {
         if index >= count {
             break;
         }
-        samples.push(cursor.read_complete_envelope::<SfsSampleV1>()?);
+        samples.push(cursor.read_complete_envelope::<SfsSample>()?);
     }
     Ok(samples)
 }
 
-fn candidate_order(left: &PracticeCandidateRowV1, right: &PracticeCandidateRowV1) -> Ordering {
+fn candidate_order(left: &PracticeCandidateRow, right: &PracticeCandidateRow) -> Ordering {
     left.attempt_tick
         .cmp(&right.attempt_tick)
         .then_with(|| left.stable_row_id_digest.cmp(&right.stable_row_id_digest))
@@ -1108,7 +1108,7 @@ fn decode_count(
 
 fn encode_candidate(
     out: &mut PayloadEncoder,
-    row: &PracticeCandidateRowV1,
+    row: &PracticeCandidateRow,
 ) -> Result<(), SfsWireError> {
     out.push_digest(row.stable_row_id_digest)?;
     out.push_u64(row.attempt_tick)?;
@@ -1118,12 +1118,12 @@ fn encode_candidate(
 
 fn decode_candidate(
     cursor: &mut PayloadCursor<'_>,
-) -> Result<PracticeCandidateRowV1, SfsRecordError> {
+) -> Result<PracticeCandidateRow, SfsRecordError> {
     let stored = cursor.read_digest()?;
     let tick = cursor.read_u64()?;
     let authority = cursor.read_digest()?;
     let intent = cursor.read_digest()?;
-    let row = PracticeCandidateRowV1::new(tick, authority, intent);
+    let row = PracticeCandidateRow::new(tick, authority, intent);
     if stored != row.stable_row_id_digest {
         return Err(SfsRecordError::StableRowDigestMismatch);
     }
@@ -1131,7 +1131,7 @@ fn decode_candidate(
 }
 
 fn reject_candidate_duplicates(
-    rows: &[PracticeCandidateRowV1],
+    rows: &[PracticeCandidateRow],
     field: &'static str,
 ) -> Result<(), SfsRecordError> {
     for index in 1..65_535 {
@@ -1149,7 +1149,7 @@ fn read_candidates(
     cursor: &mut PayloadCursor<'_>,
     count: usize,
     field: &'static str,
-) -> Result<Vec<PracticeCandidateRowV1>, SfsRecordError> {
+) -> Result<Vec<PracticeCandidateRow>, SfsRecordError> {
     let mut rows = Vec::with_capacity(count);
     for index in 0..65_535 {
         if index >= count {
@@ -1163,8 +1163,8 @@ fn read_candidates(
 }
 
 fn validate_next_candidate(
-    previous: Option<&PracticeCandidateRowV1>,
-    row: &PracticeCandidateRowV1,
+    previous: Option<&PracticeCandidateRow>,
+    row: &PracticeCandidateRow,
     field: &'static str,
 ) -> Result<(), SfsRecordError> {
     let Some(previous) = previous else {
@@ -1177,25 +1177,22 @@ fn validate_next_candidate(
     }
 }
 
-fn encode_attempt(
-    out: &mut PayloadEncoder,
-    row: &PracticeAttemptRowV1,
-) -> Result<(), SfsWireError> {
+fn encode_attempt(out: &mut PayloadEncoder, row: &PracticeAttemptRow) -> Result<(), SfsWireError> {
     encode_candidate(out, &row.candidate)?;
     out.push_u8(row.disposition.code())?;
     out.push_digest(row.disposition_digest)
 }
 
-fn decode_attempt(cursor: &mut PayloadCursor<'_>) -> Result<PracticeAttemptRowV1, SfsRecordError> {
+fn decode_attempt(cursor: &mut PayloadCursor<'_>) -> Result<PracticeAttemptRow, SfsRecordError> {
     let candidate = decode_candidate(cursor)?;
     let code = cursor.read_u8()?;
-    let disposition = PracticeDispositionV1::from_code(code)
+    let disposition = PracticeDisposition::from_code(code)
         .ok_or(SfsRecordError::InvalidDisposition { value: code })?;
     let digest = cursor.read_digest()?;
-    PracticeAttemptRowV1::new(candidate, disposition, digest)
+    PracticeAttemptRow::new(candidate, disposition, digest)
 }
 
-fn reject_attempt_duplicates(rows: &[PracticeAttemptRowV1]) -> Result<(), SfsRecordError> {
+fn reject_attempt_duplicates(rows: &[PracticeAttemptRow]) -> Result<(), SfsRecordError> {
     for index in 1..65_535 {
         if index >= rows.len() {
             break;
@@ -1213,16 +1210,14 @@ fn reject_attempt_duplicates(rows: &[PracticeAttemptRowV1]) -> Result<(), SfsRec
 fn read_attempts(
     cursor: &mut PayloadCursor<'_>,
     count: usize,
-) -> Result<Vec<PracticeAttemptRowV1>, SfsRecordError> {
+) -> Result<Vec<PracticeAttemptRow>, SfsRecordError> {
     let mut rows = Vec::with_capacity(count);
     for index in 0..65_535 {
         if index >= count {
             break;
         }
         let row = decode_attempt(cursor)?;
-        let previous = rows
-            .last()
-            .map(|item: &PracticeAttemptRowV1| &item.candidate);
+        let previous = rows.last().map(|item: &PracticeAttemptRow| &item.candidate);
         validate_next_candidate(previous, &row.candidate, "attempt_rows")?;
         rows.push(row);
     }

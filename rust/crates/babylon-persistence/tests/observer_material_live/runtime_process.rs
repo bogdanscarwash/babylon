@@ -6,17 +6,17 @@ use std::sync::{mpsc, Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use babylon_persistence::michigan_content::MichiganContentPresetV1;
-use babylon_persistence::michigan_material::MichiganDeliveryPresetV1;
+use babylon_persistence::michigan_content::MichiganContentPreset;
+use babylon_persistence::michigan_material::MichiganDeliveryPreset;
 use babylon_persistence::runtime_session::{
-    RuntimeSessionErrorCodeV3, RuntimeSessionPresetV3, RuntimeSessionRequestV3,
-    RuntimeSessionResponseV3, RuntimeSessionScopeV3, RuntimeSessionTargetV3,
-    RUNTIME_SESSION_MAX_LINE_BYTES_V3, RUNTIME_SESSION_PROTOCOL_VERSION_V3,
+    RuntimeSessionErrorCode, RuntimeSessionPreset, RuntimeSessionRequest, RuntimeSessionResponse,
+    RuntimeSessionScope, RuntimeSessionTarget, RUNTIME_SESSION_MAX_LINE_BYTES,
+    RUNTIME_SESSION_PROTOCOL_VERSION,
 };
 
 use super::{
     advance_material_period, validate_connection_target, CampaignId, Config, DisposableTarget,
-    DurableMaterialRuntimeV3, Uuid,
+    DurableMaterialRuntime, Uuid,
 };
 
 const STARTUP_LIMIT: Duration = Duration::from_secs(60);
@@ -62,22 +62,20 @@ impl RuntimeChild {
     fn receive(
         &self,
         input: BufReader<ChildStdout>,
-    ) -> (RuntimeSessionResponseV3, BufReader<ChildStdout>) {
+    ) -> (RuntimeSessionResponse, BufReader<ChildStdout>) {
         let (send, receive) = mpsc::sync_channel(1);
         let reader = thread::spawn(move || {
             let mut input = input;
             let mut bytes = Vec::new();
             let result = input
                 .by_ref()
-                .take((RUNTIME_SESSION_MAX_LINE_BYTES_V3 + 1) as u64)
+                .take((RUNTIME_SESSION_MAX_LINE_BYTES + 1) as u64)
                 .read_until(b'\n', &mut bytes)
                 .ok()
                 .filter(|size| {
-                    *size > 0
-                        && *size <= RUNTIME_SESSION_MAX_LINE_BYTES_V3
-                        && bytes.ends_with(b"\n")
+                    *size > 0 && *size <= RUNTIME_SESSION_MAX_LINE_BYTES && bytes.ends_with(b"\n")
                 })
-                .and_then(|_| serde_json::from_slice::<RuntimeSessionResponseV3>(&bytes).ok());
+                .and_then(|_| serde_json::from_slice::<RuntimeSessionResponse>(&bytes).ok());
             let _ = send.send((result, input));
         });
         let (response, input) = receive
@@ -95,8 +93,8 @@ impl RuntimeChild {
         let (response, input) = self.receive(BufReader::new(stdout));
         assert!(
             matches!(response,
-                RuntimeSessionResponseV3::Hello { protocol_version, scope }
-                if protocol_version == RUNTIME_SESSION_PROTOCOL_VERSION_V3
+                RuntimeSessionResponse::Hello { protocol_version, scope }
+                if protocol_version == RUNTIME_SESSION_PROTOCOL_VERSION
                     && scope.epoch == 0 && scope.campaign_id.is_none()
             ),
             "runtime did not emit Hello: {}",
@@ -107,32 +105,32 @@ impl RuntimeChild {
 
     fn ready(&mut self, campaign: CampaignId) -> BufReader<ChildStdout> {
         let input = self.hello();
-        self.send(&RuntimeSessionRequestV3::Switch {
-            protocol_version: RUNTIME_SESSION_PROTOCOL_VERSION_V3,
+        self.send(&RuntimeSessionRequest::Switch {
+            protocol_version: RUNTIME_SESSION_PROTOCOL_VERSION,
             request_id: 1,
-            scope: RuntimeSessionScopeV3 {
+            scope: RuntimeSessionScope {
                 epoch: 0,
                 campaign_id: None,
             },
-            target: RuntimeSessionTargetV3::Open {
+            target: RuntimeSessionTarget::Open {
                 campaign_id: campaign.as_uuid().to_string(),
             },
         })
         .unwrap();
         let (response, input) = self.receive(input);
         assert!(
-            matches!(response, RuntimeSessionResponseV3::Switching { request_id: 1, scope, .. } if scope == campaign_scope(campaign, 1))
+            matches!(response, RuntimeSessionResponse::Switching { request_id: 1, scope, .. } if scope == campaign_scope(campaign, 1))
         );
         let (response, input) = self.receive(input);
         assert!(
-            matches!(response, RuntimeSessionResponseV3::Ready { request_id: 1, scope, tail, .. } if scope == campaign_scope(campaign, 1) && tail.resolve_tick == 1),
+            matches!(response, RuntimeSessionResponse::Ready { request_id: 1, scope, tail, .. } if scope == campaign_scope(campaign, 1) && tail.resolve_tick == 1),
             "runtime did not emit Ready: {}",
             self.diagnostics()
         );
         input
     }
 
-    fn send(&mut self, request: &RuntimeSessionRequestV3) -> std::io::Result<()> {
+    fn send(&mut self, request: &RuntimeSessionRequest) -> std::io::Result<()> {
         let mut bytes = serde_json::to_vec(request).unwrap();
         bytes.push(b'\n');
         let input = self.0.stdin.as_mut().unwrap();
@@ -170,8 +168,8 @@ impl Drop for RuntimeChild {
 fn assert_broken_stdout_exits_with_stdin_open(target: &DisposableTarget, campaign: CampaignId) {
     let mut child = RuntimeChild::start(target);
     drop(child.ready(campaign));
-    let refresh = RuntimeSessionRequestV3::RefreshArchive {
-        protocol_version: RUNTIME_SESSION_PROTOCOL_VERSION_V3,
+    let refresh = RuntimeSessionRequest::RefreshArchive {
+        protocol_version: RUNTIME_SESSION_PROTOCOL_VERSION,
         scope: campaign_scope(campaign, 1),
         request_id: 91,
     };
@@ -209,8 +207,8 @@ fn assert_orderly_exit(target: &DisposableTarget, campaign: CampaignId, explicit
     });
     if explicit_stop {
         child
-            .send(&RuntimeSessionRequestV3::Stop {
-                protocol_version: RUNTIME_SESSION_PROTOCOL_VERSION_V3,
+            .send(&RuntimeSessionRequest::Stop {
+                protocol_version: RUNTIME_SESSION_PROTOCOL_VERSION,
                 scope: campaign_scope(campaign, 1),
                 request_id: 92,
             })
@@ -230,21 +228,21 @@ fn assert_orderly_exit(target: &DisposableTarget, campaign: CampaignId, explicit
     let responses = bytes
         .split(|byte| *byte == b'\n')
         .filter(|row| !row.is_empty())
-        .map(|row| serde_json::from_slice::<RuntimeSessionResponseV3>(row).unwrap())
+        .map(|row| serde_json::from_slice::<RuntimeSessionResponse>(row).unwrap())
         .collect::<Vec<_>>();
     assert!(responses.iter().all(|response| matches!(
         response,
-        RuntimeSessionResponseV3::ArchiveProgress {
+        RuntimeSessionResponse::ArchiveProgress {
             durable_tick: 1,
             ..
-        } | RuntimeSessionResponseV3::Stopped { request_id: 92, .. }
+        } | RuntimeSessionResponse::Stopped { request_id: 92, .. }
     )));
     assert_eq!(
         responses
             .iter()
             .filter(|response| matches!(
                 response,
-                RuntimeSessionResponseV3::Stopped { request_id: 92, .. }
+                RuntimeSessionResponse::Stopped { request_id: 92, .. }
             ))
             .count(),
         usize::from(explicit_stop)
@@ -252,13 +250,13 @@ fn assert_orderly_exit(target: &DisposableTarget, campaign: CampaignId, explicit
     if explicit_stop {
         assert!(matches!(
             responses.last(),
-            Some(RuntimeSessionResponseV3::Stopped { request_id: 92, scope }) if scope == &campaign_scope(campaign, 1)
+            Some(RuntimeSessionResponse::Stopped { request_id: 92, scope }) if scope == &campaign_scope(campaign, 1)
         ));
     }
 }
 
-fn campaign_scope(campaign: CampaignId, epoch: u64) -> RuntimeSessionScopeV3 {
-    RuntimeSessionScopeV3 {
+fn campaign_scope(campaign: CampaignId, epoch: u64) -> RuntimeSessionScope {
+    RuntimeSessionScope {
         epoch,
         campaign_id: Some(campaign.as_uuid().to_string()),
     }
@@ -268,13 +266,13 @@ fn switch_campaign(
     child: &mut RuntimeChild,
     mut input: BufReader<ChildStdout>,
     request_id: u64,
-    previous: &RuntimeSessionScopeV3,
-    target: RuntimeSessionTargetV3,
-    expected: &RuntimeSessionScopeV3,
-) -> (RuntimeSessionResponseV3, BufReader<ChildStdout>) {
+    previous: &RuntimeSessionScope,
+    target: RuntimeSessionTarget,
+    expected: &RuntimeSessionScope,
+) -> (RuntimeSessionResponse, BufReader<ChildStdout>) {
     child
-        .send(&RuntimeSessionRequestV3::Switch {
-            protocol_version: RUNTIME_SESSION_PROTOCOL_VERSION_V3,
+        .send(&RuntimeSessionRequest::Switch {
+            protocol_version: RUNTIME_SESSION_PROTOCOL_VERSION,
             request_id,
             scope: previous.clone(),
             target,
@@ -284,8 +282,8 @@ fn switch_campaign(
         let (response, next) = child.receive(input);
         input = next;
         match response {
-            RuntimeSessionResponseV3::ArchiveProgress { scope, .. } => assert_eq!(&scope, previous),
-            RuntimeSessionResponseV3::Switching {
+            RuntimeSessionResponse::ArchiveProgress { scope, .. } => assert_eq!(&scope, previous),
+            RuntimeSessionResponse::Switching {
                 request_id: observed,
                 previous_scope,
                 scope,
@@ -296,10 +294,10 @@ fn switch_campaign(
                 let (result, input) = child.receive(input);
                 assert!(
                     matches!(&result,
-                    RuntimeSessionResponseV3::Ready { request_id: observed, scope, .. }
+                    RuntimeSessionResponse::Ready { request_id: observed, scope, .. }
                     if *observed == request_id && scope == expected)
                         || matches!(&result,
-                    RuntimeSessionResponseV3::Error { request_id: Some(observed), scope, tail: None, .. }
+                    RuntimeSessionResponse::Error { request_id: Some(observed), scope, tail: None, .. }
                     if *observed == request_id && scope == expected),
                     "new-scope admission must precede progress: {result:?}"
                 );
@@ -311,8 +309,8 @@ fn switch_campaign(
     panic!("switch exceeded bounded response transcript");
 }
 
-fn open_target(campaign: CampaignId) -> RuntimeSessionTargetV3 {
-    RuntimeSessionTargetV3::Open {
+fn open_target(campaign: CampaignId) -> RuntimeSessionTarget {
+    RuntimeSessionTarget::Open {
         campaign_id: campaign.as_uuid().to_string(),
     }
 }
@@ -320,12 +318,12 @@ fn open_target(campaign: CampaignId) -> RuntimeSessionTargetV3 {
 fn next_control_response(
     child: &RuntimeChild,
     mut input: BufReader<ChildStdout>,
-    expected: &RuntimeSessionScopeV3,
-) -> (RuntimeSessionResponseV3, BufReader<ChildStdout>) {
+    expected: &RuntimeSessionScope,
+) -> (RuntimeSessionResponse, BufReader<ChildStdout>) {
     for _ in 0..64 {
         let (response, next) = child.receive(input);
         input = next;
-        if let RuntimeSessionResponseV3::ArchiveProgress { scope, .. } = response {
+        if let RuntimeSessionResponse::ArchiveProgress { scope, .. } = response {
             assert_eq!(&scope, expected);
         } else {
             return (response, input);
@@ -341,7 +339,7 @@ fn assert_missing_open_and_new_collision(
     first: CampaignId,
     missing: CampaignId,
 ) -> BufReader<ChildStdout> {
-    let empty = RuntimeSessionScopeV3 {
+    let empty = RuntimeSessionScope {
         epoch: 0,
         campaign_id: None,
     };
@@ -358,8 +356,8 @@ fn assert_missing_open_and_new_collision(
     );
     assert!(matches!(
         reply,
-        RuntimeSessionResponseV3::Error {
-            code: RuntimeSessionErrorCodeV3::CampaignAbsent,
+        RuntimeSessionResponse::Error {
+            code: RuntimeSessionErrorCode::CampaignAbsent,
             ..
         }
     ));
@@ -382,24 +380,22 @@ fn assert_missing_open_and_new_collision(
         open_target(first),
         &first_scope,
     );
-    assert!(
-        matches!(reply, RuntimeSessionResponseV3::Ready { tail, .. } if tail.resolve_tick == 1)
-    );
+    assert!(matches!(reply, RuntimeSessionResponse::Ready { tail, .. } if tail.resolve_tick == 1));
     let (reply, input) = switch_campaign(
         child,
         input,
         3,
         &first_scope,
-        RuntimeSessionTargetV3::New {
+        RuntimeSessionTarget::New {
             campaign_id: first.as_uuid().to_string(),
-            preset: RuntimeSessionPresetV3::Delayed,
+            preset: RuntimeSessionPreset::Delayed,
         },
         &refused_scope,
     );
     assert!(matches!(
         reply,
-        RuntimeSessionResponseV3::Error {
-            code: RuntimeSessionErrorCodeV3::CampaignAlreadyExists,
+        RuntimeSessionResponse::Error {
+            code: RuntimeSessionErrorCode::CampaignAlreadyExists,
             ..
         }
     ));
@@ -409,18 +405,18 @@ fn assert_missing_open_and_new_collision(
 fn assert_switch_stop(
     child: &mut RuntimeChild,
     input: BufReader<ChildStdout>,
-    scope: &RuntimeSessionScopeV3,
+    scope: &RuntimeSessionScope,
 ) {
     child
-        .send(&RuntimeSessionRequestV3::Stop {
-            protocol_version: RUNTIME_SESSION_PROTOCOL_VERSION_V3,
+        .send(&RuntimeSessionRequest::Stop {
+            protocol_version: RUNTIME_SESSION_PROTOCOL_VERSION,
             request_id: 7,
             scope: scope.clone(),
         })
         .unwrap();
     let (response, input) = next_control_response(child, input, scope);
     assert!(
-        matches!(response, RuntimeSessionResponseV3::Stopped { request_id: 7, scope: stopped } if &stopped == scope)
+        matches!(response, RuntimeSessionResponse::Stopped { request_id: 7, scope: stopped } if &stopped == scope)
     );
     assert!(child
         .wait(EXIT_LIMIT)
@@ -441,8 +437,8 @@ fn live_runtime_child_switch_failure_retry_and_epoch_isolation_preserve_campaign
     let first = CampaignId::from_uuid(Uuid::from_u128(0x0044_0000_0000_0000_0000_0000_0000_0081));
     let second = CampaignId::from_uuid(Uuid::from_u128(0x0044_0000_0000_0000_0000_0000_0000_0082));
     let missing = CampaignId::from_uuid(Uuid::from_u128(0x0044_0000_0000_0000_0000_0000_0000_0083));
-    let preset = MichiganContentPresetV1::new_campaign(MichiganDeliveryPresetV1::Standard);
-    let mut durable = DurableMaterialRuntimeV3::create(
+    let preset = MichiganContentPreset::new_campaign(MichiganDeliveryPreset::Standard);
+    let mut durable = DurableMaterialRuntime::create(
         &target.writer,
         first,
         preset
@@ -465,18 +461,16 @@ fn live_runtime_child_switch_failure_retry_and_epoch_isolation_preserve_campaign
         input,
         4,
         &campaign_scope(first, 3),
-        RuntimeSessionTargetV3::New {
+        RuntimeSessionTarget::New {
             campaign_id: second.as_uuid().to_string(),
-            preset: RuntimeSessionPresetV3::Delayed,
+            preset: RuntimeSessionPreset::Delayed,
         },
         &second_scope,
     );
-    assert!(
-        matches!(reply, RuntimeSessionResponseV3::Ready { tail, .. } if tail.resolve_tick == 0)
-    );
+    assert!(matches!(reply, RuntimeSessionResponse::Ready { tail, .. } if tail.resolve_tick == 0));
     child
-        .send(&RuntimeSessionRequestV3::Switch {
-            protocol_version: RUNTIME_SESSION_PROTOCOL_VERSION_V3,
+        .send(&RuntimeSessionRequest::Switch {
+            protocol_version: RUNTIME_SESSION_PROTOCOL_VERSION,
             request_id: 5,
             scope: campaign_scope(first, 2),
             target: open_target(first),
@@ -484,7 +478,7 @@ fn live_runtime_child_switch_failure_retry_and_epoch_isolation_preserve_campaign
         .unwrap();
     let (response, input) = next_control_response(&child, input, &second_scope);
     assert!(
-        matches!(response, RuntimeSessionResponseV3::Error { request_id: Some(5), scope, code: RuntimeSessionErrorCodeV3::SessionMismatch, .. } if scope == second_scope)
+        matches!(response, RuntimeSessionResponse::Error { request_id: Some(5), scope, code: RuntimeSessionErrorCode::SessionMismatch, .. } if scope == second_scope)
     );
     let (reply, input) = switch_campaign(
         &mut child,
@@ -494,16 +488,14 @@ fn live_runtime_child_switch_failure_retry_and_epoch_isolation_preserve_campaign
         open_target(first),
         &reopened_scope,
     );
-    assert!(
-        matches!(reply, RuntimeSessionResponseV3::Ready { tail, .. } if tail.resolve_tick == 1)
-    );
+    assert!(matches!(reply, RuntimeSessionResponse::Ready { tail, .. } if tail.resolve_tick == 1));
     assert_eq!(
         child.0.id(),
         process,
         "switch must retain the runtime process"
     );
     assert_switch_stop(&mut child, input, &reopened_scope);
-    let reopened = DurableMaterialRuntimeV3::open(
+    let reopened = DurableMaterialRuntime::open(
         &target.writer,
         first,
         preset
@@ -517,10 +509,10 @@ fn live_runtime_child_switch_failure_retry_and_epoch_isolation_preserve_campaign
         reopened.session().current_world_hash().unwrap(),
         original_world
     );
-    let created = DurableMaterialRuntimeV3::open(
+    let created = DurableMaterialRuntime::open(
         &target.writer,
         second,
-        MichiganContentPresetV1::new_campaign(MichiganDeliveryPresetV1::Delayed)
+        MichiganContentPreset::new_campaign(MichiganDeliveryPreset::Delayed)
             .admitted(&crate::test_support::catalog())
             .unwrap()
             .digest(),
@@ -541,9 +533,9 @@ fn live_runtime_child_pipe_failure_and_orderly_exit_preserve_committed_world() {
     let target = DisposableTarget::create();
     let campaign =
         CampaignId::from_uuid(Uuid::from_u128(0x0044_0000_0000_0000_0000_0000_0000_007f));
-    let preset = MichiganContentPresetV1::new_campaign(MichiganDeliveryPresetV1::Standard);
+    let preset = MichiganContentPreset::new_campaign(MichiganDeliveryPreset::Standard);
     let admitted = preset.admitted(&crate::test_support::catalog()).unwrap();
-    let mut runtime = DurableMaterialRuntimeV3::create(
+    let mut runtime = DurableMaterialRuntime::create(
         &target.writer,
         campaign,
         preset
@@ -562,7 +554,7 @@ fn live_runtime_child_pipe_failure_and_orderly_exit_preserve_committed_world() {
             ExitMode::Eof => assert_orderly_exit(&target, campaign, false),
         }
         let reopened =
-            DurableMaterialRuntimeV3::open(&target.writer, campaign, admitted.digest()).unwrap();
+            DurableMaterialRuntime::open(&target.writer, campaign, admitted.digest()).unwrap();
         assert_eq!(reopened.session().completed_tick(), 1);
         assert_eq!(reopened.tail(), expected_tail.as_ref());
         assert_eq!(

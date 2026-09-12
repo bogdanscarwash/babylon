@@ -4,7 +4,8 @@
 use std::collections::BTreeMap;
 
 use babylon_persistence::{
-    ObserverCountyEconomyV1, ObserverEconomySnapshotV1, ProductionSnapshotV2,
+    observer_reader::ObserverCountyEconomy, observer_reader::ObserverEconomySnapshot,
+    production_observation::ProductionSnapshot,
 };
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -45,7 +46,7 @@ impl EconomyMetric {
     }
 
     #[must_use]
-    pub const fn value(self, county: &ObserverCountyEconomyV1) -> Option<u64> {
+    pub const fn value(self, county: &ObserverCountyEconomy) -> Option<u64> {
         match self {
             Self::Employment => county.annual_avg_emplvl,
             Self::Payroll => county.total_annual_wages,
@@ -129,7 +130,7 @@ impl MapLens {
     /// The caller supplies only `ObserverFrame::for_session`; no retained label
     /// or raw identity can enter logs after a capability or context invalidation.
     #[must_use]
-    pub fn label_for_log(&self, snapshot: Option<&ObserverEconomySnapshotV1>) -> String {
+    pub fn label_for_log(&self, snapshot: Option<&ObserverEconomySnapshot>) -> String {
         match self {
             Self::Relationships => "Supply relationships".to_owned(),
             Self::Workforce(metric) => metric.label().to_owned(),
@@ -150,7 +151,7 @@ impl MapLens {
 
     /// Preserve the selected identity across periods. A different campaign or
     /// capability clears it, including while its new observation is pending.
-    pub fn reconcile(&mut self, snapshot: Option<&ObserverEconomySnapshotV1>, scope_changed: bool) {
+    pub fn reconcile(&mut self, snapshot: Option<&ObserverEconomySnapshot>, scope_changed: bool) {
         let Self::Material { kind, good } = self else {
             return;
         };
@@ -166,7 +167,7 @@ impl MapLens {
         }
     }
 
-    pub fn cycle_good(&mut self, snapshot: Option<&ObserverEconomySnapshotV1>, backwards: bool) {
+    pub fn cycle_good(&mut self, snapshot: Option<&ObserverEconomySnapshot>, backwards: bool) {
         let Self::Material { kind, good } = self else {
             return;
         };
@@ -302,12 +303,13 @@ fn add_choice(
 /// # Errors
 /// Refuses missing material identities or conflicting labels for one identity.
 pub fn material_choices(
-    snapshot: &ObserverEconomySnapshotV1,
+    snapshot: &ObserverEconomySnapshot,
     kind: MaterialLensKind,
 ) -> Result<Vec<MaterialGoodChoice>, MapLensError> {
     // The role boundary already withholds this projection, and checking the
     // capability here also prevents accidental reuse of a mismatched fixture.
-    if snapshot.visibility != babylon_persistence::ObserverVisibilityV1::FullObserver {
+    if snapshot.visibility != babylon_persistence::observer_reader::ObserverVisibility::FullObserver
+    {
         return Ok(Vec::new());
     }
     let Some(production) = &snapshot.production else {
@@ -357,7 +359,7 @@ pub fn material_choices(
 /// Every consumer uses this same reading, including refused or absent data.
 #[must_use]
 pub fn project_map_lens(
-    snapshot: Option<&ObserverEconomySnapshotV1>,
+    snapshot: Option<&ObserverEconomySnapshot>,
     lens: &MapLens,
 ) -> MapLensProjection {
     let mut result = MapLensProjection {
@@ -407,11 +409,10 @@ pub fn project_map_lens(
     let MapLens::Material { kind, good } = lens else {
         return result;
     };
-    let Some(production) = snapshot
-        .production
-        .as_ref()
-        .filter(|_| snapshot.visibility == babylon_persistence::ObserverVisibilityV1::FullObserver)
-    else {
+    let Some(production) = snapshot.production.as_ref().filter(|_| {
+        snapshot.visibility
+            == babylon_persistence::observer_reader::ObserverVisibility::FullObserver
+    }) else {
         result.unavailable = LensUnavailable::CapabilityUnavailable;
         return result;
     };
@@ -443,7 +444,7 @@ pub fn project_map_lens(
 }
 
 fn project_workforce(
-    snapshot: &ObserverEconomySnapshotV1,
+    snapshot: &ObserverEconomySnapshot,
     metric: WorkforceMetric,
     mut result: MapLensProjection,
 ) -> MapLensProjection {
@@ -454,11 +455,10 @@ fn project_workforce(
     } else {
         "DERIVED | committed modeled workforce"
     };
-    let Some(production) = snapshot
-        .production
-        .as_ref()
-        .filter(|_| snapshot.visibility == babylon_persistence::ObserverVisibilityV1::FullObserver)
-    else {
+    let Some(production) = snapshot.production.as_ref().filter(|_| {
+        snapshot.visibility
+            == babylon_persistence::observer_reader::ObserverVisibility::FullObserver
+    }) else {
         result.unavailable = LensUnavailable::CapabilityUnavailable;
         return result;
     };
@@ -474,14 +474,9 @@ fn project_workforce(
             result.unavailable = LensUnavailable::InvalidObservation;
             return result;
         };
-        if !identities.insert((&account.pool_id, &account.site_id, &account.unit_id))
-            || account.employed.checked_add(account.reserve) != Some(account.labor_force)
-            || snapshot.resolve_tick.checked_add(1) != Some(account.next_opening_period)
-            || (snapshot.resolve_tick == 0) != account.completed.is_none()
-            || account
-                .completed
-                .as_ref()
-                .is_some_and(|completed| completed.period != snapshot.resolve_tick)
+        if !identities.insert(crate::workforce::StaffingIdentity::from(account))
+            || crate::workforce::validate_staffing_balance(account).is_err()
+            || crate::workforce::validate_staffing_period(account, snapshot.resolve_tick).is_err()
         {
             result.counties.clear();
             result.unavailable = LensUnavailable::InvalidObservation;
@@ -520,7 +515,7 @@ fn add_quantity(
 }
 
 fn project_material_counties(
-    production: &ProductionSnapshotV2,
+    production: &ProductionSnapshot,
     kind: MaterialLensKind,
     good: &MaterialGoodKey,
 ) -> Result<BTreeMap<String, CountyLensReading>, MapLensError> {
@@ -609,8 +604,9 @@ mod tests {
 
     use super::*;
     use babylon_persistence::{
-        ObserverVisibilityV1, ProductionFreightV2, ProductionRouteV2, ProductionSiteV2,
-        ProductionStockV1,
+        observer_reader::ObserverVisibility, production_observation::ProductionFreight,
+        production_observation::ProductionRoute, production_observation::ProductionSite,
+        production_observation::ProductionStock,
     };
 
     fn key(letter: char) -> MaterialGoodKey {
@@ -620,50 +616,52 @@ mod tests {
         }
     }
 
-    fn site(id: &str, county: &str, good: char, quantity: u64) -> ProductionSiteV2 {
-        ProductionSiteV2 {
+    fn site(id: &str, county: &str, good: char, quantity: u64) -> ProductionSite {
+        ProductionSite {
             id: id.into(),
             county_geoid: county.into(),
             name: id.into(),
             industry_code: "331".into(),
             observed_employment: None,
-            inventory: vec![ProductionStockV1 {
+            inventory: vec![ProductionStock {
                 good_id: key(good).good_id,
                 unit_id: key(good).unit_id,
                 good: format!("Good {good}"),
                 unit: "kg".into(),
                 quantity,
             }],
-            role: babylon_persistence::ProductionSiteRoleV2::Production,
+            role: babylon_persistence::production_observation::ProductionSiteRole::Production,
             sector_code: "31-33".into(),
-            processes: vec![babylon_persistence::ProductionProcessV2 {
-                id: "fixture-process".into(),
-                name: "Fixture process".into(),
-                output_good_id: key(good).good_id,
-                output_unit_id: key(good).unit_id,
-                output_good: format!("Good {good}"),
-                output_unit: "kg".into(),
-                output_per_batch: 5,
-                available_batches: 10,
-                planned_batches: Some(2),
-                produced_batches: Some(2),
-                inputs: vec![],
-                labor: vec![],
-            }],
+            processes: vec![
+                babylon_persistence::production_observation::ProductionProcess {
+                    id: "fixture-process".into(),
+                    name: "Fixture process".into(),
+                    output_good_id: key(good).good_id,
+                    output_unit_id: key(good).unit_id,
+                    output_good: format!("Good {good}"),
+                    output_unit: "kg".into(),
+                    output_per_batch: 5,
+                    available_batches: 10,
+                    planned_batches: Some(2),
+                    produced_batches: Some(2),
+                    inputs: vec![],
+                    labor: vec![],
+                },
+            ],
         }
     }
 
-    fn snapshot() -> ObserverEconomySnapshotV1 {
-        ObserverEconomySnapshotV1 {
+    fn snapshot() -> ObserverEconomySnapshot {
+        ObserverEconomySnapshot {
             campaign_id: "4ae8c232-9b98-4a24-8a89-23821373da99".into(),
             resolve_tick: 1,
             foundation_digest: "f".repeat(64),
             nominal_world_hash: Some("d".repeat(64)),
             tick_content_hash: Some("e".repeat(64)),
             envelope_digest: Some("b".repeat(64)),
-            visibility: ObserverVisibilityV1::FullObserver,
+            visibility: ObserverVisibility::FullObserver,
             counties: vec![],
-            production: Some(ProductionSnapshotV2 {
+            production: Some(ProductionSnapshot {
                 content_authority_sha256: "a".repeat(64),
                 road_source: None,
                 physical_edges: Vec::new(),
@@ -680,10 +678,10 @@ mod tests {
                     site("other", "26163", 'b', 500),
                     site("buyer", "26099", 'b', 0),
                 ],
-                routes: vec![ProductionRouteV2 {
+                routes: vec![ProductionRoute {
                     physical_edge_ids: Vec::new(),
                     distance_mm: None,
-                    transport_kind: babylon_persistence::ProductionRouteTransportV2::Staged,
+                    transport_kind: babylon_persistence::production_observation::ProductionRouteTransport::Staged,
                     grams_per_unit: 1000,
                     stages: Vec::new(),
                     id: "route".into(),
@@ -701,7 +699,7 @@ mod tests {
                     realized: 60,
                     backlog: 10,
                 }],
-                freight: vec![ProductionFreightV2 {
+                freight: vec![ProductionFreight {
                     current_stage_index: 0,
                     grams_per_unit: 1000,
                     mass_grams: 1000,
@@ -753,7 +751,10 @@ mod tests {
 
     #[test]
     fn modeled_workforce_counts_the_owner_once_across_processes_and_refuses_preview() {
-        use babylon_persistence::{ProductionStaffingAccountV1, ProductionStaffingSubjectV1};
+        use babylon_persistence::{
+            production_observation::ProductionStaffingAccount,
+            production_observation::ProductionStaffingSubject,
+        };
         let mut snapshot = snapshot();
         snapshot.resolve_tick = 0;
         let production = snapshot.production.as_mut().unwrap();
@@ -763,11 +764,11 @@ mod tests {
         production.sites[0].processes.push(second_process);
         production
             .staffing_accounts
-            .push(ProductionStaffingAccountV1 {
+            .push(ProductionStaffingAccount {
                 pool_id: "owner-pool".into(),
                 site_id: "source".into(),
                 unit_id: "hours".into(),
-                subject: ProductionStaffingSubjectV1 {
+                subject: ProductionStaffingSubject {
                     scenario: "fixture".into(),
                     local_name: "owner-pool".into(),
                 },
@@ -800,14 +801,14 @@ mod tests {
             project_map_lens(Some(&snapshot), &MapLens::default()).county("26099"),
             CountyLensReading::Unavailable(LensUnavailable::NotModeled)
         );
-        snapshot.visibility = ObserverVisibilityV1::KnownPreview;
+        snapshot.visibility = ObserverVisibility::KnownPreview;
         let restricted = project_map_lens(Some(&snapshot), &MapLens::default());
         assert!(restricted.counties.is_empty());
         assert_eq!(
             restricted.unavailable,
             LensUnavailable::CapabilityUnavailable
         );
-        snapshot.visibility = ObserverVisibilityV1::FullObserver;
+        snapshot.visibility = ObserverVisibility::FullObserver;
         let production = snapshot.production.as_mut().unwrap();
         production
             .staffing_accounts
@@ -935,7 +936,7 @@ mod tests {
             }
         );
         // Even an accidentally attached full payload cannot open preview choices.
-        snapshot.visibility = ObserverVisibilityV1::KnownPreview;
+        snapshot.visibility = ObserverVisibility::KnownPreview;
         selection.reconcile(Some(&snapshot), false);
         assert!(
             material_choices(&snapshot, MaterialLensKind::ProducedThisPeriod)

@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 use babylon_kernel::clock::WEEKS_PER_TICK;
 use serde::{Deserialize, Serialize};
 
-use super::{MichiganDefinesErrorV1, MAX_EXACT_INTEGER};
+use super::{MichiganDefinesError, MAX_EXACT_INTEGER};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize)]
 pub(crate) enum DesignedEvidence {
@@ -114,8 +114,8 @@ fn workforce(employed: u64, reserve: u64, hours_per_period: u64) -> bool {
         .is_some_and(|people| positive(people) && product(people, hours_per_period))
 }
 
-pub(super) fn validate(defines: &super::MichiganDefinesV3) -> Result<(), MichiganDefinesErrorV1> {
-    use MichiganDefinesErrorV1::Value;
+pub(super) fn validate(defines: &super::MichiganDefines) -> Result<(), MichiganDefinesError> {
+    use MichiganDefinesError::Value;
     if defines.commodity.is_empty()
         || defines.commodity.len() > 64
         || defines.template.is_empty()
@@ -152,11 +152,11 @@ pub(super) fn validate(defines: &super::MichiganDefinesV3) -> Result<(), Michiga
 }
 
 fn validate_template(
-    defines: &super::MichiganDefinesV3,
+    defines: &super::MichiganDefines,
     name: &str,
     template: &TemplateDefines,
-) -> Result<(), MichiganDefinesErrorV1> {
-    use MichiganDefinesErrorV1::Value;
+) -> Result<(), MichiganDefinesError> {
+    use MichiganDefinesError::Value;
     let Some(output) = defines.commodity.get(&template.output_good) else {
         return Err(Value("template output must identify a commodity"));
     };
@@ -208,9 +208,9 @@ fn validate_template(
 }
 
 fn validate_transport_and_handling(
-    defines: &super::MichiganDefinesV3,
-) -> Result<(), MichiganDefinesErrorV1> {
-    use MichiganDefinesErrorV1::Value;
+    defines: &super::MichiganDefines,
+) -> Result<(), MichiganDefinesError> {
+    use MichiganDefinesError::Value;
     let transport = &defines.transport;
     if let Some(experiment) = &defines.statewide.experiment {
         if [

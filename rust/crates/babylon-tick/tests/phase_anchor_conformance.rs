@@ -3,7 +3,7 @@
 use babylon_bsl::structural_verbs::CollectingSink;
 use babylon_graph::hypergraph_store::HypergraphStore;
 use babylon_graph::state_hash::CanonicalState;
-use babylon_tick::{diagnose_content_set, run_once_into};
+use babylon_tick::{diagnose_content_set_sources, run_once_into, ContentRuleSource};
 
 const SCENARIO: &str = include_str!("../content/scenarios/two-classes.bscn");
 
@@ -108,11 +108,18 @@ fn diagnostic_loading_reports_the_same_phase_composition_refusal() {
   (bindings)
   (effects (emit EventType/RUPTURE)))
 "#;
-    let errors = diagnose_content_set(SCENARIO, None, &[rule]);
+    let errors = diagnose_content_set_sources(
+        SCENARIO,
+        None,
+        &[ContentRuleSource {
+            source_id: "rules/illegal-diagnostic-interleave.bsl",
+            source: rule,
+        }],
+    );
 
     assert_eq!(errors.len(), 1, "{errors:?}");
-    assert_eq!(errors[0].spec_code(), Some("E-LOAD-003"));
-    assert!(errors[0].to_string().contains("Material Base"));
+    assert_eq!(errors[0].error.spec_code(), Some("E-LOAD-003"));
+    assert!(errors[0].error.to_string().contains("Material Base"));
 }
 
 #[test]

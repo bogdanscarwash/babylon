@@ -3,46 +3,46 @@
 use std::collections::HashMap;
 use std::hash::BuildHasher;
 
-use babylon_graph::stable_element::StableElementResolverV1;
+use babylon_graph::stable_element::StableElementResolver;
 
 use crate::causal_contract::AuditReceipt;
 use crate::evaluator::Value;
 use crate::fuel::IntrinsicCosts;
 use crate::identity_codec::{
-    canonical_event_name_v1, checked_add, checked_u32, encode_bsl_type_v1, encode_const_value_v1,
-    encode_effect_signature_v1, encode_enum_kind_v1, encode_evidence_class_v1,
-    encode_field_kind_v1, encode_rule_role_v1, validate_enum_member, validate_enum_type,
-    validate_governance_text, validate_intrinsic_identity, validate_qname, validate_symbol,
-    IdentityCodecError, IdentityWriter, IntrinsicIdentityViolation,
+    canonical_event_name, checked_add, checked_u32, encode_bsl_type, encode_const_value,
+    encode_effect_signature, encode_enum_kind, encode_evidence_class, encode_field_kind,
+    encode_rule_role, validate_enum_member, validate_enum_type, validate_governance_text,
+    validate_intrinsic_identity, validate_qname, validate_symbol, IdentityCodecError,
+    IdentityWriter, IntrinsicIdentityViolation,
 };
 use crate::typecheck::TypeEnv;
 use crate::types::{EnumDecl, EnumRegistry};
 use crate::vocabulary::{ClosedVocabulary, EnumKind};
 
 /// Maximum ordinary prepared rows in one section.
-pub const MAX_PREPARED_ROWS_V1: usize = 65_536;
+pub const MAX_PREPARED_ROWS: usize = 65_536;
 /// Maximum exemption or intrinsic-cost rows.
-pub const MAX_PREPARED_SMALL_ROWS_V1: usize = 64;
+pub const MAX_PREPARED_SMALL_ROWS: usize = 64;
 /// Maximum members in one prepared enum declaration.
-pub const MAX_PREPARED_ENUM_MEMBERS_V1: usize = 4_096;
+pub const MAX_PREPARED_ENUM_MEMBERS: usize = 4_096;
 /// Maximum members in one prepared structural-vocabulary kind.
-pub const MAX_PREPARED_VOCABULARY_MEMBERS_V1: usize = 524_288;
+pub const MAX_PREPARED_VOCABULARY_MEMBERS: usize = 524_288;
 /// Maximum aggregate prepared-environment rows.
-pub const MAX_PREPARED_AGGREGATE_ROWS_V1: usize = 1_048_576;
+pub const MAX_PREPARED_AGGREGATE_ROWS: usize = 1_048_576;
 /// Maximum aggregate tick-payload rows.
-pub const MAX_TICK_AGGREGATE_ROWS_V1: usize = 1_048_576;
+pub const MAX_TICK_AGGREGATE_ROWS: usize = 1_048_576;
 /// Maximum combined prepared-environment section bytes.
-pub const MAX_PREPARED_COMBINED_BYTES_V1: usize = 67_108_864;
+pub const MAX_PREPARED_COMBINED_BYTES: usize = 67_108_864;
 /// Maximum combined tick-payload section bytes.
-pub const MAX_TICK_COMBINED_BYTES_V1: usize = 67_108_864;
+pub const MAX_TICK_COMBINED_BYTES: usize = 67_108_864;
 /// Maximum tick rule-outcome rows.
-pub const MAX_TICK_RULE_OUTCOMES_V1: usize = 65_536;
+pub const MAX_TICK_RULE_OUTCOMES: usize = 65_536;
 /// Maximum events or receipts in one tick payload.
-pub const MAX_TICK_ROWS_V1: usize = 1_048_576;
+pub const MAX_TICK_ROWS: usize = 1_048_576;
 
 /// Canonical BSL-owned prepared-environment section bodies.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PreparedBslSectionsV1 {
+pub struct PreparedBslSections {
     fields_and_exemptions: Vec<u8>,
     intrinsic_costs: Vec<u8>,
     constants: Vec<u8>,
@@ -51,7 +51,7 @@ pub struct PreparedBslSectionsV1 {
     aggregate_rows: u32,
 }
 
-impl PreparedBslSectionsV1 {
+impl PreparedBslSections {
     /// Borrow tag `0x04`'s body.
     #[must_use]
     pub fn fields_and_exemptions(&self) -> &[u8] {
@@ -91,7 +91,7 @@ impl PreparedBslSectionsV1 {
 
 /// Canonical BSL-owned tick-payload section bodies.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct TickPayloadSectionsV1 {
+pub struct TickPayloadSections {
     rule_outcomes: Vec<u8>,
     events: Vec<u8>,
     receipts: Vec<u8>,
@@ -99,7 +99,7 @@ pub struct TickPayloadSectionsV1 {
     aggregate_rows: u32,
 }
 
-impl TickPayloadSectionsV1 {
+impl TickPayloadSections {
     /// Borrow tag `0x01`'s body.
     #[must_use]
     pub fn rule_outcomes(&self) -> &[u8] {
@@ -136,17 +136,17 @@ impl TickPayloadSectionsV1 {
 /// # Errors
 /// Returns the first count, aggregate, semantic, scalar, byte, arithmetic,
 /// conversion, or allocation failure.
-pub fn encode_prepared_bsl_sections_v1<S: BuildHasher>(
+pub fn encode_prepared_bsl_sections<S: BuildHasher>(
     types: &TypeEnv,
     intrinsics: &IntrinsicCosts,
     constants: &HashMap<String, Value, S>,
     enums: &EnumRegistry,
     vocabulary: Option<&ClosedVocabulary>,
-) -> Result<PreparedBslSectionsV1, IdentityCodecError> {
+) -> Result<PreparedBslSections, IdentityCodecError> {
     let intrinsic_count = intrinsics.identity_rows().count();
     validate_prepared_counts(types, intrinsic_count, constants, enums, vocabulary)?;
     let aggregate = prepared_aggregate_rows(types, intrinsic_count, constants, enums, vocabulary)?;
-    validate_aggregate(aggregate, MAX_PREPARED_AGGREGATE_ROWS_V1)?;
+    validate_aggregate(aggregate, MAX_PREPARED_AGGREGATE_ROWS)?;
     let fields_and_exemptions = encode_fields(types, enums)?;
     let intrinsic_costs = encode_intrinsics(intrinsics, intrinsic_count)?;
     let constants = encode_constants(constants)?;
@@ -160,9 +160,9 @@ pub fn encode_prepared_bsl_sections_v1<S: BuildHasher>(
             &enum_types,
             &vocabulary,
         ],
-        MAX_PREPARED_COMBINED_BYTES_V1,
+        MAX_PREPARED_COMBINED_BYTES,
     )?;
-    Ok(PreparedBslSectionsV1 {
+    Ok(PreparedBslSections {
         fields_and_exemptions,
         intrinsic_costs,
         constants,
@@ -179,28 +179,20 @@ fn validate_prepared_counts<S: BuildHasher>(
     enums: &EnumRegistry,
     vocabulary: Option<&ClosedVocabulary>,
 ) -> Result<(), IdentityCodecError> {
-    validate_rows("fields", types.fields.len(), MAX_PREPARED_ROWS_V1)?;
+    validate_rows("fields", types.fields.len(), MAX_PREPARED_ROWS)?;
     validate_rows(
         "exemptions",
         types.exemptions.len(),
-        MAX_PREPARED_SMALL_ROWS_V1,
+        MAX_PREPARED_SMALL_ROWS,
     )?;
-    validate_rows(
-        "intrinsic costs",
-        intrinsic_count,
-        MAX_PREPARED_SMALL_ROWS_V1,
-    )?;
-    validate_rows("constants", constants.len(), MAX_PREPARED_ROWS_V1)?;
-    validate_rows(
-        "enum types",
-        enums.declarations().len(),
-        MAX_PREPARED_ROWS_V1,
-    )?;
-    for declaration in enums.declarations().iter().take(MAX_PREPARED_ROWS_V1 + 1) {
+    validate_rows("intrinsic costs", intrinsic_count, MAX_PREPARED_SMALL_ROWS)?;
+    validate_rows("constants", constants.len(), MAX_PREPARED_ROWS)?;
+    validate_rows("enum types", enums.declarations().len(), MAX_PREPARED_ROWS)?;
+    for declaration in enums.declarations().iter().take(MAX_PREPARED_ROWS + 1) {
         validate_rows(
             "enum members",
             declaration.members.len(),
-            MAX_PREPARED_ENUM_MEMBERS_V1,
+            MAX_PREPARED_ENUM_MEMBERS,
         )?;
     }
     if let Some(vocabulary) = vocabulary {
@@ -208,7 +200,7 @@ fn validate_prepared_counts<S: BuildHasher>(
             validate_rows(
                 "vocabulary members",
                 vocabulary.members(kind).len(),
-                MAX_PREPARED_VOCABULARY_MEMBERS_V1,
+                MAX_PREPARED_VOCABULARY_MEMBERS,
             )?;
         }
     }
@@ -232,7 +224,7 @@ fn prepared_aggregate_rows<S: BuildHasher>(
     ] {
         total = checked_add("prepared BSL aggregate rows", total, count)?;
     }
-    for declaration in enums.declarations().iter().take(MAX_PREPARED_ROWS_V1 + 1) {
+    for declaration in enums.declarations().iter().take(MAX_PREPARED_ROWS + 1) {
         total = checked_add(
             "prepared BSL aggregate rows",
             total,
@@ -257,13 +249,13 @@ fn encode_fields(types: &TypeEnv, enums: &EnumRegistry) -> Result<Vec<u8>, Ident
     fields.sort_unstable_by(|left, right| left.0.as_bytes().cmp(right.0.as_bytes()));
     let mut output = IdentityWriter::new("prepared fields and exemptions");
     output.extend(&checked_u32("field count", fields.len())?.to_be_bytes())?;
-    for (qname, declaration) in fields.iter().take(MAX_PREPARED_ROWS_V1 + 1) {
+    for (qname, declaration) in fields.iter().take(MAX_PREPARED_ROWS + 1) {
         validate_qname("field qname", qname)?;
         output.str32("field qname", qname)?;
         let mut encoded_type = Vec::new();
-        encode_bsl_type_v1(&declaration.ty, enums, &mut encoded_type)?;
+        encode_bsl_type(&declaration.ty, enums, &mut encoded_type)?;
         output.extend(&encoded_type)?;
-        output.push(encode_field_kind_v1(declaration.kind))?;
+        output.push(encode_field_kind(declaration.kind))?;
     }
     encode_exemptions(types, &mut output)?;
     Ok(output.finish())
@@ -283,7 +275,7 @@ fn encode_exemptions(
         ))
     });
     output.extend(&checked_u32("exemption count", rows.len())?.to_be_bytes())?;
-    for row in rows.iter().take(MAX_PREPARED_SMALL_ROWS_V1 + 1) {
+    for row in rows.iter().take(MAX_PREPARED_SMALL_ROWS + 1) {
         validate_qname("exemption field", row.field_name)?;
         output.str32("exemption field", row.field_name)?;
         validate_governance_text("exemption reason", row.reason)?;
@@ -304,7 +296,7 @@ fn encode_intrinsics(
     rows.sort_unstable_by(|left, right| left.0.as_bytes().cmp(right.0.as_bytes()));
     let mut output = IdentityWriter::new("prepared intrinsic costs");
     output.extend(&checked_u32("intrinsic count", count)?.to_be_bytes())?;
-    for (name, cost) in rows.iter().take(MAX_PREPARED_SMALL_ROWS_V1 + 1) {
+    for (name, cost) in rows.iter().take(MAX_PREPARED_SMALL_ROWS + 1) {
         validate_intrinsic_identity(name).map_err(|violation| {
             IdentityCodecError::InvalidString {
                 field: "intrinsic name",
@@ -329,11 +321,11 @@ fn encode_constants<S: BuildHasher>(
     rows.sort_unstable_by(|left, right| left.0.as_bytes().cmp(right.0.as_bytes()));
     let mut output = IdentityWriter::new("prepared constants");
     output.extend(&checked_u32("constant count", rows.len())?.to_be_bytes())?;
-    for (qname, value) in rows.iter().take(MAX_PREPARED_ROWS_V1 + 1) {
+    for (qname, value) in rows.iter().take(MAX_PREPARED_ROWS + 1) {
         validate_qname("constant qname", qname)?;
         output.str32("constant qname", qname)?;
         let mut encoded = Vec::new();
-        encode_const_value_v1(value, &mut encoded)?;
+        encode_const_value(value, &mut encoded)?;
         output.extend(&encoded)?;
     }
     Ok(output.finish())
@@ -344,7 +336,7 @@ fn encode_enum_types(enums: &EnumRegistry) -> Result<Vec<u8>, IdentityCodecError
     rows.sort_unstable_by(|left, right| left.name.as_bytes().cmp(right.name.as_bytes()));
     let mut output = IdentityWriter::new("prepared enum types");
     output.extend(&checked_u32("enum type count", rows.len())?.to_be_bytes())?;
-    for declaration in rows.iter().take(MAX_PREPARED_ROWS_V1 + 1) {
+    for declaration in rows.iter().take(MAX_PREPARED_ROWS + 1) {
         validate_enum_type("enum type name", &declaration.name)?;
         output.str32("enum type name", &declaration.name)?;
         output
@@ -352,7 +344,7 @@ fn encode_enum_types(enums: &EnumRegistry) -> Result<Vec<u8>, IdentityCodecError
         for member in declaration
             .members
             .iter()
-            .take(MAX_PREPARED_ENUM_MEMBERS_V1 + 1)
+            .take(MAX_PREPARED_ENUM_MEMBERS + 1)
         {
             validate_enum_member("enum member", member)?;
             output.str32("enum member", member)?;
@@ -369,13 +361,13 @@ fn encode_vocabulary(vocabulary: Option<&ClosedVocabulary>) -> Result<Vec<u8>, I
     };
     output.push(1)?;
     for kind in enum_kinds() {
-        output.push(encode_enum_kind_v1(kind))?;
+        output.push(encode_enum_kind(kind))?;
         if vocabulary.contains_kind(kind) {
             output.push(1)?;
             let mut members = vocabulary.members(kind).to_vec();
             members.sort_unstable_by(|left, right| left.as_bytes().cmp(right.as_bytes()));
             output.extend(&checked_u32("vocabulary member count", members.len())?.to_be_bytes())?;
-            for member in members.iter().take(MAX_PREPARED_VOCABULARY_MEMBERS_V1 + 1) {
+            for member in members.iter().take(MAX_PREPARED_VOCABULARY_MEMBERS + 1) {
                 validate_enum_member("vocabulary member", member)?;
                 output.str32("vocabulary member", member)?;
             }
@@ -391,23 +383,23 @@ fn encode_vocabulary(vocabulary: Option<&ClosedVocabulary>) -> Result<Vec<u8>, I
 /// # Errors
 /// Returns the first count, aggregate, semantic, stable-reference, scalar,
 /// byte, arithmetic, conversion, or allocation failure.
-pub fn encode_tick_payload_sections_v1(
+pub fn encode_tick_payload_sections(
     outcomes: &[(String, usize)],
     events: &[(String, Vec<(String, Value)>)],
     receipts: &[AuditReceipt],
-    resolver: &StableElementResolverV1,
-) -> Result<TickPayloadSectionsV1, IdentityCodecError> {
+    resolver: &StableElementResolver,
+) -> Result<TickPayloadSections, IdentityCodecError> {
     validate_tick_counts(outcomes, events, receipts)?;
     let aggregate = tick_aggregate_rows(outcomes, events, receipts)?;
-    validate_aggregate(aggregate, MAX_TICK_AGGREGATE_ROWS_V1)?;
+    validate_aggregate(aggregate, MAX_TICK_AGGREGATE_ROWS)?;
     let rule_outcomes = encode_outcomes(outcomes)?;
     let events = encode_events(events, resolver)?;
     let receipts = encode_receipts(receipts)?;
     validate_combined_bytes(
         &[&rule_outcomes, &events, &receipts, &[0, 0]],
-        MAX_TICK_COMBINED_BYTES_V1,
+        MAX_TICK_COMBINED_BYTES,
     )?;
-    Ok(TickPayloadSectionsV1 {
+    Ok(TickPayloadSections {
         rule_outcomes,
         events,
         receipts,
@@ -421,11 +413,11 @@ fn validate_tick_counts(
     events: &[(String, Vec<(String, Value)>)],
     receipts: &[AuditReceipt],
 ) -> Result<(), IdentityCodecError> {
-    validate_rows("rule outcomes", outcomes.len(), MAX_TICK_RULE_OUTCOMES_V1)?;
-    validate_rows("events", events.len(), MAX_TICK_ROWS_V1)?;
-    validate_rows("receipts", receipts.len(), MAX_TICK_ROWS_V1)?;
-    for (_, payload) in events.iter().take(MAX_TICK_ROWS_V1 + 1) {
-        validate_rows("event payload items", payload.len(), MAX_TICK_ROWS_V1)?;
+    validate_rows("rule outcomes", outcomes.len(), MAX_TICK_RULE_OUTCOMES)?;
+    validate_rows("events", events.len(), MAX_TICK_ROWS)?;
+    validate_rows("receipts", receipts.len(), MAX_TICK_ROWS)?;
+    for (_, payload) in events.iter().take(MAX_TICK_ROWS + 1) {
+        validate_rows("event payload items", payload.len(), MAX_TICK_ROWS)?;
     }
     Ok(())
 }
@@ -437,7 +429,7 @@ fn tick_aggregate_rows(
 ) -> Result<usize, IdentityCodecError> {
     let mut total = checked_add("tick BSL aggregate rows", outcomes.len(), events.len())?;
     total = checked_add("tick BSL aggregate rows", total, receipts.len())?;
-    for (_, payload) in events.iter().take(MAX_TICK_ROWS_V1 + 1) {
+    for (_, payload) in events.iter().take(MAX_TICK_ROWS + 1) {
         total = checked_add("tick BSL aggregate rows", total, payload.len())?;
     }
     Ok(total)
@@ -446,7 +438,7 @@ fn tick_aggregate_rows(
 fn encode_outcomes(outcomes: &[(String, usize)]) -> Result<Vec<u8>, IdentityCodecError> {
     let mut output = IdentityWriter::new("tick rule outcomes");
     output.extend(&checked_u32("rule outcome count", outcomes.len())?.to_be_bytes())?;
-    for (rule, fired) in outcomes.iter().take(MAX_TICK_RULE_OUTCOMES_V1 + 1) {
+    for (rule, fired) in outcomes.iter().take(MAX_TICK_RULE_OUTCOMES + 1) {
         validate_qname("rule outcome qname", rule)?;
         output.str32("rule outcome qname", rule)?;
         let fired = u64::try_from(*fired)
@@ -458,19 +450,19 @@ fn encode_outcomes(outcomes: &[(String, usize)]) -> Result<Vec<u8>, IdentityCode
 
 fn encode_events(
     events: &[(String, Vec<(String, Value)>)],
-    resolver: &StableElementResolverV1,
+    resolver: &StableElementResolver,
 ) -> Result<Vec<u8>, IdentityCodecError> {
     let mut output = IdentityWriter::new("tick events");
     output.extend(&checked_u32("event count", events.len())?.to_be_bytes())?;
-    for (event, payload) in events.iter().take(MAX_TICK_ROWS_V1 + 1) {
-        let canonical = canonical_event_name_v1(event)?;
+    for (event, payload) in events.iter().take(MAX_TICK_ROWS + 1) {
+        let canonical = canonical_event_name(event)?;
         output.str32("event name", &canonical)?;
         output.extend(&checked_u32("event payload count", payload.len())?.to_be_bytes())?;
-        for (label, value) in payload.iter().take(MAX_TICK_ROWS_V1 + 1) {
+        for (label, value) in payload.iter().take(MAX_TICK_ROWS + 1) {
             validate_symbol("event payload label", label)?;
             output.str32("event payload label", label)?;
             let mut encoded = Vec::new();
-            crate::identity_codec::encode_value_v1(value, resolver, &mut encoded)?;
+            crate::identity_codec::encode_runtime_value(value, resolver, &mut encoded)?;
             output.extend(&encoded)?;
         }
     }
@@ -480,14 +472,14 @@ fn encode_events(
 fn encode_receipts(receipts: &[AuditReceipt]) -> Result<Vec<u8>, IdentityCodecError> {
     let mut output = IdentityWriter::new("tick receipts");
     output.extend(&checked_u32("receipt count", receipts.len())?.to_be_bytes())?;
-    for receipt in receipts.iter().take(MAX_TICK_ROWS_V1 + 1) {
+    for receipt in receipts.iter().take(MAX_TICK_ROWS + 1) {
         validate_qname("receipt rule qname", &receipt.rule_id)?;
         output.str32("receipt rule qname", &receipt.rule_id)?;
-        output.push(encode_rule_role_v1(receipt.role))?;
-        output.push(encode_evidence_class_v1(receipt.evidence))?;
+        output.push(encode_rule_role(receipt.role))?;
+        output.push(encode_evidence_class(receipt.evidence))?;
         output.extend(&receipt.ordinal.to_be_bytes())?;
         let mut effect = Vec::new();
-        encode_effect_signature_v1(&receipt.effect, &mut effect)?;
+        encode_effect_signature(&receipt.effect, &mut effect)?;
         output.extend(&effect)?;
     }
     Ok(output.finish())
@@ -545,24 +537,23 @@ const fn enum_kinds() -> [EnumKind; 4] {
 #[cfg(test)]
 mod tests {
     use super::{
-        validate_aggregate, validate_rows, MAX_PREPARED_AGGREGATE_ROWS_V1,
-        MAX_PREPARED_ENUM_MEMBERS_V1, MAX_PREPARED_ROWS_V1, MAX_PREPARED_SMALL_ROWS_V1,
-        MAX_PREPARED_VOCABULARY_MEMBERS_V1, MAX_TICK_AGGREGATE_ROWS_V1, MAX_TICK_ROWS_V1,
-        MAX_TICK_RULE_OUTCOMES_V1,
+        validate_aggregate, validate_rows, MAX_PREPARED_AGGREGATE_ROWS, MAX_PREPARED_ENUM_MEMBERS,
+        MAX_PREPARED_ROWS, MAX_PREPARED_SMALL_ROWS, MAX_PREPARED_VOCABULARY_MEMBERS,
+        MAX_TICK_AGGREGATE_ROWS, MAX_TICK_ROWS, MAX_TICK_RULE_OUTCOMES,
     };
     use crate::identity_codec::{
-        validate_governance_text, IdentityCodecError, MAX_GOVERNANCE_UTF8_BYTES_V1,
+        validate_governance_text, IdentityCodecError, MAX_GOVERNANCE_UTF8_BYTES,
     };
 
     #[test]
     fn every_bsl_section_ceiling_accepts_maximum_and_refuses_plus_one() {
         for (section, maximum) in [
-            ("prepared", MAX_PREPARED_ROWS_V1),
-            ("prepared small", MAX_PREPARED_SMALL_ROWS_V1),
-            ("enum members", MAX_PREPARED_ENUM_MEMBERS_V1),
-            ("vocabulary members", MAX_PREPARED_VOCABULARY_MEMBERS_V1),
-            ("rule outcomes", MAX_TICK_RULE_OUTCOMES_V1),
-            ("tick rows", MAX_TICK_ROWS_V1),
+            ("prepared", MAX_PREPARED_ROWS),
+            ("prepared small", MAX_PREPARED_SMALL_ROWS),
+            ("enum members", MAX_PREPARED_ENUM_MEMBERS),
+            ("vocabulary members", MAX_PREPARED_VOCABULARY_MEMBERS),
+            ("rule outcomes", MAX_TICK_RULE_OUTCOMES),
+            ("tick rows", MAX_TICK_ROWS),
         ] {
             assert_eq!(validate_rows(section, maximum, maximum), Ok(()));
             assert_eq!(
@@ -574,7 +565,7 @@ mod tests {
                 })
             );
         }
-        for maximum in [MAX_PREPARED_AGGREGATE_ROWS_V1, MAX_TICK_AGGREGATE_ROWS_V1] {
+        for maximum in [MAX_PREPARED_AGGREGATE_ROWS, MAX_TICK_AGGREGATE_ROWS] {
             assert_eq!(validate_aggregate(maximum, maximum), Ok(()));
             assert_eq!(
                 validate_aggregate(maximum + 1, maximum),
@@ -588,14 +579,14 @@ mod tests {
 
     #[test]
     fn governance_utf8_accepts_exact_bytes_and_refuses_plus_one() {
-        let maximum = "é".repeat(MAX_GOVERNANCE_UTF8_BYTES_V1 / 2);
+        let maximum = "é".repeat(MAX_GOVERNANCE_UTF8_BYTES / 2);
         assert_eq!(validate_governance_text("governance", &maximum), Ok(()));
         let oversized = format!("{maximum}x");
         assert_eq!(
             validate_governance_text("governance", &oversized),
             Err(IdentityCodecError::InvalidString {
                 field: "governance",
-                index: MAX_GOVERNANCE_UTF8_BYTES_V1 + 1,
+                index: MAX_GOVERNANCE_UTF8_BYTES + 1,
             })
         );
     }

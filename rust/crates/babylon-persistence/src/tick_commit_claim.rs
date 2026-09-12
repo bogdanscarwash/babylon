@@ -1,36 +1,36 @@
 //! Database-free content-identity claim for one future `tick_commit` marker.
 
-use babylon_kernel::tick_content_hash::TickContentHashV1;
+use babylon_kernel::tick_content_hash::TickContentHash;
 
 use crate::identity::CampaignId;
 
 /// Canonical `TickCommitClaimV1` layout version.
-pub const TICK_COMMIT_CLAIM_LAYOUT_VERSION_V1: u32 = 1;
+pub const TICK_COMMIT_CLAIM_LAYOUT_VERSION: u32 = 1;
 /// Exact byte length of every canonical V1 claim.
-pub const TICK_COMMIT_CLAIM_BYTES_V1: usize = 93;
+pub const TICK_COMMIT_CLAIM_BYTES: usize = 93;
 
-const TICK_CONTENT_HASH_LAYOUT_VERSION_V1: u32 = 1;
+const TICK_CONTENT_HASH_LAYOUT_VERSION: u32 = 1;
 const DOMAIN: &[u8; 26] = b"babylon.tick-commit-claim\0";
 
 /// One typed future-marker key bound to its authoritative tick-content identity.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct TickCommitClaimV1 {
+pub struct TickCommitClaim {
     campaign_id: CampaignId,
     resolve_tick: u64,
-    tick_content_hash: TickContentHashV1,
-    canonical_bytes: [u8; TICK_COMMIT_CLAIM_BYTES_V1],
+    tick_content_hash: TickContentHash,
+    canonical_bytes: [u8; TICK_COMMIT_CLAIM_BYTES],
 }
 
 /// Successful classification of a retry against an existing claim.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum TickCommitClaimRetryV1 {
+pub enum TickCommitClaimRetry {
     /// The requested key and content identity equal the existing claim.
     Idempotent,
 }
 
 /// Closed conflict classes for a requested claim compared with an existing one.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum TickCommitClaimConflictV1 {
+pub enum TickCommitClaimConflict {
     /// The comparison crossed campaign or tick keys.
     KeyMismatch {
         /// Campaign in the existing claim.
@@ -49,29 +49,29 @@ pub enum TickCommitClaimConflictV1 {
         /// Shared resolve tick.
         resolve_tick: u64,
         /// Content identity already claimed.
-        existing: TickContentHashV1,
+        existing: TickContentHash,
         /// Different content identity requested by the retry.
-        requested: TickContentHashV1,
+        requested: TickContentHash,
     },
 }
 
-impl TickCommitClaimV1 {
+impl TickCommitClaim {
     /// Compose the exact fixed V1 bytes from the three owning typed values.
     #[must_use]
     pub fn compose(
         campaign_id: CampaignId,
         resolve_tick: u64,
-        tick_content_hash: TickContentHashV1,
+        tick_content_hash: TickContentHash,
     ) -> Self {
-        let mut canonical_bytes = [0_u8; TICK_COMMIT_CLAIM_BYTES_V1];
+        let mut canonical_bytes = [0_u8; TICK_COMMIT_CLAIM_BYTES];
         canonical_bytes[0..26].copy_from_slice(DOMAIN);
-        canonical_bytes[26..30].copy_from_slice(&TICK_COMMIT_CLAIM_LAYOUT_VERSION_V1.to_be_bytes());
+        canonical_bytes[26..30].copy_from_slice(&TICK_COMMIT_CLAIM_LAYOUT_VERSION.to_be_bytes());
         canonical_bytes[30] = 0x01;
         canonical_bytes[31..47].copy_from_slice(campaign_id.canonical_bytes());
         canonical_bytes[47] = 0x02;
         canonical_bytes[48..56].copy_from_slice(&resolve_tick.to_be_bytes());
         canonical_bytes[56] = 0x03;
-        canonical_bytes[57..61].copy_from_slice(&TICK_CONTENT_HASH_LAYOUT_VERSION_V1.to_be_bytes());
+        canonical_bytes[57..61].copy_from_slice(&TICK_CONTENT_HASH_LAYOUT_VERSION.to_be_bytes());
         canonical_bytes[61..93].copy_from_slice(tick_content_hash.as_bytes());
         Self {
             campaign_id,
@@ -95,13 +95,13 @@ impl TickCommitClaimV1 {
 
     /// Return the direct kernel-owned tick-content identity.
     #[must_use]
-    pub const fn tick_content_hash(&self) -> TickContentHashV1 {
+    pub const fn tick_content_hash(&self) -> TickContentHash {
         self.tick_content_hash
     }
 
     /// Borrow the exact 93 canonical bytes.
     #[must_use]
-    pub const fn canonical_bytes(&self) -> &[u8; TICK_COMMIT_CLAIM_BYTES_V1] {
+    pub const fn canonical_bytes(&self) -> &[u8; TICK_COMMIT_CLAIM_BYTES] {
         &self.canonical_bytes
     }
 
@@ -113,9 +113,9 @@ impl TickCommitClaimV1 {
     pub fn classify_retry_against(
         &self,
         existing: &Self,
-    ) -> Result<TickCommitClaimRetryV1, TickCommitClaimConflictV1> {
+    ) -> Result<TickCommitClaimRetry, TickCommitClaimConflict> {
         if self.campaign_id != existing.campaign_id || self.resolve_tick != existing.resolve_tick {
-            return Err(TickCommitClaimConflictV1::KeyMismatch {
+            return Err(TickCommitClaimConflict::KeyMismatch {
                 existing_campaign_id: existing.campaign_id,
                 existing_resolve_tick: existing.resolve_tick,
                 requested_campaign_id: self.campaign_id,
@@ -123,13 +123,13 @@ impl TickCommitClaimV1 {
             });
         }
         if self.tick_content_hash != existing.tick_content_hash {
-            return Err(TickCommitClaimConflictV1::ContentIdentityMismatch {
+            return Err(TickCommitClaimConflict::ContentIdentityMismatch {
                 campaign_id: self.campaign_id,
                 resolve_tick: self.resolve_tick,
                 existing: existing.tick_content_hash,
                 requested: self.tick_content_hash,
             });
         }
-        Ok(TickCommitClaimRetryV1::Idempotent)
+        Ok(TickCommitClaimRetry::Idempotent)
     }
 }

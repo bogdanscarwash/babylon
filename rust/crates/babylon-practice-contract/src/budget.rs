@@ -1,8 +1,8 @@
 //! Pure checked `ActionBudget` storage and transition math.
 
 use crate::{
-    OrganizationBudgetDeltaV1, PracticeBudgetTermsV1, PracticeContractError, PracticeIdV1,
-    PracticeTargetDomainV1, SolidarityFootprintEdgeV1, MAX_ORG_SOLIDARITY_EDGES_PER_ORG,
+    OrganizationBudgetDelta, PracticeBudgetTerms, PracticeContractError, PracticeId,
+    PracticeTargetDomain, SolidarityFootprintEdge, MAX_ORG_SOLIDARITY_EDGES_PER_ORG,
 };
 
 /// Convert one canonical binary64 `ActionBudget` storage value to `u32`.
@@ -39,22 +39,29 @@ pub fn write_action_budget(value: u32) -> f64 {
 }
 
 fn governed_cost(
-    practice: Option<PracticeIdV1>,
+    practice: Option<PracticeId>,
     organize_cost: u32,
     agitate_cost: u32,
     mutual_aid_cost: u32,
-) -> u32 {
-    match practice {
+) -> Result<u32, PracticeContractError> {
+    Ok(match practice {
         None => 0,
-        Some(PracticeIdV1::Organize) => organize_cost,
-        Some(PracticeIdV1::Agitate) => agitate_cost,
-        Some(PracticeIdV1::MutualAid) => mutual_aid_cost,
-    }
+        Some(PracticeId::Organize) => organize_cost,
+        Some(PracticeId::Agitate) => agitate_cost,
+        Some(PracticeId::MutualAid) => mutual_aid_cost,
+        Some(
+            PracticeId::Strike
+            | PracticeId::Blockade
+            | PracticeId::Occupation
+            | PracticeId::Damage
+            | PracticeId::CapitalStrike,
+        ) => return Err(PracticeContractError::PracticeBudgetUnpriced),
+    })
 }
 
 fn validate_footprint(
     actor_node_id: u64,
-    footprint_edges: &[SolidarityFootprintEdgeV1],
+    footprint_edges: &[SolidarityFootprintEdge],
 ) -> Result<u32, PracticeContractError> {
     if footprint_edges.len() > MAX_ORG_SOLIDARITY_EDGES_PER_ORG {
         return Err(PracticeContractError::PracticeFootprintLimit);
@@ -75,7 +82,7 @@ fn validate_footprint(
             return Err(PracticeContractError::PracticeFootprintSource);
         }
         match edge.target_domain_u8 {
-            PracticeTargetDomainV1::SocialClass => {}
+            PracticeTargetDomain::SocialClass => {}
         }
         let strength = f64::from_bits(edge.strength_f64_bits_u64);
         if !strength.is_finite() {
@@ -104,32 +111,32 @@ pub fn compute_budget_delta(
     actor_node_id: u64,
     pre_action_world_hash: [u8; 32],
     budget_before: u32,
-    practice: Option<PracticeIdV1>,
-    footprint_edges: &[SolidarityFootprintEdgeV1],
-    terms: PracticeBudgetTermsV1,
-) -> Result<OrganizationBudgetDeltaV1, PracticeContractError> {
+    practice: Option<PracticeId>,
+    footprint_edges: &[SolidarityFootprintEdge],
+    terms: PracticeBudgetTerms,
+) -> Result<OrganizationBudgetDelta, PracticeContractError> {
     let footprint_count = validate_footprint(actor_node_id, footprint_edges)?;
-    let PracticeBudgetTermsV1 {
+    let PracticeBudgetTerms {
         initial: _,
-        weekly_credit_cap,
+        period_credit_cap,
         storage_ceiling,
         organize_cost,
         agitate_cost,
         mutual_aid_cost,
     } = terms;
-    let cost = governed_cost(practice, organize_cost, agitate_cost, mutual_aid_cost);
+    let cost = governed_cost(practice, organize_cost, agitate_cost, mutual_aid_cost)?;
     if budget_before < cost {
         return Err(PracticeContractError::PracticeBudgetInsufficient);
     }
     let after_cost = budget_before
         .checked_sub(cost)
         .ok_or(PracticeContractError::PracticeBudgetInsufficient)?;
-    let credited_credit = footprint_count.min(weekly_credit_cap);
+    let credited_credit = footprint_count.min(period_credit_cap);
     let before_ceiling = after_cost
         .checked_add(credited_credit)
         .ok_or(PracticeContractError::PracticeBudgetArithmetic)?;
     let budget_after = before_ceiling.min(storage_ceiling);
-    Ok(OrganizationBudgetDeltaV1 {
+    Ok(OrganizationBudgetDelta {
         schema_version: 1,
         tick,
         actor_node_id,

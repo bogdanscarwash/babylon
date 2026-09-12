@@ -165,14 +165,13 @@ runtime_observation() {
       PGPASSWORD=test PGCONNECT_TIMEOUT=2 PGSSLMODE=disable \
     psql -X -w -qAt -h 127.0.0.1 -p "$PORT" -U test -d "$1" \
       -v ON_ERROR_STOP=1 -c "SELECT \
-        (SELECT pg_catalog.string_agg(ordinal::pg_catalog.text || ':' || state_tag::pg_catalog.text || ':' || schema_epoch::pg_catalog.text, ',' ORDER BY ordinal) FROM babylon_meta.persistence_authority_ledger) \
-        || '|' || (SELECT pg_catalog.string_agg(ordinal::pg_catalog.text || ':' || state_tag::pg_catalog.text || ':' || activation_epoch::pg_catalog.text, ',' ORDER BY ordinal) FROM babylon_meta.committed_tick_v2_authority_ledger) \
+        (SELECT (pg_catalog.count(*) = 1 AND pg_catalog.bool_and(singleton AND pg_catalog.octet_length(schema_sha256) = 32))::pg_catalog.text FROM babylon_meta.current_schema) \
         || '|' || (SELECT pg_catalog.count(*)::pg_catalog.text FROM babylon_meta.campaign) \
         || '|' || (pg_catalog.to_regclass('public.hex_spatial_map') IS NULL)::pg_catalog.text \
         || '|' || (pg_catalog.to_regclass('babylon_state.campaign_foundation') IS NOT NULL)::pg_catalog.text"
 }
 
-readonly CLEAN_RUNTIME="1:1:8,2:2:9|1:1:10,2:2:11|0|true|true"
+readonly CLEAN_RUNTIME="true|0|true|true"
 
 create_runtime_template() {
   local observation
@@ -366,7 +365,7 @@ if [ "$status" -eq 0 ]; then
       ;;
     reference_integrity)
       run_phase reference_integrity 900 cargo test -p babylon-persistence --lib \
-        schema_epoch::live_rollback_tests:: --locked -- --nocapture --ignored --test-threads=1 || status=$?
+        current_schema::live_tests:: --locked -- --nocapture --ignored --test-threads=1 || status=$?
       if [ "$status" -eq 0 ]; then
         run_phase reference_catalog 600 cargo test -p babylon-persistence --test reference_integrity \
           --locked -- --nocapture --ignored --test-threads=1 || status=$?
@@ -383,9 +382,22 @@ if [ "$status" -eq 0 ]; then
       fi
       ;;
     archive)
-      run_phase archive 600 cargo test -p babylon-persistence \
-        --test archive_worker_live --test place_producer_live --test county_producer_live \
-        --locked -- --nocapture --ignored --test-threads=1 || status=$?
+      # Current material fixtures commit real ticks. Bound each independent
+      # acceptance group so one slow group cannot hide an unfinished later one.
+      run_phase archive_worker 600 cargo test -p babylon-persistence --lib \
+        archive_revision::worker::live_tests:: --locked -- --nocapture --ignored \
+        --skip ::bounds:: --skip ::revisions:: --skip ::wakeup:: --test-threads=1 || status=$?
+      for archive_group in bounds revisions wakeup; do
+        [ "$status" -eq 0 ] || break
+        run_phase "archive_$archive_group" 600 cargo test -p babylon-persistence --lib \
+          "archive_revision::worker::live_tests::$archive_group::" \
+          --locked -- --nocapture --ignored --test-threads=1 || status=$?
+      done
+      for archive_producer in place_producer_live county_producer_live; do
+        [ "$status" -eq 0 ] || break
+        run_phase "$archive_producer" 600 cargo test -p babylon-persistence \
+          --test "$archive_producer" --locked -- --nocapture --ignored --test-threads=1 || status=$?
+      done
       ;;
     reader)
       for reader_suite in reader_role_live observer_material_live; do
@@ -393,13 +405,16 @@ if [ "$status" -eq 0 ]; then
         reader_threads=1
         [ "$reader_suite" != observer_material_live ] || reader_threads=4
         run_phase "$reader_suite" 600 cargo test -p babylon-persistence --test "$reader_suite" \
-          --locked -- --nocapture --ignored --skip statewide_qualified:: --test-threads="$reader_threads" || status=$?
+          --locked -- --nocapture --ignored --skip statewide:: --skip statewide_qualified:: --test-threads="$reader_threads" || status=$?
         [ "$status" -eq 0 ] || break
       done
-      ;;
+      # The full synthetic campaign gets its own deadline after ordinary readers.
+      ;&
     statewide_synthetic)
-      run_phase statewide_synthetic 600 cargo test -p babylon-persistence --test observer_material_live \
-        statewide:: --locked -- --nocapture --ignored --test-threads=1 || status=$?
+      if [ "$status" -eq 0 ]; then
+        run_phase statewide_synthetic 600 cargo test -p babylon-persistence --test observer_material_live \
+          statewide:: --locked -- --nocapture --ignored --test-threads=1 || status=$?
+      fi
       ;;
     statewide_qualified)
       # Actual-source four-preset qualification is separate from routine reader checks.

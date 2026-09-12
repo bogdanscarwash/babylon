@@ -35,12 +35,12 @@
 //! to the library.
 
 use crate::allocator_state::{AllocatorCursors, AllocatorState};
-use crate::stable_element::{StableElementResolverV1, StableIdentityError};
-use crate::stable_state::{encode_stable_graph_state_v1, StableGraphStateV1};
+use crate::stable_element::{StableElementResolver, StableIdentityError};
+use crate::stable_state::{encode_stable_graph_state, StableGraphState};
 use crate::state_hash::CanonicalState;
 use crate::substrate::{Direction, GraphError, GraphSubstrate, HyperedgeId, NodeId};
 use crate::working_copy::DetachedCopy;
-use babylon_kernel::Currency;
+use babylon_kernel::currency::Currency;
 use hypergraph_rs::Hypergraph;
 use std::collections::HashMap;
 
@@ -173,13 +173,13 @@ impl HypergraphStore {
     /// # Errors
     /// Returns the first topology, stable-identity, or allocation refusal
     /// without changing the store.
-    pub fn restore_stable_state_v1(
+    pub fn restore_stable_state(
         &mut self,
-        resolver: &StableElementResolverV1,
-        state: &StableGraphStateV1,
+        resolver: &StableElementResolver,
+        state: &StableGraphState,
     ) -> Result<(), StableIdentityError> {
         resolver.validate_topology(self)?;
-        let current = encode_stable_graph_state_v1(self, resolver)?;
+        let current = encode_stable_graph_state(self, resolver)?;
         let source = state.rows();
         let live = current.rows();
         let same_nodes = source.nodes() == live.nodes();

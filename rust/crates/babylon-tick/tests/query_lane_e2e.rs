@@ -18,7 +18,7 @@
 //! from the ONE shared scenario file each time (`run_once_into` loads the
 //! scenario into a NEW graph per call) — so no shape's tick can observe
 //! another shape's writes, and the cross-RULE pre-state gap (D-row **Q14**,
-//! `bsl-language.rst`'s register — `run_once_into`/`TickSession::advance`
+//! `bsl-language.rst`'s register — `run_once_into`/`RuleDiagnosticSession::advance`
 //! run each rule in a content set to completion before the next starts, so
 //! TWO rules at the same anchor position do not share pre-state) never
 //! applies here: nothing in this file ever loads more than one `(rule …)`

@@ -9,7 +9,7 @@
 //! language reference's completion of that model and are
 //! `[draft ruling — Phase 1 review]`. Neither tier is a tuning knob.
 
-use babylon_kernel::sha256_of;
+use babylon_kernel::content_digest::sha256_of;
 use std::collections::HashMap;
 
 use crate::identity_codec::{validate_intrinsic_identity, IntrinsicIdentityViolation};

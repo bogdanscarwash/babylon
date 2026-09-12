@@ -1,10 +1,9 @@
 //! One admitted backend and exactly one Archive driver, retired together.
 
 use super::{ArchiveControl, SessionEvent, COMPLETION_CHECK};
-use crate::archive_driver::ArchiveDriverEventV1;
+use crate::archive_driver::ArchiveDriverEvent;
 use crate::runtime_session::{
-    emit, RuntimeSessionErrorCodeV3, RuntimeSessionResponseV3, RuntimeSessionScopeV3,
-    SessionBackend,
+    emit, RuntimeSessionErrorCode, RuntimeSessionResponse, RuntimeSessionScope, SessionBackend,
 };
 use std::io::Write;
 use std::sync::mpsc::{self, Receiver};
@@ -14,7 +13,6 @@ pub(super) struct Active<B: SessionBackend, D: ArchiveControl> {
     pub(super) backend: B,
     pub(super) archive: D,
     verified_tick: u64,
-    retention_ready: bool,
     joined: bool,
 }
 impl<B: SessionBackend, D: ArchiveControl> Active<B, D> {
@@ -23,20 +21,19 @@ impl<B: SessionBackend, D: ArchiveControl> Active<B, D> {
             backend,
             archive,
             verified_tick: 0,
-            retention_ready: false,
             joined: false,
         }
     }
     fn refuse(
         &self,
         output: &mut impl Write,
-        scope: &RuntimeSessionScopeV3,
+        scope: &RuntimeSessionScope,
         request_id: Option<u64>,
-        code: RuntimeSessionErrorCodeV3,
-    ) -> Result<(), RuntimeSessionErrorCodeV3> {
+        code: RuntimeSessionErrorCode,
+    ) -> Result<(), RuntimeSessionErrorCode> {
         emit(
             output,
-            &RuntimeSessionResponseV3::Error {
+            &RuntimeSessionResponse::Error {
                 request_id,
                 scope: scope.clone(),
                 code,
@@ -47,24 +44,16 @@ impl<B: SessionBackend, D: ArchiveControl> Active<B, D> {
     pub(super) fn event(
         &mut self,
         output: &mut impl Write,
-        scope: &RuntimeSessionScopeV3,
-        event: &ArchiveDriverEventV1,
-    ) -> Result<(), RuntimeSessionErrorCodeV3> {
+        scope: &RuntimeSessionScope,
+        event: &ArchiveDriverEvent,
+    ) -> Result<(), RuntimeSessionErrorCode> {
         match event {
-            ArchiveDriverEventV1::Progress {
+            ArchiveDriverEvent::Progress {
                 request_id,
                 durable_tick,
                 verified_tick,
-                retention_ready,
-            } => self.progress(
-                output,
-                scope,
-                *request_id,
-                *durable_tick,
-                *verified_tick,
-                *retention_ready,
-            ),
-            ArchiveDriverEventV1::Failure {
+            } => self.progress(output, scope, *request_id, *durable_tick, *verified_tick),
+            ArchiveDriverEvent::Failure {
                 request_id,
                 retrying: false,
                 ..
@@ -72,9 +61,9 @@ impl<B: SessionBackend, D: ArchiveControl> Active<B, D> {
                 output,
                 scope,
                 *request_id,
-                RuntimeSessionErrorCodeV3::ArchiveRefused,
+                RuntimeSessionErrorCode::ArchiveRefused,
             ),
-            ArchiveDriverEventV1::Failure {
+            ArchiveDriverEvent::Failure {
                 request_id,
                 retrying: true,
                 ..
@@ -87,29 +76,28 @@ impl<B: SessionBackend, D: ArchiveControl> Active<B, D> {
                         output,
                         scope,
                         Some(id),
-                        RuntimeSessionErrorCodeV3::ArchiveRefused,
+                        RuntimeSessionErrorCode::ArchiveRefused,
                     )
                 })
             }
-            ArchiveDriverEventV1::Stopped => Ok(()),
+            ArchiveDriverEvent::Stopped => Ok(()),
         }
     }
     fn progress(
         &mut self,
         output: &mut impl Write,
-        scope: &RuntimeSessionScopeV3,
+        scope: &RuntimeSessionScope,
         request_id: Option<u64>,
         durable_tick: u64,
         verified_tick: u64,
-        retention_ready: bool,
-    ) -> Result<(), RuntimeSessionErrorCodeV3> {
+    ) -> Result<(), RuntimeSessionErrorCode> {
         let tail = self.backend.tail().resolve_tick;
         if durable_tick > tail {
             return self.refuse(
                 output,
                 scope,
                 request_id,
-                RuntimeSessionErrorCodeV3::StaleExpectedTail,
+                RuntimeSessionErrorCode::StaleExpectedTail,
             );
         }
         if durable_tick < tail {
@@ -118,42 +106,37 @@ impl<B: SessionBackend, D: ArchiveControl> Active<B, D> {
                     output,
                     scope,
                     Some(id),
-                    RuntimeSessionErrorCodeV3::StaleExpectedTail,
+                    RuntimeSessionErrorCode::StaleExpectedTail,
                 )
             });
         }
-        if verified_tick > durable_tick
-            || verified_tick < self.verified_tick
-            || (self.retention_ready && !retention_ready)
-        {
+        if verified_tick > durable_tick || verified_tick < self.verified_tick {
             return self.refuse(
                 output,
                 scope,
                 request_id,
-                RuntimeSessionErrorCodeV3::ArchiveRefused,
+                RuntimeSessionErrorCode::ArchiveRefused,
             );
         }
         self.verified_tick = verified_tick;
-        self.retention_ready = retention_ready;
         emit(
             output,
-            &RuntimeSessionResponseV3::ArchiveProgress {
+            &RuntimeSessionResponse::ArchiveProgress {
                 request_id,
                 scope: scope.clone(),
                 durable_tick,
                 verified_tick,
-                retention_ready,
             },
         )
     }
     pub(super) fn retire(
         &mut self,
         output: &mut impl Write,
-        scope: &RuntimeSessionScopeV3,
+        scope: &RuntimeSessionScope,
         events: &Receiver<SessionEvent>,
         expose_progress: bool,
         grace: Duration,
-    ) -> Result<(), RuntimeSessionErrorCodeV3> {
+    ) -> Result<(), RuntimeSessionErrorCode> {
         self.archive.stop();
         let started = Instant::now();
         loop {
@@ -167,7 +150,7 @@ impl<B: SessionBackend, D: ArchiveControl> Active<B, D> {
                 return Ok(());
             }
             let Some(remaining) = grace.checked_sub(started.elapsed()) else {
-                return Err(RuntimeSessionErrorCodeV3::StorageCanceled);
+                return Err(RuntimeSessionErrorCode::StorageCanceled);
             };
             match events.recv_timeout(remaining.min(COMPLETION_CHECK)) {
                 Ok(event) => self.retiring_event(output, scope, event, expose_progress)?,
@@ -181,10 +164,10 @@ impl<B: SessionBackend, D: ArchiveControl> Active<B, D> {
     fn retiring_event(
         &mut self,
         output: &mut impl Write,
-        scope: &RuntimeSessionScopeV3,
+        scope: &RuntimeSessionScope,
         event: SessionEvent,
         expose_progress: bool,
-    ) -> Result<(), RuntimeSessionErrorCodeV3> {
+    ) -> Result<(), RuntimeSessionErrorCode> {
         if let SessionEvent::Archive {
             scope: emitted,
             event,

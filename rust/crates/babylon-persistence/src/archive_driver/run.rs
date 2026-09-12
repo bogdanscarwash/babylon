@@ -4,12 +4,12 @@ use std::time::{Duration, Instant};
 
 use postgres::{fallible_iterator::FallibleIterator as _, Client, Config, NoTls};
 
-use super::{ArchiveDriverEventV1, ArchiveDriverFailureV1};
+use super::{ArchiveDriverEvent, ArchiveDriverFailure};
 use crate::archive::database;
 use crate::{
-    ArchiveWorkerCancellationV1, ArchiveWorkerV1, CampaignId, CompositeArchiveDossierProducerV1,
-    CountyDossierProducerV1, PlaceDossierProducerV1, PostgresFailureClassV1,
-    SemanticArchiveErrorV1, ARCHIVE_WAKEUP_CHANNEL_V1,
+    identity::CampaignId, ArchiveWorker, ArchiveWorkerCancellation,
+    CompositeArchiveDossierProducer, CountyDossierProducer, PlaceDossierProducer,
+    PostgresFailureClass, SemanticArchiveError, ARCHIVE_WAKEUP_CHANNEL,
 };
 
 const WAIT: Duration = Duration::from_millis(125);
@@ -24,12 +24,12 @@ pub(super) fn bounded_config(config: &Config) -> Config {
     bounded
 }
 
-pub(super) fn classify(error: SemanticArchiveErrorV1) -> ArchiveDriverFailureV1 {
+pub(super) fn classify(error: SemanticArchiveError) -> ArchiveDriverFailure {
     let transient = match &error {
-        SemanticArchiveErrorV1::Database { diagnostic, .. } => {
+        SemanticArchiveError::Database { diagnostic, .. } => {
             matches!(
                 diagnostic.classification(),
-                PostgresFailureClassV1::Reachability | PostgresFailureClassV1::Timeout
+                PostgresFailureClass::Reachability | PostgresFailureClass::Timeout
             ) || diagnostic.sqlstate().is_some_and(|code| {
                 code.starts_with("08")
                     || matches!(
@@ -41,13 +41,13 @@ pub(super) fn classify(error: SemanticArchiveErrorV1) -> ArchiveDriverFailureV1 
         _ => false,
     };
     if transient {
-        ArchiveDriverFailureV1::Transient(error)
+        ArchiveDriverFailure::Transient(error)
     } else {
-        ArchiveDriverFailureV1::Refused(error)
+        ArchiveDriverFailure::Refused(error)
     }
 }
 
-fn listener(config: &Config) -> Result<Client, ArchiveDriverFailureV1> {
+fn listener(config: &Config) -> Result<Client, ArchiveDriverFailure> {
     let mut listener_config = config.clone();
     listener_config.application_name("babylon-archive-listener-v1");
     let mut client = listener_config
@@ -61,7 +61,7 @@ fn listener(config: &Config) -> Result<Client, ArchiveDriverFailureV1> {
     Ok(client)
 }
 
-fn notification(client: &mut Client) -> Result<bool, ArchiveDriverFailureV1> {
+fn notification(client: &mut Client) -> Result<bool, ArchiveDriverFailure> {
     // Recreate this iterator: postgres 0.19.14 does not reset after timeout None.
     let first = client
         .notifications()
@@ -70,7 +70,7 @@ fn notification(client: &mut Client) -> Result<bool, ArchiveDriverFailureV1> {
         .map_err(|error| classify(database("wait for Archive wakeup", &error)))?;
     let mut wake = first.as_ref().is_some_and(is_hint);
     if first.is_none() && client.is_closed() {
-        return Err(ArchiveDriverFailureV1::Disconnected);
+        return Err(ArchiveDriverFailure::Disconnected);
     }
     if first.is_some() {
         let mut notifications = client.notifications();
@@ -89,21 +89,21 @@ fn notification(client: &mut Client) -> Result<bool, ArchiveDriverFailureV1> {
 }
 
 fn is_hint(value: &postgres::Notification) -> bool {
-    value.channel() == ARCHIVE_WAKEUP_CHANNEL_V1 && value.payload().is_empty()
+    value.channel() == ARCHIVE_WAKEUP_CHANNEL && value.payload().is_empty()
 }
 
 /// At most one correlated result and one automatic result can wait here.
 #[derive(Default)]
-pub(super) struct Outbox(VecDeque<ArchiveDriverEventV1>);
+pub(super) struct Outbox(VecDeque<ArchiveDriverEvent>);
 impl Outbox {
-    pub(super) fn push(&mut self, event: ArchiveDriverEventV1) {
+    pub(super) fn push(&mut self, event: ArchiveDriverEvent) {
         if request_id(&event).is_none() {
             self.0
                 .retain(|old| request_id(old).is_some() || is_refusal(old));
         }
         self.0.push_back(event);
     }
-    pub(super) fn flush(&mut self, sink: &impl Fn(ArchiveDriverEventV1) -> bool) {
+    pub(super) fn flush(&mut self, sink: &impl Fn(ArchiveDriverEvent) -> bool) {
         while let Some(front) = self.0.front() {
             if !sink(front.clone()) {
                 break;
@@ -118,20 +118,20 @@ impl Outbox {
         self.0.iter().any(|event| request_id(event).is_some())
     }
 }
-fn is_refusal(event: &ArchiveDriverEventV1) -> bool {
+fn is_refusal(event: &ArchiveDriverEvent) -> bool {
     matches!(
         event,
-        ArchiveDriverEventV1::Failure {
+        ArchiveDriverEvent::Failure {
             retrying: false,
             ..
         }
     )
 }
-fn request_id(event: &ArchiveDriverEventV1) -> Option<u64> {
+fn request_id(event: &ArchiveDriverEvent) -> Option<u64> {
     match event {
-        ArchiveDriverEventV1::Progress { request_id, .. }
-        | ArchiveDriverEventV1::Failure { request_id, .. } => *request_id,
-        ArchiveDriverEventV1::Stopped => None,
+        ArchiveDriverEvent::Progress { request_id, .. }
+        | ArchiveDriverEvent::Failure { request_id, .. } => *request_id,
+        ArchiveDriverEvent::Stopped => None,
     }
 }
 
@@ -142,7 +142,7 @@ struct DriverState {
     backoff: Duration,
     request: Option<u64>,
     outbox: Outbox,
-    last_refusal: Option<ArchiveDriverFailureV1>,
+    last_refusal: Option<ArchiveDriverFailure>,
 }
 impl DriverState {
     fn new() -> Self {
@@ -156,12 +156,12 @@ impl DriverState {
             last_refusal: None,
         }
     }
-    fn failure(&mut self, failure: ArchiveDriverFailureV1) {
-        let retrying = !matches!(failure, ArchiveDriverFailureV1::Refused(_));
+    fn failure(&mut self, failure: ArchiveDriverFailure) {
+        let retrying = !matches!(failure, ArchiveDriverFailure::Refused(_));
         if !retrying {
             self.last_refusal = Some(failure.clone());
         }
-        self.outbox.push(ArchiveDriverEventV1::Failure {
+        self.outbox.push(ArchiveDriverEvent::Failure {
             request_id: self.request.take(),
             failure,
             retrying,
@@ -173,12 +173,12 @@ impl DriverState {
     }
     fn finish(
         mut self,
-        sink: &impl Fn(ArchiveDriverEventV1) -> bool,
-    ) -> Result<(), ArchiveDriverFailureV1> {
+        sink: &impl Fn(ArchiveDriverEvent) -> bool,
+    ) -> Result<(), ArchiveDriverFailure> {
         // Best effort only; the join result retains a fatal refusal independently
         // of both saturated and accepted-but-not-yet-observed queue entries.
         self.outbox.flush(sink);
-        let _ = sink(ArchiveDriverEventV1::Stopped);
+        let _ = sink(ArchiveDriverEvent::Stopped);
         self.last_refusal.take().map_or(Ok(()), Err)
     }
     fn request(&mut self, requests: &Receiver<u64>) -> bool {
@@ -209,11 +209,11 @@ pub(super) fn run(
     config: &Config,
     campaign: CampaignId,
     requests: &Receiver<u64>,
-    cancellation: &ArchiveWorkerCancellationV1,
-    sink: &impl Fn(ArchiveDriverEventV1) -> bool,
-) -> Result<(), ArchiveDriverFailureV1> {
+    cancellation: &ArchiveWorkerCancellation,
+    sink: &impl Fn(ArchiveDriverEvent) -> bool,
+) -> Result<(), ArchiveDriverFailure> {
     let mut state = DriverState::new();
-    let mut worker = ArchiveWorkerV1::new(config);
+    let mut worker = ArchiveWorker::new(config);
     while !cancellation.is_stopped() {
         state.outbox.flush(sink);
         // A fatal refusal must reach the coordinator before later recovery can
@@ -245,8 +245,8 @@ fn maintain(
     state: &mut DriverState,
     config: &Config,
     campaign: CampaignId,
-    worker: &mut ArchiveWorkerV1,
-    cancellation: &ArchiveWorkerCancellationV1,
+    worker: &mut ArchiveWorker,
+    cancellation: &ArchiveWorkerCancellation,
 ) {
     if state.listener.is_none() {
         match listener(config) {
@@ -261,26 +261,25 @@ fn maintain(
         .and_then(|producer| worker.sweep_cancellable(campaign, &producer, cancellation));
     match result {
         Ok(report) => {
-            state.outbox.push(ArchiveDriverEventV1::Progress {
+            state.outbox.push(ArchiveDriverEvent::Progress {
                 request_id: state.request.take(),
                 durable_tick: report.durable_tick(),
                 verified_tick: report.verified_tick(),
-                retention_ready: report.retention_ready(),
             });
             state.last_refusal = None;
             state.dirty = report.has_pending_work();
             state.retry_at = None;
             state.backoff = WAIT;
         }
-        Err(SemanticArchiveErrorV1::WorkerCanceled) => state.dirty = false,
+        Err(SemanticArchiveError::WorkerCanceled) => state.dirty = false,
         Err(error) => state.failure(classify(error)),
     }
 }
 
-fn producer(config: &Config) -> Result<CompositeArchiveDossierProducerV1, SemanticArchiveErrorV1> {
-    Ok(CompositeArchiveDossierProducerV1::new(vec![
-        Box::new(CountyDossierProducerV1::try_new(config)?),
-        Box::new(PlaceDossierProducerV1::try_new(config)?),
+fn producer(config: &Config) -> Result<CompositeArchiveDossierProducer, SemanticArchiveError> {
+    Ok(CompositeArchiveDossierProducer::new(vec![
+        Box::new(CountyDossierProducer::try_new(config)?),
+        Box::new(PlaceDossierProducer::try_new(config)?),
     ]))
 }
 
@@ -291,7 +290,7 @@ mod tests {
 
     #[test]
     fn stopped_completion_preserves_refusal_when_event_sink_is_full() {
-        let refusal = ArchiveDriverFailureV1::Refused(SemanticArchiveErrorV1::StoredPageMismatch);
+        let refusal = ArchiveDriverFailure::Refused(SemanticArchiveError::StoredPageMismatch);
         let mut state = DriverState::new();
         state.failure(refusal.clone());
         state.outbox.flush(&|_| false);
@@ -301,7 +300,7 @@ mod tests {
 
     #[test]
     fn queued_but_unobserved_refusal_remains_in_completion_result() {
-        let refusal = ArchiveDriverFailureV1::Refused(SemanticArchiveErrorV1::ReceiptConflict);
+        let refusal = ArchiveDriverFailure::Refused(SemanticArchiveError::ReceiptConflict);
         let mut state = DriverState::new();
         state.failure(refusal.clone());
         let queue = RefCell::new(Vec::new());
@@ -316,7 +315,7 @@ mod tests {
         assert_eq!(state.finish(&|_| true), Err(refusal));
         assert!(matches!(
             queue.borrow().as_slice(),
-            [ArchiveDriverEventV1::Failure {
+            [ArchiveDriverEvent::Failure {
                 retrying: false,
                 ..
             }]

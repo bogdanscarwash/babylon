@@ -841,7 +841,7 @@ const CARCERAL_ARC_SCENARIO: &str =
 /// The joint carceral arc's own composition golden (Task 8, the train's
 /// acceptance test) — TICK 1 ALONE, the same single-tick convention every
 /// other pair in this file follows: `carceral_arc_conformance.rs`'s own
-/// multi-tick `TickSession` suite already pins the FULL five-phase
+/// multi-tick `RuleDiagnosticSession` suite already pins the FULL five-phase
 /// sequence (ticks 1/53/105/106) structurally; this golden exists to catch
 /// ANY unintentional tick-1 drift a structural assertion happens not to
 /// cover — the same class of blind spot `territory_conformance_hashes_are_
@@ -985,12 +985,13 @@ fn community_world_4_hashes_are_pinned() {
 /// prior pins.
 #[test]
 fn community_world_5_arc_hashes_are_pinned() {
-    let mut session = babylon_tick::TickSession::new_with_prelude(
+    let mut session = babylon_tick::diagnostic::RuleDiagnosticSession::new(
         COMMUNITY_W5,
-        &practice_prelude(),
+        Some(&practice_prelude()),
         COMMUNITY_PACK,
         HypergraphStore::new(),
-        babylon_kernel::SessionId::new("community-decay-arc").expect("literal"),
+        babylon_kernel::replay::ReplaySessionId::try_from("community-decay-arc").expect("literal"),
+        babylon_kernel::replay::ReplaySeed::new(0),
     )
     .expect("world 5 session");
     let mut sink = babylon_bsl::structural_verbs::CollectingSink::default();

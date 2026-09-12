@@ -51,7 +51,10 @@ EXPECTED_CONSUMER_MAPPING: Final = {
     "conversion": "exact-nonnegative-i64-no-rounding",
     "evidence_class": "Observed",
     "time_policy": "fixed-2024-observed-baseline",
-    "consumers": ["ObserverEconomyReaderV1", "CountyDossierProducerV1"],
+    "consumers": [
+        "babylon_persistence::observer_reader::ObserverEconomyReader",
+        "babylon_persistence::CountyDossierProducer",
+    ],
     "mechanics_consumers": [],
     "fields": [
         {

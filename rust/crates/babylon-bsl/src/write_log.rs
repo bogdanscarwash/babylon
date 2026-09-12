@@ -31,28 +31,16 @@
 //!    violated, and a determinism divergence with it.
 
 use babylon_graph::substrate::{HyperedgeId, NodeId};
-use babylon_kernel::Currency;
+use babylon_kernel::currency::Currency;
 
 /// One mutation, as it crossed the store boundary.
 ///
-/// The variants mirror §2.8's structural verb set exactly. `emit` is absent
+/// The variants record supported node, edge, and hyperedge field updates. `emit` is absent
 /// on purpose: an event is not a write, and it already has its own seam
 /// ([`crate::structural_verbs::EventSink`]).
 #[derive(Debug, Clone, PartialEq)]
 pub enum Write {
-    /// `add-node` minted a node.
-    NodeAdded {
-        /// The identity the substrate minted.
-        id: NodeId,
-        /// Its declared type.
-        node_type: String,
-    },
-    /// `remove-node` retired a node.
-    NodeRemoved {
-        /// The node that no longer exists.
-        id: NodeId,
-    },
-    /// A field write — from `update-node`, or from an `add-node` field-init.
+    /// A field write from `update-node`.
     NodeAttribute {
         /// The node written to.
         id: NodeId,
@@ -105,45 +93,7 @@ pub enum Write {
         /// The value now stored.
         value: f64,
     },
-    /// `add-edge` created a dyadic edge.
-    EdgeAdded {
-        /// Its declared type.
-        edge_type: String,
-        /// Source node.
-        from: NodeId,
-        /// Target node.
-        to: NodeId,
-        /// The `:strength` operand's value.
-        strength: f64,
-    },
-    /// `remove-edge` retired a dyadic edge.
-    EdgeRemoved {
-        /// Its declared type.
-        edge_type: String,
-        /// Source node.
-        from: NodeId,
-        /// Target node.
-        to: NodeId,
-    },
-    /// `add-hyperedge` created a hyperedge. The member list is recorded
-    /// WHOLE — this log does not expand it into pairs any more than the
-    /// executor does (Anti-Pattern VIII.9).
-    HyperedgeAdded {
-        /// The identity the substrate minted.
-        id: HyperedgeId,
-        /// Its declared type.
-        hyperedge_type: String,
-        /// Its members, in **ascending [`NodeId`] order**. Membership is a
-        /// set and declared member order is never observable (§2.6 draft
-        /// ruling D25) — recording source order here would make the write
-        /// log the one surface that leaks it back.
-        members: Vec<NodeId>,
-    },
-    /// `remove-hyperedge` retired a hyperedge.
-    HyperedgeRemoved {
-        /// The hyperedge that no longer exists.
-        id: HyperedgeId,
-    },
+
     /// A field write on a hyperedge — from `update-hyperedge`, on either
     /// dispatch site (Community port train, Task 6, E2b). An
     /// `(hyperedge-attr …)` scenario seed does NOT produce one: hydration
@@ -233,15 +183,35 @@ mod tests {
             log.record(WriteRecord {
                 rule: "hunger/agitate".to_owned(),
                 ordinal,
-                write: Write::NodeRemoved { id: NodeId(id) },
+                write: Write::NodeAttribute {
+                    id: NodeId(id),
+                    field: "social-class/agitation".to_owned(),
+                    previous: None,
+                    value: 0.5,
+                },
             });
         }
         assert_eq!(
             log.writes(),
             vec![
-                Write::NodeRemoved { id: NodeId(7) },
-                Write::NodeRemoved { id: NodeId(3) },
-                Write::NodeRemoved { id: NodeId(9) },
+                Write::NodeAttribute {
+                    id: NodeId(7),
+                    field: "social-class/agitation".to_owned(),
+                    previous: None,
+                    value: 0.5
+                },
+                Write::NodeAttribute {
+                    id: NodeId(3),
+                    field: "social-class/agitation".to_owned(),
+                    previous: None,
+                    value: 0.5
+                },
+                Write::NodeAttribute {
+                    id: NodeId(9),
+                    field: "social-class/agitation".to_owned(),
+                    previous: None,
+                    value: 0.5
+                },
             ],
             "arrival order is the record, not id order"
         );

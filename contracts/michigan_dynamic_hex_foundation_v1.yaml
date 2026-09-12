@@ -53,8 +53,8 @@ audited_identities:
   r8_child: "8826648001fffff"
   r8_parent: "872664800ffffff"
 rust_binding:
-  foundation_type: MichiganDynamicHexFoundationV1
-  r8_row_type: MichiganH3R8ChildParentV1
+  foundation_type: babylon_tick::h3_runtime::MichiganDynamicHexFoundation
+  r8_row_type: babylon_tick::h3_runtime::MichiganH3R8ChildParent
   r8_rows_accessor: r8_child_parent_rows
   child_accessor: child_cell_id
   parent_accessor: parent_r7_cell_id

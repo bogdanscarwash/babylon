@@ -29,11 +29,13 @@ fn administrative_fixture_recomputes_real_tick_identity() {
     assert_eq!(hex(&report.after), identity.graph_state_hash);
     assert_eq!(hex(&report.world_after), identity.nominal_world_hash);
     assert_eq!(
-        hex(&babylon_kernel::sha256_of(SCENARIO.as_bytes())),
+        hex(&babylon_kernel::content_digest::sha256_of(
+            SCENARIO.as_bytes()
+        )),
         identity.scenario_digest
     );
     assert_eq!(
-        hex(&babylon_kernel::sha256_of(RULE.as_bytes())),
+        hex(&babylon_kernel::content_digest::sha256_of(RULE.as_bytes())),
         identity.rule_digest
     );
     assert_eq!(identity.definitions_digest.len(), 64);
@@ -46,7 +48,9 @@ fn scenario_state_mutation_moves_raw_and_tick_identities() {
     let mutated = SCENARIO.replacen("26099", "26098", 1);
     let report = run_once(&mutated, RULE).expect("mutated administrative control tick");
     assert_ne!(
-        hex(&babylon_kernel::sha256_of(mutated.as_bytes())),
+        hex(&babylon_kernel::content_digest::sha256_of(
+            mutated.as_bytes()
+        )),
         identity.scenario_digest
     );
     assert_ne!(hex(&report.after), identity.graph_state_hash);
@@ -60,7 +64,9 @@ fn raw_rule_mutation_invalidates_rule_digest_without_overclaiming_world_binding(
     let report = run_once(SCENARIO, &mutated).expect("still-false mutated rule");
     assert_eq!(report.fired, 0);
     assert_ne!(
-        hex(&babylon_kernel::sha256_of(mutated.as_bytes())),
+        hex(&babylon_kernel::content_digest::sha256_of(
+            mutated.as_bytes()
+        )),
         identity.rule_digest
     );
     assert_eq!(hex(&report.after), identity.graph_state_hash);

@@ -2,33 +2,27 @@
 //! `PostgreSQL` runtime.
 //!
 //! Each test clones the validated Rust-active runtime template, commits real
-//! ticks through `DurableReplayRuntimeV2`, and proves one place dossier
+//! ticks through `DurableMaterialRuntimeV3`, and proves one place dossier
 //! acceptance property against the committed dirty receipts: paged bootstrap
 //! drain with a pending-until-drained receipt, bounded allowlist drain with
 //! clean rerun, and foundation-seeded grants publishing the revealed page
 //! without any explicit grant insert.
 
+#[path = "support/current_material.rs"]
+mod current_material;
+use babylon_persistence::{material_runtime, michigan_content, michigan_material};
+
 use std::str::FromStr;
 
-use babylon_bsl::rule_pipeline::split_content;
-use babylon_bsl::rules_hash_of;
 use babylon_bsl::structural_verbs::CollectingSink;
-use babylon_graph::hypergraph_store::HypergraphStore;
-use babylon_kernel::replay::{ReplaySeed, ReplaySessionIdV1};
-use babylon_kernel::sha256_of;
-use babylon_kernel::tick_content_hash::RefDigestV1;
-use babylon_kernel::ContentDigest;
+use babylon_persistence::material_runtime::DurableMaterialRuntime;
 use babylon_persistence::{
-    michigan_dynamic_hex_foundation_v1, validate_connection_target, ArchiveDossierProducerV1,
-    ArchiveMaterializeDispositionV1, ArchiveMaterializeModeV1, ArchiveReceiptDispositionV1,
-    ArchiveSchemaDispositionV1, ArchiveSubjectKindV1, ArchiveWorkerV1, CampaignId,
-    CompositeArchiveDossierProducerV1, CountyDossierProducerV1, DurableReplayRuntimeV2,
-    FoundationContentBundleV1, PendingArchiveReceiptV1, PlaceDossierProducerV1,
-    SemanticArchiveErrorV1, SemanticArchiveStoreV1,
+    identity::CampaignId, postgres_catalog::validate_connection_target, ArchiveDossierProducer,
+    ArchiveMaterializeDisposition, ArchiveMaterializeMode, ArchiveReceiptDisposition,
+    ArchiveSubjectKind, ArchiveWorker, CompositeArchiveDossierProducer, CountyDossierProducer,
+    PendingArchiveReceipt, PlaceDossierProducer, SemanticArchiveError, SemanticArchiveStore,
 };
-use babylon_practice_contract::ordered_action_v1::OrderedPracticeActionBatchV1;
-use babylon_tick::material_state::MaterialStateV1;
-use babylon_tick::replay_session::ReplayTickSession;
+use babylon_practice_contract::OrderedPracticeActionBatch;
 use postgres::{Config, NoTls};
 use uuid::Uuid;
 
@@ -37,12 +31,6 @@ const ACK_ENV: &str = "BABYLON_POSTGRES_DISPOSABLE_ACK";
 const ACK: &str = "I_UNDERSTAND_THIS_DISPOSABLE_RUNTIME_DROPS_ITS_SCRATCH_DATABASES_AND_ROLES";
 const CANARY_ENV: &str = "BABYLON_POSTGRES_DISPOSABLE_CANARY";
 const TEMPLATE_DB_ENV: &str = "BABYLON_RUNTIME_TEMPLATE_DB";
-const DEFINES: &[u8] = br#"{"alpha":1}"#;
-const REFERENCE_BUNDLE_DOMAIN: &[u8] = b"babylon.h3.reference-bundle-composite.v1\0";
-const SCENARIO: &str =
-    include_str!("../../babylon-tick/content/scenarios/struggle-spark-conformance.bscn");
-const RULE: &str = include_str!("../../babylon-tick/content/rules/struggle-spark.bsl");
-const WORKER_SEED: i64 = 2;
 const PLACE_COUNT: usize = 745;
 const MAX_PAGES_PER_RECEIPT: usize = 256;
 
@@ -72,26 +60,25 @@ impl TestDatabase {
             admin,
             active: true,
         };
+        babylon_persistence::preflight_current_schema(&database.config(base))
+            .expect("runtime clone has the exact current catalog and role grants");
+        let expected_schema_digest = babylon_persistence::current_schema_sha256();
         let observation = database
             .config(base)
             .connect(NoTls)
             .expect("runtime clone connection")
             .query_one(
                 "SELECT \
-                   (SELECT pg_catalog.string_agg(ordinal::pg_catalog.text || ':' || \
-                            state_tag::pg_catalog.text || ':' || schema_epoch::pg_catalog.text, \
-                            ',' ORDER BY ordinal) \
-                    FROM babylon_meta.persistence_authority_ledger), \
+                   (SELECT pg_catalog.count(*) = 1 AND \
+                           pg_catalog.bool_and(singleton AND schema_sha256 = $1) \
+                    FROM babylon_meta.current_schema), \
                    (SELECT pg_catalog.count(*) FROM babylon_meta.campaign)",
-                &[],
+                &[&expected_schema_digest.as_slice()],
             )
             .expect("runtime clone observation");
-        assert_eq!(
-            observation
-                .try_get::<_, String>(0)
-                .expect("authority ledger decodes"),
-            "1:1:8,2:2:9"
-        );
+        assert!(observation
+            .try_get::<_, bool>(0)
+            .expect("current schema identity decodes"));
         assert_eq!(
             observation
                 .try_get::<_, i64>(1)
@@ -177,56 +164,17 @@ fn validated_template_name() -> String {
     template
 }
 
-fn runtime_fixture_with_seed(
-    seed: i64,
-) -> (
-    ReplayTickSession<HypergraphStore>,
-    FoundationContentBundleV1,
-) {
-    let (_, rules) = split_content(RULE).expect("live rule parses");
-    let forms = rules.into_iter().map(|rule| rule.form).collect::<Vec<_>>();
-    let content = ContentDigest {
-        defines_hash: sha256_of(DEFINES),
-        rules_hash: rules_hash_of(&forms).expect("live rule hashes"),
-    };
-    let foundation = michigan_dynamic_hex_foundation_v1().expect("foundation decodes");
-    let mut reference_manifest = REFERENCE_BUNDLE_DOMAIN.to_vec();
-    reference_manifest.extend_from_slice(&foundation.base_reference_cohort_digest());
-    reference_manifest.extend_from_slice(&foundation.r8_section_digest());
-    assert_eq!(
-        sha256_of(&reference_manifest),
-        foundation.reference_bundle_digest()
-    );
-    let reference = RefDigestV1::from_bytes(foundation.reference_bundle_digest());
-    let session = ReplayTickSession::new(
-        SCENARIO,
-        None,
-        RULE,
-        HypergraphStore::new(),
-        ReplaySessionIdV1::try_from("per22/place-producer-live").expect("session id"),
-        ReplaySeed::new(seed),
-        content,
-        reference,
-        MaterialStateV1::try_new(foundation).expect("material state"),
-    )
-    .expect("tick-zero session prepares");
-    let bundle =
-        FoundationContentBundleV1::try_new(SCENARIO, None, RULE, DEFINES, &reference_manifest)
-            .expect("content bundle");
-    (session, bundle)
-}
-
-fn commit_ticks(runtime: &mut DurableReplayRuntimeV2<HypergraphStore>, count: u64) {
+fn commit_ticks(runtime: &mut DurableMaterialRuntime, count: u64) {
     for tick in 1..=count {
-        let actions = OrderedPracticeActionBatchV1::empty(
-            runtime.foundation().replay_session_identity().clone(),
+        let actions = OrderedPracticeActionBatch::empty(
+            runtime.session().graph_session().session_identity().clone(),
             tick,
         )
         .expect("empty action batch");
         let receipt = runtime
             .advance_and_commit(&mut CollectingSink::default(), &actions)
             .expect("tick commits");
-        assert_eq!(receipt.resolve_tick().get(), tick);
+        assert_eq!(receipt.resolve_tick(), tick);
     }
 }
 
@@ -244,12 +192,10 @@ impl LivePlaceTarget {
         let database = TestDatabase::create_from_template(&base, &template, label);
         let config = database.config(&base);
         let campaign_id = CampaignId::from_uuid(Uuid::from_u128(campaign_uuid));
-        let store = SemanticArchiveStoreV1::new(&config);
-        match store.install_schema().expect("Archive schema installs") {
-            ArchiveSchemaDispositionV1::Installed | ArchiveSchemaDispositionV1::AlreadyCurrent => {}
-        }
-        let (session, bundle) = runtime_fixture_with_seed(WORKER_SEED);
-        let mut runtime = DurableReplayRuntimeV2::create(&config, campaign_id, session, bundle)
+        let store = SemanticArchiveStore::new(&config);
+        store.verify_schema().expect("Archive schema installs");
+        let foundation = current_material::foundation();
+        let mut runtime = DurableMaterialRuntime::create(&config, campaign_id, foundation)
             .expect("runtime constructs after activation");
         commit_ticks(&mut runtime, tick_count);
         drop(runtime);
@@ -303,7 +249,7 @@ fn place_page_rows(config: &Config, campaign_id: CampaignId) -> Vec<(String, i64
         .expect("place page rows connection")
         .query(
             "SELECT DISTINCT ON(subject_id) subject_id, source_tick, markdown FROM babylon_meta.archive_page_revision_v2 \
-             WHERE campaign_id = $1::uuid AND subject_kind = 'place' ORDER BY subject_id,effective_tick DESC,origin DESC",
+             WHERE campaign_id = $1::uuid AND subject_kind = 'place' ORDER BY subject_id,effective_tick DESC",
             &[campaign_id.as_uuid()],
         )
         .expect("place page rows query")
@@ -325,8 +271,8 @@ fn detroit_row(rows: &[(String, i64, String)]) -> &(String, i64, String) {
 }
 
 fn dispositions(
-    report: &babylon_persistence::ArchiveWorkerSweepReportV1,
-) -> Vec<(u64, ArchiveReceiptDispositionV1)> {
+    report: &babylon_persistence::ArchiveWorkerSweepReport,
+) -> Vec<(u64, ArchiveReceiptDisposition)> {
     report
         .dispositions()
         .iter()
@@ -391,13 +337,13 @@ fn live_place_producer_pages_the_bootstrap_drain_across_sweeps() {
         1,
     );
 
-    let producer = PlaceDossierProducerV1::try_new(&target.config).expect("pinned products load");
+    let producer = PlaceDossierProducer::try_new(&target.config).expect("pinned products load");
     assert_eq!(
         producer.desired_pages().expect("desired pages").len(),
         PLACE_COUNT
     );
 
-    let mut worker = ArchiveWorkerV1::new(&target.config);
+    let mut worker = ArchiveWorker::new(&target.config);
     // Sweep one stages the leading 256-page head; the receipt stays pending
     // and the watermark honestly stalls behind it.
     let first = worker
@@ -405,7 +351,7 @@ fn live_place_producer_pages_the_bootstrap_drain_across_sweeps() {
         .expect("first sweep stages the head batch");
     assert_eq!(
         dispositions(&first),
-        vec![(1, ArchiveReceiptDispositionV1::Paged)]
+        vec![(1, ArchiveReceiptDisposition::Paged)]
     );
     assert_eq!(first.paged_count(), 1);
     assert_eq!(first.applied_count(), 0);
@@ -429,7 +375,7 @@ fn live_place_producer_pages_the_bootstrap_drain_across_sweeps() {
         .expect("second sweep stages the next prefix");
     assert_eq!(
         dispositions(&second),
-        vec![(1, ArchiveReceiptDispositionV1::Paged)]
+        vec![(1, ArchiveReceiptDisposition::Paged)]
     );
     assert_eq!(place_page_count(&target.config, target.campaign_id), 512);
     assert_eq!(
@@ -445,7 +391,7 @@ fn live_place_producer_pages_the_bootstrap_drain_across_sweeps() {
         .expect("third sweep drains the tail");
     assert_eq!(
         dispositions(&third),
-        vec![(1, ArchiveReceiptDispositionV1::Applied)]
+        vec![(1, ArchiveReceiptDisposition::Applied)]
     );
     assert_eq!(third.paged_count(), 0);
     assert_eq!(third.verified_tick(), 1);
@@ -481,30 +427,31 @@ fn live_place_producer_pages_the_bootstrap_drain_across_sweeps() {
 #[test]
 #[ignore = "requires the task-owned disposable PostgreSQL runtime and committed ticks"]
 fn live_composite_producer_drains_the_backlog_county_first() {
+    const COUNTY_COUNT: i64 = 83;
     let target = LivePlaceTarget::create("compdrain", 0x2200_0000_0000_0000_0000_0000_0000_00c2, 1);
 
-    // The place conformance scenario declares no `territory/county-fips`
-    // geography, so scenario reconciliation leaves the declared county mapping
-    // empty. Seed the two mapping rows directly — the exact rows a declaring
-    // scenario would extract — so the county dossier has a deterministic dirty
-    // set to thread ahead of the place head.
-    target
+    // The current material foundation declares all Michigan counties. Verify
+    // those canonical mappings before exercising the shared page budget.
+    let mapping = target
         .config
         .connect(NoTls)
-        .expect("county map seed connection")
-        .execute(
-            "INSERT INTO babylon_meta.territory_county_map_v1 \
-             (campaign_id, territory_local_name, county_geoid) \
-             VALUES ($1::uuid, 'wayne', '26163'), ($1::uuid, 'oakland', '26125')",
+        .expect("current county map connection")
+        .query_one(
+            "SELECT count(*), count(DISTINCT county_geoid), \
+             bool_and(territory_local_name = 'county-' || county_geoid) \
+             FROM babylon_meta.territory_county_map_v1 WHERE campaign_id = $1::uuid",
             &[target.campaign_id.as_uuid()],
         )
-        .expect("county map rows seed");
+        .expect("current county mapping census");
+    assert_eq!(mapping.get::<_, i64>(0), COUNTY_COUNT);
+    assert_eq!(mapping.get::<_, i64>(1), COUNTY_COUNT);
+    assert!(mapping.get::<_, bool>(2));
 
-    let county = CountyDossierProducerV1::try_new(&target.config).expect("county products load");
-    let place = PlaceDossierProducerV1::try_new(&target.config).expect("place products load");
-    let producer = CompositeArchiveDossierProducerV1::new(vec![Box::new(county), Box::new(place)]);
+    let county = CountyDossierProducer::try_new(&target.config).expect("county products load");
+    let place = PlaceDossierProducer::try_new(&target.config).expect("place products load");
+    let producer = CompositeArchiveDossierProducer::new(vec![Box::new(county), Box::new(place)]);
 
-    let mut worker = ArchiveWorkerV1::new(&target.config);
+    let mut worker = ArchiveWorker::new(&target.config);
     // Sweep one proves county-first threading: the shared 256-page budget
     // publishes the county head plus the remaining place head (256 - county
     // exactly), stages them without claiming, and leaves the head receipt
@@ -515,14 +462,14 @@ fn live_composite_producer_drains_the_backlog_county_first() {
     let first_dispositions = dispositions(&first);
     assert_eq!(
         first_dispositions.first(),
-        Some(&(1, ArchiveReceiptDispositionV1::Paged)),
+        Some(&(1, ArchiveReceiptDisposition::Paged)),
         "the head receipt stages its first page batch"
     );
     let staged_county = archive_page_count(&target.config, target.campaign_id, "county");
     let staged_place = place_page_count(&target.config, target.campaign_id);
     assert_eq!(
-        staged_county, 2,
-        "both declared counties publish in the first batch"
+        staged_county, COUNTY_COUNT,
+        "all declared counties publish in the first batch"
     );
     assert_eq!(
         staged_county + staged_place,
@@ -594,7 +541,7 @@ fn live_staged_batch_restages_without_double_writes() {
         LivePlaceTarget::create("stagerestage", 0x2200_0000_0000_0000_0000_0000_0000_00c3, 1);
 
     let allowlist = vec!["2622000".to_owned()];
-    let producer = PlaceDossierProducerV1::with_place_allowlist(&target.config, &allowlist)
+    let producer = PlaceDossierProducer::with_place_allowlist(&target.config, &allowlist)
         .expect("sorted unique allowlist binds");
     let hash: Vec<u8> = target
         .config
@@ -608,7 +555,7 @@ fn live_staged_batch_restages_without_double_writes() {
         .expect("one committed dirty receipt")
         .try_get(0)
         .expect("dirty receipt digest");
-    let receipt = PendingArchiveReceiptV1::try_new(1, hash.try_into().expect("exact digest width"))
+    let receipt = PendingArchiveReceipt::try_new(1, hash.try_into().expect("exact digest width"))
         .expect("pending receipt");
     let outcome = producer
         .produce(
@@ -621,18 +568,15 @@ fn live_staged_batch_restages_without_double_writes() {
     assert_eq!(outcome.remaining(), 0);
     assert_eq!(outcome.batch().pages().len(), 1);
 
-    let store = SemanticArchiveStoreV1::new(&target.config);
+    let store = SemanticArchiveStore::new(&target.config);
     let first = store
         .materialize_receipt(
             target.campaign_id,
             outcome.batch(),
-            ArchiveMaterializeModeV1::Stage,
+            ArchiveMaterializeMode::Stage,
         )
         .expect("first stage applies");
-    assert_eq!(
-        first.disposition(),
-        ArchiveMaterializeDispositionV1::Applied
-    );
+    assert_eq!(first.disposition(), ArchiveMaterializeDisposition::Applied);
     assert_eq!(place_page_count(&target.config, target.campaign_id), 1);
     assert_eq!(
         receipt_consumption_count(&target.config, target.campaign_id),
@@ -646,12 +590,12 @@ fn live_staged_batch_restages_without_double_writes() {
         .materialize_receipt(
             target.campaign_id,
             outcome.batch(),
-            ArchiveMaterializeModeV1::Stage,
+            ArchiveMaterializeMode::Stage,
         )
         .expect("restage reconciles");
     assert_eq!(
         restage.disposition(),
-        ArchiveMaterializeDispositionV1::Applied
+        ArchiveMaterializeDisposition::Applied
     );
     assert_eq!(place_page_count(&target.config, target.campaign_id), 1);
     assert_eq!(
@@ -667,12 +611,12 @@ fn live_staged_batch_restages_without_double_writes() {
         .materialize_receipt(
             target.campaign_id,
             outcome.batch(),
-            ArchiveMaterializeModeV1::Consume,
+            ArchiveMaterializeMode::Consume,
         )
         .expect("consume mode settles the drained receipt");
     assert_eq!(
         consumed.disposition(),
-        ArchiveMaterializeDispositionV1::Applied
+        ArchiveMaterializeDisposition::Applied
     );
     assert_eq!(
         receipt_consumption_count(&target.config, target.campaign_id),
@@ -690,12 +634,12 @@ fn live_staged_batch_restages_without_double_writes() {
         .materialize_receipt(
             target.campaign_id,
             outcome.batch(),
-            ArchiveMaterializeModeV1::Stage,
+            ArchiveMaterializeMode::Stage,
         )
         .expect("settled stage retry reconciles");
     assert_eq!(
         settled.disposition(),
-        ArchiveMaterializeDispositionV1::AlreadyConsumed
+        ArchiveMaterializeDisposition::AlreadyConsumed
     );
     assert_eq!(place_page_count(&target.config, target.campaign_id), 1);
     target.finish();
@@ -708,7 +652,7 @@ fn live_staged_batch_refuses_tampered_consumption_claim() {
         LivePlaceTarget::create("stagetamper", 0x2200_0000_0000_0000_0000_0000_0000_00c4, 1);
 
     let allowlist = vec!["2622000".to_owned()];
-    let producer = PlaceDossierProducerV1::with_place_allowlist(&target.config, &allowlist)
+    let producer = PlaceDossierProducer::with_place_allowlist(&target.config, &allowlist)
         .expect("sorted unique allowlist binds");
     let hash: Vec<u8> = target
         .config
@@ -722,7 +666,7 @@ fn live_staged_batch_refuses_tampered_consumption_claim() {
         .expect("one committed dirty receipt")
         .try_get(0)
         .expect("dirty receipt digest");
-    let receipt = PendingArchiveReceiptV1::try_new(1, hash.try_into().expect("exact digest width"))
+    let receipt = PendingArchiveReceipt::try_new(1, hash.try_into().expect("exact digest width"))
         .expect("pending receipt");
     let outcome = producer
         .produce(
@@ -733,19 +677,19 @@ fn live_staged_batch_refuses_tampered_consumption_claim() {
         )
         .expect("allowlisted produce drains whole");
 
-    let store = SemanticArchiveStoreV1::new(&target.config);
+    let store = SemanticArchiveStore::new(&target.config);
     store
         .materialize_receipt(
             target.campaign_id,
             outcome.batch(),
-            ArchiveMaterializeModeV1::Stage,
+            ArchiveMaterializeMode::Stage,
         )
         .expect("stage applies the drained batch");
     store
         .materialize_receipt(
             target.campaign_id,
             outcome.batch(),
-            ArchiveMaterializeModeV1::Consume,
+            ArchiveMaterializeMode::Consume,
         )
         .expect("consume mode claims the receipt");
 
@@ -768,11 +712,11 @@ fn live_staged_batch_refuses_tampered_consumption_claim() {
     let refused = store.materialize_receipt(
         target.campaign_id,
         outcome.batch(),
-        ArchiveMaterializeModeV1::Stage,
+        ArchiveMaterializeMode::Stage,
     );
     assert_eq!(
         refused,
-        Err(SemanticArchiveErrorV1::ReceiptConflict),
+        Err(SemanticArchiveError::ReceiptConflict),
         "a stage retry reconciles the stored claim digests and refuses a mismatch"
     );
     target.finish();
@@ -794,12 +738,12 @@ fn live_place_producer_drains_allowlisted_pages_and_reruns_clean() {
         "2684000".to_owned(),
         "2689320".to_owned(),
     ];
-    let producer = PlaceDossierProducerV1::with_place_allowlist(&target.config, &allowlist)
+    let producer = PlaceDossierProducer::with_place_allowlist(&target.config, &allowlist)
         .expect("sorted unique allowlist binds");
 
     // No explicit grants: foundation seeding granted every allowlisted place
     // subject and identity plus every overlapping county subject at tick zero.
-    let mut worker = ArchiveWorkerV1::new(&target.config);
+    let mut worker = ArchiveWorker::new(&target.config);
     let report = worker
         .sweep_once(target.campaign_id, &producer)
         .expect("allowlisted sweep drains the small backlog");
@@ -810,8 +754,8 @@ fn live_place_producer_drains_allowlisted_pages_and_reruns_clean() {
             .map(|(tick, disposition)| (*tick, *disposition))
             .collect::<Vec<_>>(),
         vec![
-            (1, ArchiveReceiptDispositionV1::Applied),
-            (2, ArchiveReceiptDispositionV1::Applied),
+            (1, ArchiveReceiptDisposition::Applied),
+            (2, ArchiveReceiptDisposition::Applied),
         ],
         "one receipt publishes every allowlisted place; the next verifies unchanged content"
     );
@@ -881,22 +825,22 @@ fn live_place_producer_foundation_grants_publish_revealed_page_and_rerun_is_idle
     );
 
     let allowlist = vec!["2622000".to_owned()];
-    let producer = PlaceDossierProducerV1::with_place_allowlist(&target.config, &allowlist)
+    let producer = PlaceDossierProducer::with_place_allowlist(&target.config, &allowlist)
         .expect("sorted unique allowlist binds");
 
     // No explicit grants: foundation seeding granted the place subject and
     // identity and the overlapping county subject at tick zero, so the first
     // receipt already publishes the fully revealed page.
-    let mut worker = ArchiveWorkerV1::new(&target.config);
+    let mut worker = ArchiveWorker::new(&target.config);
     let first = worker
         .sweep_once(target.campaign_id, &producer)
         .expect("foundation-knowledge sweep publishes the revealed page");
     assert_eq!(
         dispositions(&first),
         vec![
-            (1, ArchiveReceiptDispositionV1::Applied),
-            (2, ArchiveReceiptDispositionV1::Applied),
-            (3, ArchiveReceiptDispositionV1::Applied),
+            (1, ArchiveReceiptDisposition::Applied),
+            (2, ArchiveReceiptDisposition::Applied),
+            (3, ArchiveReceiptDisposition::Applied),
         ]
     );
     let rows = place_page_rows(&target.config, target.campaign_id);
@@ -929,27 +873,27 @@ fn knowledge_at(
     config: &Config,
     campaign: CampaignId,
     tick: u64,
-) -> babylon_persistence::ArchiveKnowledgeV1 {
+) -> babylon_persistence::ArchiveKnowledge {
     let rows=config.connect(NoTls).expect("knowledge fixture connection").query(
         "SELECT subject_kind,subject_id,grant_key,granted_tick,provenance_source_id,provenance_locator FROM babylon_meta.archive_knowledge_grant_v1 WHERE campaign_id=$1 AND granted_tick<=$2 AND subject_kind IN ('county','place') ORDER BY subject_kind,subject_id,grant_key", &[campaign.as_uuid(), &i64::try_from(tick).expect("fixture tick")]).expect("fixture exact knowledge");
     let grants = rows
         .iter()
         .map(|row| {
             let kind = match row.get::<_, &str>(0) {
-                "county" => ArchiveSubjectKindV1::County,
-                "place" => ArchiveSubjectKindV1::Place,
+                "county" => ArchiveSubjectKind::County,
+                "place" => ArchiveSubjectKind::Place,
                 _ => panic!("closed fixture page kind"),
             };
-            babylon_persistence::ArchiveKnowledgeGrantV1::try_new(
-                babylon_persistence::ArchivePageRefV1::try_new(kind, row.get(1))
+            babylon_persistence::ArchiveKnowledgeGrant::try_new(
+                babylon_persistence::ArchivePageRef::try_new(kind, row.get(1))
                     .expect("fixture page"),
                 row.get(2),
                 u64::try_from(row.get::<_, i64>(3)).expect("fixture grant tick"),
-                babylon_persistence::ArchiveCitationV1::try_new(row.get(4), row.get(5))
+                babylon_persistence::ArchiveCitation::try_new(row.get(4), row.get(5))
                     .expect("fixture citation"),
             )
             .expect("fixture grant")
         })
         .collect();
-    babylon_persistence::ArchiveKnowledgeV1::try_new(grants).expect("fixture knowledge")
+    babylon_persistence::ArchiveKnowledge::try_new(grants).expect("fixture knowledge")
 }

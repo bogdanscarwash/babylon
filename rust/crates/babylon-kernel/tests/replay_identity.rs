@@ -1,13 +1,13 @@
 use babylon_kernel::replay::{
-    ReplayIdentityError, ReplaySeed, ReplaySessionIdV1, RngDomainV2, RngLayoutVersion,
+    ReplayIdentityError, ReplaySeed, ReplaySessionId, RngDomain, RngLayoutVersion,
 };
 
-fn checked_session_from_bytes(bytes: &[u8]) -> Result<ReplaySessionIdV1, ReplayIdentityError> {
-    ReplaySessionIdV1::try_from(bytes)
+fn checked_session_from_bytes(bytes: &[u8]) -> Result<ReplaySessionId, ReplayIdentityError> {
+    ReplaySessionId::try_from(bytes)
 }
 
-fn checked_session_from_string(value: &str) -> Result<ReplaySessionIdV1, ReplayIdentityError> {
-    ReplaySessionIdV1::try_from(value)
+fn checked_session_from_string(value: &str) -> Result<ReplaySessionId, ReplayIdentityError> {
+    ReplaySessionId::try_from(value)
 }
 
 fn seed_from_i64(value: i64) -> ReplaySeed {
@@ -63,9 +63,12 @@ fn replay_seed_uses_exact_signed_i64_big_endian_bytes() {
 }
 
 #[test]
-fn rng_layout_version_accepts_only_the_two_governed_layouts() {
-    assert_eq!(RngLayoutVersion::try_from(1), Ok(RngLayoutVersion::V1));
-    assert_eq!(RngLayoutVersion::try_from(2), Ok(RngLayoutVersion::V2));
+fn rng_layout_version_accepts_only_the_current_layout() {
+    assert!(RngLayoutVersion::try_from(1).is_err());
+    assert_eq!(
+        RngLayoutVersion::try_from(2),
+        Ok(RngLayoutVersion::SeededCarrier)
+    );
 
     for value in [0, 3, u32::MAX] {
         assert!(matches!(
@@ -80,7 +83,7 @@ fn rng_domain_accepts_only_bsl_qnames_at_the_boundaries() {
     let maximum = format!("{}/{}/c/d", "a".repeat(64), "b".repeat(59));
 
     for valid in ["a/b", "rule-name/segment-2", maximum.as_str()] {
-        let domain = RngDomainV2::try_from(valid).unwrap();
+        let domain = RngDomain::try_from(valid).unwrap();
         assert_eq!(domain.as_str(), valid);
     }
 }
@@ -102,6 +105,6 @@ fn rng_domain_rejects_non_qname_grammar() {
     ];
 
     for value in invalid {
-        assert!(RngDomainV2::try_from(value).is_err(), "{value}");
+        assert!(RngDomain::try_from(value).is_err(), "{value}");
     }
 }

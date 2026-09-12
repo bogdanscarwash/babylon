@@ -1,0 +1,36 @@
+version: 2
+name: campaign_foundation_content
+purpose: Capture exact authored sources for the current material runtime.
+encoding:
+  type: FoundationContentBundle
+  domain: "babylon.campaign-foundation-content.v2\0"
+  layout: u32_big_endian_2
+  fields:
+    - {tag: 1, name: scenario_source_bytes, codec: source_utf8}
+    - {tag: 2, name: prelude_source_bytes, codec: optional_source_utf8}
+    - {tag: 3, name: rule_source_bytes, codec: source_utf8}
+    - {tag: 4, name: defines_bytes, codec: bounded_bytes}
+    - {tag: 5, name: reference_bundle_manifest_bytes, codec: bounded_bytes}
+  source_utf8:
+    frame: u32_big_endian_length_then_exact_utf8_bytes
+    maximum_bytes: 1048576
+    refused: [invalid_utf8, embedded_nul, over_bound]
+  optional_source_utf8:
+    none: u8_0
+    some: u8_1_then_source_utf8
+    absent_and_present_empty: distinct
+  bounded_bytes:
+    frame: u32_big_endian_length_then_exact_bytes
+    maximum_bytes: 67108864
+  maximum_complete_bytes: 67108864
+  digest: sha256_exact_complete_bytes
+  canonicalization: Exact input bytes without rewriting or format dispatch.
+construction:
+  content: FoundationContentBundle::try_new
+  capture: CampaignFoundation::capture
+  identity: The nested content domain and layout bind the complete foundation digest.
+storage:
+  schema: One current schema, verified before writes or acknowledgement.
+  creation: Capture graph and material foundation in one transaction.
+  hydration: Rebuild exact source bytes and verify the stored foundation digest.
+  refusal: Incompatible schema, changed bytes, malformed sources or digest mismatch.

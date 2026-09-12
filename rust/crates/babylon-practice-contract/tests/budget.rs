@@ -1,14 +1,14 @@
 use babylon_practice_contract::{
-    compute_budget_delta, read_action_budget, write_action_budget, PracticeBudgetTermsV1,
-    PracticeContractError, PracticeIdV1, PracticeTargetDomainV1, SolidarityFootprintEdgeV1,
+    compute_budget_delta, read_action_budget, write_action_budget, PracticeBudgetTerms,
+    PracticeContractError, PracticeId, PracticeTargetDomain, SolidarityFootprintEdge,
 };
 
 const WORLD_HASH: [u8; 32] = [0x5a; 32];
 
-fn terms() -> PracticeBudgetTermsV1 {
-    PracticeBudgetTermsV1 {
+fn terms() -> PracticeBudgetTerms {
+    PracticeBudgetTerms {
         initial: 1,
-        weekly_credit_cap: 1,
+        period_credit_cap: 1,
         storage_ceiling: 4,
         organize_cost: 1,
         agitate_cost: 2,
@@ -16,10 +16,10 @@ fn terms() -> PracticeBudgetTermsV1 {
     }
 }
 
-fn edge(source: u64, target: u64, strength: f64) -> SolidarityFootprintEdgeV1 {
-    SolidarityFootprintEdgeV1 {
+fn edge(source: u64, target: u64, strength: f64) -> SolidarityFootprintEdge {
+    SolidarityFootprintEdge {
         source_org_node_id_u64: source,
-        target_domain_u8: PracticeTargetDomainV1::SocialClass,
+        target_domain_u8: PracticeTargetDomain::SocialClass,
         target_class_node_id_u64: target,
         strength_f64_bits_u64: strength.to_bits(),
     }
@@ -60,7 +60,7 @@ fn transition_derives_cost_count_credit_and_snapshot() {
         7,
         WORLD_HASH,
         2,
-        Some(PracticeIdV1::Organize),
+        Some(PracticeId::Organize),
         &[edge(7, 101, 1.0), edge(7, 102, 1.0)],
         terms(),
     )
@@ -82,9 +82,9 @@ fn transition_derives_cost_count_credit_and_snapshot() {
 fn every_practice_cost_and_none_zero_cost_are_exhaustive() {
     for (practice, expected) in [
         (None, 0),
-        (Some(PracticeIdV1::Organize), 1),
-        (Some(PracticeIdV1::Agitate), 2),
-        (Some(PracticeIdV1::MutualAid), 3),
+        (Some(PracticeId::Organize), 1),
+        (Some(PracticeId::Agitate), 2),
+        (Some(PracticeId::MutualAid), 3),
     ] {
         let delta = compute_budget_delta(11, 7, WORLD_HASH, 3, practice, &[], terms()).unwrap();
         assert_eq!(delta.governed_cost, expected);
@@ -100,13 +100,13 @@ fn insufficient_and_checked_addition_refusals_pin_codes_33_and_34() {
             7,
             WORLD_HASH,
             0,
-            Some(PracticeIdV1::Organize),
+            Some(PracticeId::Organize),
             &[],
             terms(),
         ),
         Err(PracticeContractError::PracticeBudgetInsufficient)
     );
-    let overflow_terms = PracticeBudgetTermsV1 {
+    let overflow_terms = PracticeBudgetTerms {
         storage_ceiling: u32::MAX,
         ..terms()
     };
@@ -125,25 +125,8 @@ fn insufficient_and_checked_addition_refusals_pin_codes_33_and_34() {
 }
 
 #[test]
-fn subtraction_keeps_precedence_guard_and_uses_checked_contract() {
-    let source = include_str!("../src/budget.rs");
-    let guard = source
-        .find("if budget_before < cost")
-        .expect("explicit code-33 precedence guard");
-    let checked = source
-        .find(".checked_sub(cost)")
-        .expect("checked subtraction");
-    let mapping = checked
-        + source[checked..]
-            .find("PracticeContractError::PracticeBudgetInsufficient")
-            .expect("subtraction maps to the code-33 identity");
-    assert!(guard < checked);
-    assert!(checked < mapping);
-}
-
-#[test]
 fn ceiling_binds_only_after_valid_checked_addition() {
-    let capped_terms = PracticeBudgetTermsV1 {
+    let capped_terms = PracticeBudgetTerms {
         storage_ceiling: 3,
         ..terms()
     };
@@ -215,4 +198,20 @@ fn footprint_strength_refusals_and_maximum_are_exact() {
     let delta = compute_budget_delta(11, 7, WORLD_HASH, 0, None, &maximum, terms()).unwrap();
     assert_eq!(delta.footprint_count, 256);
     assert_eq!(delta.raw_credit, 256);
+}
+
+#[test]
+fn practices_without_declared_budget_prices_fail_explicitly() {
+    for practice in [
+        PracticeId::Strike,
+        PracticeId::Blockade,
+        PracticeId::Occupation,
+        PracticeId::Damage,
+        PracticeId::CapitalStrike,
+    ] {
+        assert_eq!(
+            compute_budget_delta(1, 7, [0; 32], 4, Some(practice), &[], terms()),
+            Err(PracticeContractError::PracticeBudgetUnpriced)
+        );
+    }
 }
