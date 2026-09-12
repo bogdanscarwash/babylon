@@ -77,7 +77,6 @@ fn campaign_row_counts(client: &mut postgres::Client, campaign: CampaignId) -> V
              UNION ALL SELECT 'material foundation', count(*) FROM babylon_state.material_campaign_foundation_v2 WHERE campaign_id=$1 \
              UNION ALL SELECT 'county map', count(*) FROM babylon_meta.territory_county_map_v1 WHERE campaign_id=$1 \
              UNION ALL SELECT 'knowledge grants', count(*) FROM babylon_meta.archive_knowledge_grant_v1 WHERE campaign_id=$1 \
-             UNION ALL SELECT 'Archive enrollment', count(*) FROM babylon_meta.archive_retention_v2 WHERE campaign_id=$1 \
              UNION ALL SELECT 'commit marker', count(*) FROM babylon_state.tick_commit WHERE campaign_id=$1",
             &[campaign.as_uuid()],
         )
@@ -89,7 +88,7 @@ fn campaign_row_counts(client: &mut postgres::Client, campaign: CampaignId) -> V
 
 #[test]
 #[ignore = "requires the existing disposable PostgreSQL harness; independent clone ownership"]
-fn live_staffing_owner_refusal_rolls_back_foundation_grants_and_enrollment() {
+fn live_staffing_owner_refusal_rolls_back_foundation_and_grants() {
     let target = DisposableTarget::create();
     let campaign = CampaignId::from_uuid(Uuid::from_u128(32_001));
     let invalid = captured_foreign_writer();

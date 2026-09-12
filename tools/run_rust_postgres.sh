@@ -405,13 +405,16 @@ if [ "$status" -eq 0 ]; then
         reader_threads=1
         [ "$reader_suite" != observer_material_live ] || reader_threads=4
         run_phase "$reader_suite" 600 cargo test -p babylon-persistence --test "$reader_suite" \
-          --locked -- --nocapture --ignored --skip statewide_qualified:: --test-threads="$reader_threads" || status=$?
+          --locked -- --nocapture --ignored --skip statewide:: --skip statewide_qualified:: --test-threads="$reader_threads" || status=$?
         [ "$status" -eq 0 ] || break
       done
-      ;;
+      # The full synthetic campaign gets its own deadline after ordinary readers.
+      ;&
     statewide_synthetic)
-      run_phase statewide_synthetic 600 cargo test -p babylon-persistence --test observer_material_live \
-        statewide:: --locked -- --nocapture --ignored --test-threads=1 || status=$?
+      if [ "$status" -eq 0 ]; then
+        run_phase statewide_synthetic 600 cargo test -p babylon-persistence --test observer_material_live \
+          statewide:: --locked -- --nocapture --ignored --test-threads=1 || status=$?
+      fi
       ;;
     statewide_qualified)
       # Actual-source four-preset qualification is separate from routine reader checks.

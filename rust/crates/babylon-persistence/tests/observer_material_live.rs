@@ -263,20 +263,22 @@ fn live_michigan_all_county_cards_keep_public_source_and_quiet_restart_freshness
     SemanticArchiveStore::new(&target.writer)
         .verify_schema()
         .unwrap();
-    // A fresh campaign must remain searchable before automatic statistics
-    // maintenance. Keep this disposable fixture cold through the full drain;
-    // otherwise autovacuum timing can hide repeated whole-Archive validation.
-    target
-        .writer
-        .connect(NoTls)
-        .unwrap()
+    // Keep revision tables without planner statistics through the full drain.
+    // This lock permits worker DML but blocks automatic VACUUM/ANALYZE without
+    // changing the admitted schema. Knowledge tables remain unlocked because
+    // pinning a cohort deliberately analyzes them before its first read.
+    let mut cold_connection = target.writer.connect(NoTls).unwrap();
+    let mut cold_statistics = cold_connection.transaction().unwrap();
+    cold_statistics
         .batch_execute(
-            "ALTER TABLE babylon_meta.archive_page_revision_v2 SET (autovacuum_enabled = false); \
-             ALTER TABLE babylon_meta.archive_revision_grant_v2 SET (autovacuum_enabled = false); \
-             ALTER TABLE babylon_meta.archive_revision_atom_v2 SET (autovacuum_enabled = false); \
-             ALTER TABLE babylon_meta.archive_knowledge_grant_v1 SET (autovacuum_enabled = false)",
+            "SET LOCAL lock_timeout TO '5s'; \
+             LOCK TABLE babylon_meta.archive_page_revision_v2, \
+                        babylon_meta.archive_revision_grant_v2, \
+                        babylon_meta.archive_revision_atom_v2 \
+             IN SHARE UPDATE EXCLUSIVE MODE",
         )
         .unwrap();
+    assert_revision_statistics_absent(&mut cold_statistics);
     let preset = MichiganDeliveryPreset::Standard;
     let mut runtime = DurableMaterialRuntime::create(
         &target.writer,
@@ -327,6 +329,26 @@ fn live_michigan_all_county_cards_keep_public_source_and_quiet_restart_freshness
     );
     drop((runtime, worker, producer));
     assert_restart_drains_and_verifies_quiet_periods(&target, &reader, &scope, &pages);
+    assert_revision_statistics_absent(&mut cold_statistics);
+    cold_statistics.rollback().unwrap();
+}
+
+fn assert_revision_statistics_absent(client: &mut impl postgres::GenericClient) {
+    let count: i64 = client
+        .query_one(
+            "SELECT count(*) FROM pg_catalog.pg_statistic \
+             WHERE starelid IN ( \
+                 'babylon_meta.archive_page_revision_v2'::pg_catalog.regclass, \
+                 'babylon_meta.archive_revision_grant_v2'::pg_catalog.regclass, \
+                 'babylon_meta.archive_revision_atom_v2'::pg_catalog.regclass)",
+            &[],
+        )
+        .unwrap()
+        .get(0);
+    assert_eq!(
+        count, 0,
+        "revision reads must succeed without planner statistics"
+    );
 }
 
 fn assert_restart_drains_and_verifies_quiet_periods(
@@ -1146,12 +1168,16 @@ mod current_authority {
     #[test]
     #[ignore = "requires task-owned disposable PostgreSQL runtime"]
     fn live_concurrent_identical_material_commit_publishes_one_exact_candidate() {
+        use babylon_persistence::material_runtime::MaterialRuntimeError;
+
         let target = DisposableTarget::create();
         let campaign = CampaignId::from_uuid(Uuid::from_u128(21_002));
         let source = foundation();
         let digest = source.digest();
         let first = DurableMaterialRuntime::create(&target.writer, campaign, source).unwrap();
         let second = DurableMaterialRuntime::open(&target.writer, campaign, digest).unwrap();
+        let initial_world = first.session().current_world_hash().unwrap();
+        let initial_material = first.session().material().canonical_bytes().to_vec();
         let barrier = std::sync::Arc::new(std::sync::Barrier::new(2));
         let handles = [first, second]
             .into_iter()
@@ -1163,21 +1189,57 @@ mod current_authority {
                         1,
                     )
                     .unwrap();
+                    let mut sink = CollectingSink::default();
                     barrier.wait();
-                    let identity = runtime
-                        .advance_and_commit(&mut CollectingSink::default(), &actions)
-                        .unwrap();
-                    (
-                        identity,
-                        runtime.session().material().canonical_bytes().to_vec(),
-                        runtime.diagnostic_receipt().unwrap().commit_disposition(),
-                    )
+                    let outcome = runtime.advance_and_commit(&mut sink, &actions);
+                    (runtime, actions, sink, outcome)
                 })
             })
             .collect::<Vec<_>>();
-        let mut results = handles.into_iter().map(|h| h.join().unwrap());
-        let a = results.next().unwrap();
-        let b = results.next().unwrap();
+        // Join both initial attempts before a refused contender can retry. One
+        // attempt must have succeeded; an unrelated failure never becomes a retry.
+        let attempts = handles
+            .into_iter()
+            .map(|handle| handle.join().unwrap())
+            .collect::<Vec<_>>();
+        assert!(attempts.iter().any(|(_, _, _, outcome)| outcome.is_ok()));
+        let mut results = Vec::new();
+        for (mut runtime, actions, mut sink, outcome) in attempts {
+            let identity = match outcome {
+                Ok(identity) => identity,
+                Err(MaterialRuntimeError::DatabaseLockRefused(error)) => {
+                    assert_eq!(
+                        error.code(),
+                        Some(&postgres::error::SqlState::LOCK_NOT_AVAILABLE)
+                    );
+                    assert_eq!(
+                        runtime.session().current_world_hash().unwrap(),
+                        initial_world
+                    );
+                    assert_eq!(
+                        runtime.session().material().canonical_bytes(),
+                        initial_material
+                    );
+                    assert_eq!(runtime.session().completed_tick(), 0);
+                    assert_eq!(runtime.session().graph_session().completed_tick(), 0);
+                    assert!(runtime.tail().is_none());
+                    assert!(runtime.diagnostic_receipt().is_none());
+                    assert!(sink.events.is_empty());
+                    runtime
+                        .advance_and_commit(&mut sink, &actions)
+                        .expect("one retry after the competing commit finished must reconcile")
+                }
+                Err(error) => panic!("unexpected concurrent commit refusal: {error:?}"),
+            };
+            results.push((
+                identity,
+                runtime.session().material().canonical_bytes().to_vec(),
+                runtime.diagnostic_receipt().unwrap().commit_disposition(),
+            ));
+        }
+        let [a, b] = results.as_slice() else {
+            panic!("both concurrent candidates must be acknowledged");
+        };
         assert_eq!(a.0, b.0);
         assert_eq!(a.1, b.1);
         assert_ne!(a.2, b.2);

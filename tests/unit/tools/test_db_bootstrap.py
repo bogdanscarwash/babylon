@@ -281,6 +281,8 @@ def test_fresh_runtime_focuses_cover_current_live_consumers() -> None:
     assert "--ignored" in runner
     assert "--test-threads=1" in runner
     assert "reader_threads=4" in runner
+    assert "--skip statewide:: --skip statewide_qualified::" in runner
+    assert "run_phase statewide_synthetic 600 cargo test" in runner
     assert not (ROOT / "tools/run_rust_legacy_adopter_pg.sh").exists()
     for retired in (
         "schema_epoch_matrix",
@@ -363,9 +365,17 @@ def test_heavy_children_and_enclosing_ci_have_truthful_deadlines() -> None:
             step for step in job["steps"] if step.get("run") == "tools/run_rust_postgres.sh"
         )
         if job_name == "pg-integration-shards":
-            assert step["timeout-minutes"] == "${{ matrix.focus == 'archive' && 85 || 45 }}"
-            assert job["timeout-minutes"] == "${{ matrix.focus == 'archive' && 95 || 55 }}"
+            assert (
+                step["timeout-minutes"]
+                == "${{ matrix.focus == 'archive' && 85 || matrix.focus == 'reader' && 60 || 45 }}"
+            )
+            assert (
+                job["timeout-minutes"]
+                == "${{ matrix.focus == 'archive' && 95 || matrix.focus == 'reader' && 70 || 55 }}"
+            )
             assert 600 + 180 + contract_seconds + 600 <= 45 * 60
+            # Reader roles, material observations and statewide synthetic proofs each get a phase.
+            assert 60 * 60 >= 600 + 180 + 3 * 600 + 600
             # Six serial Archive groups retain separate ten-minute ceilings.
             assert 85 * 60 >= 600 + 180 + 6 * 600 + 600
         else:

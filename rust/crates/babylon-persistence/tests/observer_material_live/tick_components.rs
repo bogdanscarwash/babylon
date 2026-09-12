@@ -80,8 +80,7 @@ const FOUNDATION_CAMPAIGN: u128 = 41_003;
 
 fn prepared_target() -> DisposableTarget {
     let target = DisposableTarget::create();
-    // The observer's existing economy schema depends on Archive relations
-    // installed by the normal campaign foundation path.
+    // Keep a second admitted campaign available for the marker-scope mutation.
     drop(
         DurableMaterialRuntime::create(
             &target.writer,
@@ -158,15 +157,37 @@ fn exact_rows_require_the_matching_commit_marker() {
         populated >= 12,
         "real replay must exercise multiple row families"
     );
-    // These corruptions exist only within rolled-back fixture transactions.
-    // They isolate each part of the SQL marker predicate without changing saves.
+    // Unsupported layouts are refused by the current schema before a view can
+    // observe them. The failed write and rollback preserve the exact marker.
+    let marker_before = rows(&mut writer, "babylon_state.tick_commit", campaign);
+    let mut tx = writer.transaction().unwrap();
+    let error = tx
+        .execute(
+            "UPDATE babylon_state.tick_commit SET envelope_layout_version=2 WHERE campaign_id=$1::uuid",
+            &[campaign.as_uuid()],
+        )
+        .unwrap_err();
+    assert_eq!(
+        error.code(),
+        Some(&postgres::error::SqlState::CHECK_VIOLATION)
+    );
+    assert_eq!(
+        error.as_db_error().unwrap().constraint(),
+        Some("tick_commit_envelope_layout_v3")
+    );
+    tx.rollback().unwrap();
+    assert_eq!(
+        rows(&mut writer, "babylon_state.tick_commit", campaign),
+        marker_before
+    );
+    // These remaining corruptions exist only in rolled-back fixture transactions.
+    // They isolate each reachable SQL marker predicate without changing saves.
     let wrong_campaign = format!(
         "UPDATE babylon_state.tick_commit SET campaign_id='{}'::uuid WHERE campaign_id=$1::uuid",
         Uuid::from_u128(FOUNDATION_CAMPAIGN)
     );
     for mutation in [
         "DELETE FROM babylon_state.tick_commit WHERE campaign_id=$1::uuid",
-        "UPDATE babylon_state.tick_commit SET envelope_layout_version=2 WHERE campaign_id=$1::uuid",
         "UPDATE babylon_state.tick_commit SET resolve_tick=resolve_tick+1 WHERE campaign_id=$1::uuid",
         wrong_campaign.as_str(),
     ] {
@@ -290,75 +311,48 @@ fn full_observer_requires_every_view_and_preview_refuses_all_grant_paths() {
 
 #[test]
 #[ignore = "requires the disposable PostgreSQL harness; independent clone ownership"]
-fn schema_identity_rejects_source_definition_and_partial_install_drift() {
-    let target = prepared_target();
+fn observer_provisioning_refuses_changed_or_missing_component_views_without_repair() {
+    let target = DisposableTarget::create();
     install(&target);
     let mut writer = target.writer.connect(NoTls).unwrap();
-    let marker = writer.query_one(
-        "SELECT migration_sha256, view_definitions FROM public.observer_tick_components_schema_v1 WHERE singleton", &[],
-    ).unwrap();
-    let digest: String = marker.get(0);
-    let definitions: Vec<String> = marker.get(1);
-    assert_eq!(digest.len(), 64);
-    assert_eq!(definitions.len(), RELATIONS.len());
-    install(&target);
-    let repeated = writer.query_one(
-        "SELECT migration_sha256, view_definitions FROM public.observer_tick_components_schema_v1 WHERE singleton", &[],
-    ).unwrap();
-    assert_eq!(repeated.get::<_, String>(0), digest);
-    assert_eq!(repeated.get::<_, Vec<String>>(1), definitions);
-    writer
-        .execute(
-            "UPDATE public.observer_tick_components_schema_v1 SET migration_sha256=$1",
-            &[&"0".repeat(64)],
-        )
-        .unwrap();
+    let current_state = |writer: &mut postgres::Client| {
+        let row = writer
+            .query_one(
+                "SELECT schema_sha256, CASE \
+                 WHEN pg_catalog.to_regclass('public.v_observer_graph_node_v1') IS NULL THEN NULL \
+                 ELSE pg_catalog.pg_get_viewdef( \
+                     pg_catalog.to_regclass('public.v_observer_graph_node_v1'), false) END \
+                 FROM babylon_meta.current_schema WHERE singleton",
+                &[],
+            )
+            .unwrap();
+        (row.get::<_, Vec<u8>>(0), row.get::<_, Option<String>>(1))
+    };
+    let admitted = current_state(&mut writer);
     assert_eq!(
-        provision_observer_role(&target.writer),
-        Err(ObserverEconomyError::SchemaDrift)
+        admitted.0,
+        babylon_persistence::current_schema_sha256().to_vec()
     );
-    writer
-        .execute(
-            "UPDATE public.observer_tick_components_schema_v1 SET migration_sha256=$1",
-            &[&digest],
-        )
-        .unwrap();
-    let original: String = writer
-        .query_one(
-            "SELECT pg_catalog.pg_get_viewdef('public.v_observer_graph_node_v1'::regclass, false)",
-            &[],
-        )
-        .unwrap()
-        .get(0);
+    assert!(admitted.1.is_some());
     writer.batch_execute(
         "CREATE OR REPLACE VIEW public.v_observer_graph_node_v1 AS SELECT component.* FROM babylon_state.graph_node_v1 component WHERE false",
     ).unwrap();
+    let altered = current_state(&mut writer);
+    assert_eq!(altered.0, admitted.0);
+    assert_ne!(altered.1, admitted.1);
     assert_eq!(
         provision_observer_role(&target.writer),
         Err(ObserverEconomyError::SchemaDrift)
     );
-    writer
-        .batch_execute(&format!(
-            "CREATE OR REPLACE VIEW public.v_observer_graph_node_v1 AS {original}"
-        ))
-        .unwrap();
-    install(&target);
+    assert_eq!(current_state(&mut writer), altered);
     writer
         .batch_execute("DROP VIEW public.v_observer_graph_node_v1")
         .unwrap();
+    let absent = current_state(&mut writer);
+    assert_eq!(absent, (admitted.0, None));
     assert_eq!(
         provision_observer_role(&target.writer),
         Err(ObserverEconomyError::SchemaDrift)
     );
-    writer.batch_execute(&format!(
-        "CREATE VIEW public.v_observer_graph_node_v1 AS {original}; GRANT SELECT ON public.v_observer_graph_node_v1 TO babylon_observer"
-    )).unwrap();
-    install(&target);
-    writer
-        .batch_execute("DROP TABLE public.observer_tick_components_schema_v1")
-        .unwrap();
-    assert_eq!(
-        provision_observer_role(&target.writer),
-        Err(ObserverEconomyError::SchemaDrift)
-    );
+    assert_eq!(current_state(&mut writer), absent);
 }
